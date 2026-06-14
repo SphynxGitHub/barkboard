@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barkboard Portal</title>
+    <link rel="icon" href="https://fav.farm/🐾" />
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -22,16 +23,17 @@
         
         <section id="staff-view" class="view-panel hidden">
             <h2>Today's Overview</h2>
-            <p>Staff feed dashboard metrics...</p>
+            <p>Staff feed metrics...</p>
         </section>
 
         <section id="crm-view" class="view-panel">
             <div class="crm-header">
-                <h2>Registry Directory</h2>
+                <h2>Registry Directory & Global Relations</h2>
                 
                 <div class="controls-row">
-                    <input type="text" id="crm-search" placeholder="Search names, phone numbers, breeds, clinics..." onkeyup="filterCRM()">
+                    <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderCRM()">
                     <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
+                    <button class="btn btn-primary" onclick="openRelationshipModal()">⛓️ Link New Relationship</button>
                 </div>
 
                 <div class="filter-menu">
@@ -43,76 +45,46 @@
                 </div>
             </div>
 
-            <div id="crm-list-container" class="card-layout">
-                
-                <div class="crm-item" data-type="household" data-search="miller john jane oakridge arrington">
-                    <div class="item-header">
-                        <h3>The Miller Household</h3>
-                        <span class="entity-badge household">Household</span>
-                    </div>
-                    <p><strong>Primary Contact:</strong> John Miller (555-0192) | <strong>Secondary:</strong> Jane Miller</p>
-                    <p class="pin-note">📌 <strong>Household Note:</strong> Gate code is #4412. Jane handles weekend drop-offs.</p>
-                    <div class="nested-details">
-                        <p><strong>Linked Pets:</strong> Max (Golden Retriever), Bella (Siamese Cat)</p>
-                        <p><strong>Preferred Vet:</strong> Oakridge Vet Clinic (Dr. Arrington)</p>
-                    </div>
-                </div>
-
-                <div class="crm-item" data-type="household" data-search="davis alice city animal hospital">
-                    <div class="item-header">
-                        <h3>The Davis Household</h3>
-                        <span class="entity-badge household">Household</span>
-                    </div>
-                    <p><strong>Primary Contact:</strong> Alice Davis (555-3341)</p>
-                    <div class="nested-details">
-                        <p><strong>Linked Pets:</strong> Luna (French Bulldog)</p>
-                        <p><strong>Preferred Vet:</strong> City Animal Hospital</p>
-                    </div>
-                </div>
-
-                <div class="crm-item" data-type="people" data-search="john miller 555-0192 primary">
-                    <div class="item-header">
-                        <h3>John Miller</h3>
-                        <span class="entity-badge person">Person</span>
-                    </div>
-                    <p><strong>Household Unit:</strong> The Miller Household (Primary)</p>
-                    <p><strong>Contact Info:</strong> 555-0192 | john.m@email.com</p>
-                    <p><strong>External Relations:</strong> Emergency Contact for Smith Household</p>
-                </div>
-
-                <div class="crm-item" data-type="pets" data-search="max golden retriever miller vax clear">
-                    <div class="item-header">
-                        <h3>Max <span class="sub-text">(Golden Retriever)</span></h3>
-                        <span class="entity-badge pet">Pet</span>
-                    </div>
-                    <p><strong>Family Unit:</strong> Miller Household | <strong>Age & Weight:</strong> 3yo, 72 lbs</p>
-                    <p class="health-indicator success">✅ Vaccines Current (Expires Dec 2026)</p>
-                    <p><strong>Personal Gear:</strong> Blue Kong toy, Red nylon training leash</p>
-                </div>
-
-                <div class="crm-item" data-type="pets" data-search="bella siamese cat miller expired vax alert">
-                    <div class="item-header">
-                        <h3>Bella <span class="sub-text">(Siamese Cat)</span></h3>
-                        <span class="entity-badge pet">Pet</span>
-                    </div>
-                    <p><strong>Family Unit:</strong> Miller Household | <strong>Age & Weight:</strong> 7yo, 11 lbs</p>
-                    <p class="health-indicator danger">❌ Vaccines Expired (May 2026)</p>
-                </div>
-
-                <div class="crm-item" data-type="vets" data-search="oakridge vet clinic arrington 555-9981">
-                    <div class="item-header">
-                        <h3>Oakridge Vet Clinic</h3>
-                        <span class="entity-badge coi">Vet / COI</span>
-                    </div>
-                    <p><strong>Primary Care Practitioner:</strong> Dr. Arrington</p>
-                    <p><strong>Phone:</strong> 555-9981 | <strong>Address:</strong> 104 Oakridge Medical Way</p>
-                    <p><strong>Active Clients Registered:</strong> 4 Households (Miller, Smith, Thompson, Vance)</p>
-                </div>
-
-            </div>
+            <div id="crm-list-container" class="card-layout"></div>
         </section>
 
-        <section id="calendar-view" class="view-panel hidden"><h2>Calendar Grid</h2></section>
+        <div id="relationship-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Link Cross-Entity Relationship</h3>
+                <form id="relation-form" onsubmit="saveNewRelationship(event)">
+                    <div class="form-group">
+                        <label>Select Primary Entity:</label>
+                        <select id="modal-entity-a" required></select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Relationship Configuration:</label>
+                        <select id="modal-relation-type" onchange="toggleRelationshipFields()" required>
+                            <option value="vet">Uses Veterinary Clinic / COI</option>
+                            <option value="emergency">Emergency Contact Connection</option>
+                            <option value="family">Extended Family / Neighbor Boundary</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Select Target Entity to Link:</label>
+                        <select id="modal-entity-b" required></select>
+                    </div>
+
+                    <div class="form-group id="custom-note-group">
+                        <label>Relationship Note / Tag Identifier:</label>
+                        <input type="text" id="modal-relation-note" placeholder="e.g., Neighbor who has key, Primary Co-op vet">
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="closeRelationshipModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Establish Link & Sync</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <section id="calendar-view" class="view-panel hidden"><h2>Calendar</h2></section>
         <section id="owner-view" class="view-panel hidden"><h2>Owner Portal</h2></section>
     </main>
 
