@@ -12,8 +12,8 @@
     <header class="navbar">
         <div class="logo">🐾 Barkboard</div>
         <nav>
-            <button onclick="switchView('staff-view')" class="nav-btn">Staff Feed</button>
-            <button onclick="switchView('crm-view')" class="nav-btn active">People & Pets</button>
+            <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
+            <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
             <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
             <button onclick="switchView('biz-view')" class="nav-btn">Business Management</button>
             <button onclick="switchView('owner-view')" class="nav-btn">Owner Portal</button>
@@ -22,18 +22,25 @@
 
     <main class="container">
         
-        <section id="staff-view" class="view-panel hidden">
+        <section id="staff-view" class="view-panel">
             <h2>Today's Overview</h2>
-            <p>Staff feed dashboard metrics...</p>
+            <div class="stats-grid">
+                <div class="stat-card"><h3>Occupied Kennels</h3><p id="stat-kennels">0 / 20</p></div>
+                <div class="stat-card"><h3>Training Sessions</h3><p>5 Today</p></div>
+                <div class="stat-card alert"><h3>Pending Invoices</h3><p>$1,240</p></div>
+            </div>
+            
+            <h2>Current Active Guests</h2>
+            <div id="staff-guests-container" class="card-layout"></div>
         </section>
 
-        <section id="crm-view" class="view-panel">
+        <section id="crm-view" class="view-panel hidden">
             <div class="crm-header">
                 <h2>Registry Directory & Global Relations</h2>
                 <div class="controls-row">
-                    <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderCRM()">
+                    <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()">
                     <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
-                    <button class="btn btn-primary" onclick="openRelationshipModal()">⛓️ Link New Relationship</button>
+                    <button class="btn btn-primary" onclick="openRelationshipModal()">🔗 Link New Relationship</button>
                 </div>
                 <div class="filter-menu">
                     <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
@@ -43,7 +50,6 @@
                     <button id="filter-vets" class="filter-chip" onclick="setEntityFilter('vets')">Vets / COIs</button>
                 </div>
             </div>
-
             <div id="crm-list-container" class="card-layout"></div>
         </section>
 
@@ -55,33 +61,73 @@
                 <div class="stat-card"><h3>Retention Rate</h3><p class="success-color">94.2%</p></div>
                 <div class="stat-card"><h3>Active Subscription Packages</h3><p>38</p></div>
             </div>
-
             <div class="chart-container-mock">
                 <h3>Sales & Bookings Performance Over Time</h3>
                 <div class="bar-chart-mock">
                     <div class="bar-col" style="height: 40%"><span class="bar-lbl">Mar</span><span class="bar-val">$12k</span></div>
                     <div class="bar-col" style="height: 55%"><span class="bar-lbl">Apr</span><span class="bar-val">$15k</span></div>
                     <div class="bar-col" style="height: 75%"><span class="bar-lbl">May</span><span class="bar-val">$21k</span></div>
-                    <div class="bar-col active" style="height: 90%"><span class="bar-lbl">Jun (Current)</span><span class="bar-val">$26k</span></div>
+                    <div class="bar-col active" style="height: 90%"><span class="bar-lbl">Jun</span><span class="bar-val">$26k</span></div>
                 </div>
             </div>
         </section>
 
-        <section id="calendar-view" class="view-panel hidden"><h2>Calendar</h2></section>
+        <section id="calendar-view" class="view-panel hidden">
+            <h2>Boarding & Kennel Availability Grid</h2>
+            <div class="crm-card">
+                <table class="calendar-table">
+                    <thead>
+                        <tr>
+                            <th>Resource Space</th>
+                            <th>Sun 14</th>
+                            <th>Mon 15</th>
+                            <th>Tue 16</th>
+                            <th>Wed 17</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calendar-body-target"></tbody>
+                </table>
+            </div>
+        </section>
         
-        <section id="owner-view" class="view-panel hidden"><h2>Owner Portal</h2></section>
+        <section id="owner-view" class="view-panel hidden">
+            <h2>Welcome back, John! 👋</h2>
+            <div class="booking-wizard">
+                <h3>Book a New Stay for Your Pets</h3>
+                <label>Select Service:</label>
+                <select id="booking-service-select">
+                    <option value="55">Luxury Suite Boarding ($55/night)</option>
+                    <option value="35">Standard Boarding ($35/night)</option>
+                    <option value="75">Private Agility Training ($75/session)</option>
+                </select>
+                <div class="date-row">
+                    <div>
+                        <label>Check-In:</label>
+                        <input type="date" value="2026-07-03">
+                    </div>
+                    <div>
+                        <label>Check-Out:</label>
+                        <input type="date" value="2026-07-07">
+                    </div>
+                </div>
+                <div class="health-banner success">
+                    ✅ Household health safety checks passed. Max's vaccinations are active.
+                </div>
+                <label>Special Packing Instructions & Personal Items:</label>
+                <textarea placeholder="List toys, specific leash styles, or custom food bags..."></textarea>
+                <button class="btn-primary" onclick="alert('Booking processing via mock Stripe gateway!')">Proceed to Secure Checkout</button>
+            </div>
+        </section>
 
         <div id="fullscreen-modal" class="modal hidden">
             <div class="fullscreen-content">
                 <div class="fullscreen-header">
-                    <h2 id="fs-title">Contact Profile</h2>
+                    <h2 id="fs-title">Profile View</h2>
                     <button class="close-fs-btn" onclick="closeFullscreenProfile()">✕ Close Profile</button>
                 </div>
                 <div class="fs-body-layout">
-                    <div id="fs-quick-actions-anchor" class="fs-sidebar-actions">
-                        </div>
-                    <div id="fs-details-payload" class="fs-main-details">
-                        </div>
+                    <div id="fs-quick-actions-anchor" class="fs-sidebar-actions"></div>
+                    <div id="fs-details-payload" class="fs-main-details"></div>
                 </div>
             </div>
         </div>
@@ -90,17 +136,17 @@
             <div class="modal-content">
                 <h3>Link Cross-Entity Relationship</h3>
                 <form id="relation-form" onsubmit="saveNewRelationship(event)">
-                    <div class="form-group"><label>Select Primary Entity:</label><select id="modal-entity-a" required></select></div>
+                    <div class="form-group"><label>Primary Entity:</label><select id="modal-entity-a" required></select></div>
                     <div class="form-group">
                         <label>Relationship Configuration:</label>
                         <select id="modal-relation-type" onchange="toggleRelationshipFields()" required>
                             <option value="vet">Uses Veterinary Clinic / COI</option>
                             <option value="emergency">Emergency Contact Connection</option>
-                            <option value="family">Extended Family / Neighbor Boundary</option>
+                            <option value="family">Extended Family / Neighbor</option>
                         </select>
                     </div>
-                    <div class="form-group"><label>Select Target Entity to Link:</label><select id="modal-entity-b" required></select></div>
-                    <div class="form-group"><label>Relationship Note:</label><input type="text" id="modal-relation-note" placeholder="e.g., Authorized drop-off"></div>
+                    <div class="form-group"><label>Link Target Entity:</label><select id="modal-entity-b" required></select></div>
+                    <div class="form-group"><label>Relationship Note:</label><input type="text" id="modal-relation-note" placeholder="e.g., Preferred emergency facility"></div>
                     <div class="modal-actions">
                         <button type="button" class="btn" onclick="closeRelationshipModal()">Cancel</button>
                         <button type="submit" class="btn btn-primary">Establish Link</button>
