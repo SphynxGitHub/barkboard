@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barkboard Portal</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <header class="navbar">
+        <div class="logo">🐾 Barkboard</div>
+        <nav>
+            <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
+            <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
+            <button onclick="switchView('owner-view')" class="nav-btn">Owner Portal</button>
+        </nav>
+    </header>
+
+    <main class="container">
+        
+        <section id="staff-view" class="view-panel">
+            <h2>Today's Overview</h2>
+            <div class="stats-grid">
+                <div class="stat-card"><h3>Occupied Kennels</h3><p>14 / 20</p></div>
+                <div class="stat-card"><h3>Training Sessions</h3><p>5 Today</p></div>
+                <div class="stat-card alert"><h3>Pending Invoices</h3><p>$1,240</p></div>
+            </div>
+            
+            <h2>Current Active Guests</h2>
+            <div class="guest-card">
+                <h3>Max <span class="badge luxury">Luxury Suite #5</span></h3>
+                <p><strong>Breed:</strong> Golden Retriever | <strong>Household:</strong> Miller</p>
+                <div class="actions">
+                    <button class="btn">+ Feeding Log</button>
+                    <button class="btn">+ Potty Log</button>
+                </div>
+            </div>
+            <div class="guest-card warning">
+                <h3>Luna <span class="badge standard">Standard Run B</span></h3>
+                <p><strong>Breed:</strong> French Bulldog | <strong>Household:</strong> Davis</p>
+                <p class="pin-note">📌 <strong>Pinned Alert:</strong> Food aggressive around other dogs.</p>
+                <div class="actions">
+                    <button class="btn">+ Feeding Log</button>
+                    <button class="btn">+ Potty Log</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="calendar-view" class="view-panel hidden">
+            <h2>Boarding & Kennel Availability Grid</h2>
+            <table class="calendar-table">
+                <thead>
+                    <tr>
+                        <th>Resource</th>
+                        <th>Sun 14</th>
+                        <th>Mon 15</th>
+                        <th>Tue 16</th>
+                        <th>Wed 17</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Luxury Suite #1</strong></td>
+                        <td class="booked" colspan="2">Rocky (Smith)</td>
+                        <td class="available">Available</td>
+                        <td class="available">Available</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Luxury Suite #2</strong></td>
+                        <td class="available">Available</td>
+                        <td class="available">Available</td>
+                        <td class="booked" colspan="2">Max (Miller)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Standard Run A</strong></td>
+                        <td class="booked">Luna (Davis)</td>
+                        <td class="available">Available</td>
+                        <td class="available">Available</td>
+                        <td class="available">Available</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="owner-view" class="view-panel hidden">
+            <h2>Welcome back, John! 👋</h2>
+            <div class="booking-wizard">
+                <h3>Book a New Stay for Max</h3>
+                <label>Select Service:</label>
+                <select>
+                    <option>Luxury Suite Boarding ($55/night)</option>
+                    <option>Standard Boarding ($35/night)</option>
+                    <option>Private Agility Training ($75/session)</option>
+                </select>
+
+                <div class="date-row">
+                    <div>
+                        <label>Check-In:</label>
+                        <input type="date" value="2026-07-03">
+                    </div>
+                    <div>
+                        <label>Check-Out:</label>
+                        <input type="date" value="2026-07-07">
+                    </div>
+                </div>
+
+                <div class="health-banner success">
+                    ✅ Max's vaccinations are up to date (Expires Dec 2026).
+                </div>
+
+                <label>Special Packing Instructions:</label>
+                <textarea placeholder="Blue Kong toy, medication schedule, favorite blanket..."></textarea>
+
+                <button class="btn-primary">Proceed to Secure Checkout</button>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
