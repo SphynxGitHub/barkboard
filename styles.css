@@ -1,3 +1,4 @@
+/* Color Palette System */
 :root {
     --primary: #4f46e5;
     --primary-hover: #4338ca;
@@ -19,6 +20,7 @@ body {
     padding: 0;
 }
 
+/* Global Navigation Header */
 .navbar {
     display: flex;
     justify-content: space-between;
@@ -42,6 +44,7 @@ body {
     cursor: pointer;
     border-radius: 0.375rem;
     margin-left: 0.5rem;
+    transition: all 0.2s ease;
 }
 
 .nav-btn.active, .nav-btn:hover {
@@ -65,7 +68,7 @@ body {
     display: none !important;
 }
 
-/* Dashboard Cards */
+/* Dashboard Analytics Widgets */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -84,8 +87,8 @@ body {
 .stat-card p { margin: 0.5rem 0 0 0; font-size: 1.75rem; font-weight: bold; }
 .stat-card.alert { background-color: var(--warning); color: var(--warning-text); }
 
-/* Guest Log List */
-.guest-card {
+/* Card System (Guests & CRM Profiles) */
+.guest-card, .crm-card {
     background: var(--surface);
     padding: 1.5rem;
     border-radius: 0.5rem;
@@ -96,9 +99,28 @@ body {
 .badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 9999px; float: right; }
 .badge.luxury { background: #dbeafe; color: #1e40af; }
 .badge.standard { background: #e5e7eb; color: #374151; }
-.pin-note { background: var(--warning); padding: 0.75rem; border-radius: 0.375rem; color: var(--warning-text); }
+.pin-note { background: var(--warning); padding: 0.75rem; border-radius: 0.375rem; color: var(--warning-text); margin-top: 0.5rem; }
 
-/* Forms & Wizard */
+/* CRM Component Layout splits */
+.crm-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.crm-sub-block {
+    background: #f3f4f6;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border);
+}
+
+.crm-sub-block h4 { margin-top: 0; margin-bottom: 0.5rem; color: var(--primary); }
+.crm-sub-block ul { margin: 0; padding-left: 1.25rem; }
+.crm-sub-block li { margin-bottom: 0.5rem; }
+
+/* Form Elements & Interactive Booking Assistant */
 .booking-wizard {
     background: var(--surface);
     padding: 2rem;
@@ -115,6 +137,7 @@ input, select, textarea {
     border: 1px solid var(--border);
     border-radius: 0.375rem;
     box-sizing: border-box;
+    font-size: 1rem;
 }
 
 .date-row { display: flex; gap: 1rem; }
@@ -123,11 +146,12 @@ input, select, textarea {
 .health-banner { padding: 1rem; border-radius: 0.375rem; font-weight: 500; }
 .health-banner.success { background: var(--success); color: var(--success-text); }
 
-.btn { background: #f3f4f6; border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; }
-.btn-primary { background: var(--primary); color: white; border: none; padding: 1rem; border-radius: 0.375rem; font-size: 1rem; font-weight: bold; cursor: pointer; }
+.btn { background: #f3f4f6; border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; transition: background 0.2s; }
+.btn:hover { background: #e5e7eb; }
+.btn-primary { background: var(--primary); color: white; border: none; padding: 1rem; border-radius: 0.375rem; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
 .btn-primary:hover { background: var(--primary-hover); }
 
-/* Availability Grid */
+/* Resource Availability Grid Table */
 .calendar-table {
     width: 100%;
     border-collapse: collapse;
@@ -137,12 +161,7 @@ input, select, textarea {
     border: 1px solid var(--border);
 }
 
-.calendar-table th, .calendar-table td {
-    border: 1px solid var(--border);
-    padding: 1rem;
-    text-align: center;
-}
-
-.calendar-table th { background: #f3f4f6; }
+.calendar-table th, .calendar-table td { border: 1px solid var(--border); padding: 1rem; text-align: center; }
+.calendar-table th { background: #f3f4f6; color: #4b5563; font-weight: 600; }
 .calendar-table td.booked { background-color: #dbeafe; color: #1e40af; font-weight: 500; }
 .calendar-table td.available { color: #10b981; }
