@@ -11,8 +11,8 @@
     <header class="navbar">
         <div class="logo">🐾 Barkboard</div>
         <nav>
-            <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
-            <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
+            <button onclick="switchView('staff-view')" class="nav-btn">Staff Feed</button>
+            <button onclick="switchView('crm-view')" class="nav-btn active">People & Pets</button>
             <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
             <button onclick="switchView('owner-view')" class="nav-btn">Owner Portal</button>
         </nav>
@@ -20,144 +20,100 @@
 
     <main class="container">
         
-        <section id="staff-view" class="view-panel">
+        <section id="staff-view" class="view-panel hidden">
             <h2>Today's Overview</h2>
-            <div class="stats-grid">
-                <div class="stat-card"><h3>Occupied Kennels</h3><p>14 / 20</p></div>
-                <div class="stat-card"><h3>Training Sessions</h3><p>5 Today</p></div>
-                <div class="stat-card alert"><h3>Pending Invoices</h3><p>$1,240</p></div>
-            </div>
-            
-            <h2>Current Active Guests</h2>
-            <div class="guest-card">
-                <h3>Max <span class="badge luxury">Luxury Suite #5</span></h3>
-                <p><strong>Breed:</strong> Golden Retriever | <strong>Household:</strong> Miller</p>
-                <div class="actions">
-                    <button class="btn">+ Feeding Log</button>
-                    <button class="btn">+ Potty Log</button>
-                </div>
-            </div>
-            <div class="guest-card warning">
-                <h3>Luna <span class="badge standard">Standard Run B</span></h3>
-                <p><strong>Breed:</strong> French Bulldog | <strong>Household:</strong> Davis</p>
-                <p class="pin-note">📌 <strong>Pinned Alert:</strong> Food aggressive around other dogs.</p>
-                <div class="actions">
-                    <button class="btn">+ Feeding Log</button>
-                    <button class="btn">+ Potty Log</button>
-                </div>
-            </div>
+            <p>Staff feed dashboard metrics...</p>
         </section>
 
-        <section id="crm-view" class="view-panel hidden">
-            <h2>Household Registry (CRM)</h2>
-            <div class="crm-card">
-                <h3>The Miller Household</h3>
-                <p><strong>Primary Contact:</strong> John Miller (555-0192) | <strong>Secondary:</strong> Jane Miller</p>
-                <p class="pin-note">📌 <strong>Household Note:</strong> Gate code is #4412. Jane handles weekend drop-offs.</p>
+        <section id="crm-view" class="view-panel">
+            <div class="crm-header">
+                <h2>Registry Directory</h2>
                 
-                <div class="crm-grid">
-                    <div class="crm-sub-block">
-                        <h4>Pets in Household</h4>
-                        <ul>
-                            <li><strong>Max:</strong> Golden Retriever (3yo, 72 lbs) <br>✅ Vaccines Current</li>
-                            <li><strong>Bella:</strong> Siamese Cat (7yo, 11 lbs) <br>❌ Vaccines Expired</li>
-                        </ul>
-                    </div>
-                    <div class="crm-sub-block">
-                        <h4>Preferred Professionals & Vets</h4>
-                        <p><strong>Clinic:</strong> Oakridge Vet Clinic</p>
-                        <p><strong>Doctor:</strong> Dr. Arrington (555-9981)</p>
-                    </div>
+                <div class="controls-row">
+                    <input type="text" id="crm-search" placeholder="Search names, phone numbers, breeds, clinics..." onkeyup="filterCRM()">
+                    <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
+                </div>
+
+                <div class="filter-menu">
+                    <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
+                    <button id="filter-household" class="filter-chip" onclick="setEntityFilter('household')">Households</button>
+                    <button id="filter-people" class="filter-chip" onclick="setEntityFilter('people')">People</button>
+                    <button id="filter-pets" class="filter-chip" onclick="setEntityFilter('pets')">Pets</button>
+                    <button id="filter-vets" class="filter-chip" onclick="setEntityFilter('vets')">Vets / COIs</button>
                 </div>
             </div>
 
-            <div class="crm-card">
-                <h3>The Davis Household</h3>
-                <p><strong>Primary Contact:</strong> Alice Davis (555-3341)</p>
-                <div class="crm-grid">
-                    <div class="crm-sub-block">
-                        <h4>Pets in Household</h4>
-                        <ul>
-                            <li><strong>Luna:</strong> French Bulldog (2yo, 22 lbs) <br>✅ Vaccines Current</li>
-                        </ul>
+            <div id="crm-list-container" class="card-layout">
+                
+                <div class="crm-item" data-type="household" data-search="miller john jane oakridge arrington">
+                    <div class="item-header">
+                        <h3>The Miller Household</h3>
+                        <span class="entity-badge household">Household</span>
                     </div>
-                    <div class="crm-sub-block">
-                        <h4>Preferred Professionals & Vets</h4>
-                        <p><strong>Clinic:</strong> City Animal Hospital (555-1212)</p>
+                    <p><strong>Primary Contact:</strong> John Miller (555-0192) | <strong>Secondary:</strong> Jane Miller</p>
+                    <p class="pin-note">📌 <strong>Household Note:</strong> Gate code is #4412. Jane handles weekend drop-offs.</p>
+                    <div class="nested-details">
+                        <p><strong>Linked Pets:</strong> Max (Golden Retriever), Bella (Siamese Cat)</p>
+                        <p><strong>Preferred Vet:</strong> Oakridge Vet Clinic (Dr. Arrington)</p>
                     </div>
                 </div>
+
+                <div class="crm-item" data-type="household" data-search="davis alice city animal hospital">
+                    <div class="item-header">
+                        <h3>The Davis Household</h3>
+                        <span class="entity-badge household">Household</span>
+                    </div>
+                    <p><strong>Primary Contact:</strong> Alice Davis (555-3341)</p>
+                    <div class="nested-details">
+                        <p><strong>Linked Pets:</strong> Luna (French Bulldog)</p>
+                        <p><strong>Preferred Vet:</strong> City Animal Hospital</p>
+                    </div>
+                </div>
+
+                <div class="crm-item" data-type="people" data-search="john miller 555-0192 primary">
+                    <div class="item-header">
+                        <h3>John Miller</h3>
+                        <span class="entity-badge person">Person</span>
+                    </div>
+                    <p><strong>Household Unit:</strong> The Miller Household (Primary)</p>
+                    <p><strong>Contact Info:</strong> 555-0192 | john.m@email.com</p>
+                    <p><strong>External Relations:</strong> Emergency Contact for Smith Household</p>
+                </div>
+
+                <div class="crm-item" data-type="pets" data-search="max golden retriever miller vax clear">
+                    <div class="item-header">
+                        <h3>Max <span class="sub-text">(Golden Retriever)</span></h3>
+                        <span class="entity-badge pet">Pet</span>
+                    </div>
+                    <p><strong>Family Unit:</strong> Miller Household | <strong>Age & Weight:</strong> 3yo, 72 lbs</p>
+                    <p class="health-indicator success">✅ Vaccines Current (Expires Dec 2026)</p>
+                    <p><strong>Personal Gear:</strong> Blue Kong toy, Red nylon training leash</p>
+                </div>
+
+                <div class="crm-item" data-type="pets" data-search="bella siamese cat miller expired vax alert">
+                    <div class="item-header">
+                        <h3>Bella <span class="sub-text">(Siamese Cat)</span></h3>
+                        <span class="entity-badge pet">Pet</span>
+                    </div>
+                    <p><strong>Family Unit:</strong> Miller Household | <strong>Age & Weight:</strong> 7yo, 11 lbs</p>
+                    <p class="health-indicator danger">❌ Vaccines Expired (May 2026)</p>
+                </div>
+
+                <div class="crm-item" data-type="vets" data-search="oakridge vet clinic arrington 555-9981">
+                    <div class="item-header">
+                        <h3>Oakridge Vet Clinic</h3>
+                        <span class="entity-badge coi">Vet / COI</span>
+                    </div>
+                    <p><strong>Primary Care Practitioner:</strong> Dr. Arrington</p>
+                    <p><strong>Phone:</strong> 555-9981 | <strong>Address:</strong> 104 Oakridge Medical Way</p>
+                    <p><strong>Active Clients Registered:</strong> 4 Households (Miller, Smith, Thompson, Vance)</p>
+                </div>
+
             </div>
         </section>
 
-        <section id="calendar-view" class="view-panel hidden">
-            <h2>Boarding & Kennel Availability Grid</h2>
-            <table class="calendar-table">
-                <thead>
-                    <tr>
-                        <th>Resource</th>
-                        <th>Sun 14</th>
-                        <th>Mon 15</th>
-                        <th>Tue 16</th>
-                        <th>Wed 17</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>Luxury Suite #1</strong></td>
-                        <td class="booked" colspan="2">Rocky (Smith)</td>
-                        <td class="available">Available</td>
-                        <td class="available">Available</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Luxury Suite #2</strong></td>
-                        <td class="available">Available</td>
-                        <td class="available">Available</td>
-                        <td class="booked" colspan="2">Max (Miller)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Standard Run A</strong></td>
-                        <td class="booked">Luna (Davis)</td>
-                        <td class="available">Available</td>
-                        <td class="available">Available</td>
-                        <td class="available">Available</td>
-                    </tr>
-                </tbody>
-            </table>
-        </section>
-
-        <section id="owner-view" class="view-panel hidden">
-            <h2>Welcome back, John! 👋</h2>
-            <div class="booking-wizard">
-                <h3>Book a New Stay for Max</h3>
-                <label>Select Service:</label>
-                <select>
-                    <option>Luxury Suite Boarding ($55/night)</option>
-                    <option>Standard Boarding ($35/night)</option>
-                    <option>Private Agility Training ($75/session)</option>
-                </select>
-
-                <div class="date-row">
-                    <div>
-                        <label>Check-In:</label>
-                        <input type="date" value="2026-07-03">
-                    </div>
-                    <div>
-                        <label>Check-Out:</label>
-                        <input type="date" value="2026-07-07">
-                    </div>
-                </div>
-
-                <div class="health-banner success">
-                    ✅ Max's vaccinations are up to date (Expires Dec 2026).
-                </div>
-
-                <label>Special Packing Instructions:</label>
-                <textarea placeholder="Blue Kong toy, medication schedule, favorite blanket..."></textarea>
-
-                <button class="btn-primary">Proceed to Secure Checkout</button>
-            </div>
-        </section>
-
+        <section id="calendar-view" class="view-panel hidden"><h2>Calendar Grid</h2></section>
+        <section id="owner-view" class="view-panel hidden"><h2>Owner Portal</h2></section>
     </main>
 
     <script src="app.js"></script>
