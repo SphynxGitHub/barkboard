@@ -15,6 +15,7 @@
             <button onclick="switchView('staff-view')" class="nav-btn">Staff Feed</button>
             <button onclick="switchView('crm-view')" class="nav-btn active">People & Pets</button>
             <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
+            <button onclick="switchView('biz-view')" class="nav-btn">Business Management</button>
             <button onclick="switchView('owner-view')" class="nav-btn">Owner Portal</button>
         </nav>
     </header>
@@ -23,19 +24,17 @@
         
         <section id="staff-view" class="view-panel hidden">
             <h2>Today's Overview</h2>
-            <p>Staff feed metrics...</p>
+            <p>Staff feed dashboard metrics...</p>
         </section>
 
         <section id="crm-view" class="view-panel">
             <div class="crm-header">
                 <h2>Registry Directory & Global Relations</h2>
-                
                 <div class="controls-row">
                     <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderCRM()">
                     <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
                     <button class="btn btn-primary" onclick="openRelationshipModal()">⛓️ Link New Relationship</button>
                 </div>
-
                 <div class="filter-menu">
                     <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
                     <button id="filter-household" class="filter-chip" onclick="setEntityFilter('household')">Households</button>
@@ -48,15 +47,50 @@
             <div id="crm-list-container" class="card-layout"></div>
         </section>
 
+        <section id="biz-view" class="view-panel hidden">
+            <h2>Business Management Dashboard</h2>
+            <div class="stats-grid">
+                <div class="stat-card"><h3>Gross Revenue (Mtd)</h3><p class="revenue-color">$18,450</p></div>
+                <div class="stat-card"><h3>Average Lifetime Value (LTV)</h3><p>$1,120</p></div>
+                <div class="stat-card"><h3>Retention Rate</h3><p class="success-color">94.2%</p></div>
+                <div class="stat-card"><h3>Active Subscription Packages</h3><p>38</p></div>
+            </div>
+
+            <div class="chart-container-mock">
+                <h3>Sales & Bookings Performance Over Time</h3>
+                <div class="bar-chart-mock">
+                    <div class="bar-col" style="height: 40%"><span class="bar-lbl">Mar</span><span class="bar-val">$12k</span></div>
+                    <div class="bar-col" style="height: 55%"><span class="bar-lbl">Apr</span><span class="bar-val">$15k</span></div>
+                    <div class="bar-col" style="height: 75%"><span class="bar-lbl">May</span><span class="bar-val">$21k</span></div>
+                    <div class="bar-col active" style="height: 90%"><span class="bar-lbl">Jun (Current)</span><span class="bar-val">$26k</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="calendar-view" class="view-panel hidden"><h2>Calendar</h2></section>
+        
+        <section id="owner-view" class="view-panel hidden"><h2>Owner Portal</h2></section>
+
+        <div id="fullscreen-modal" class="modal hidden">
+            <div class="fullscreen-content">
+                <div class="fullscreen-header">
+                    <h2 id="fs-title">Contact Profile</h2>
+                    <button class="close-fs-btn" onclick="closeFullscreenProfile()">✕ Close Profile</button>
+                </div>
+                <div class="fs-body-layout">
+                    <div id="fs-quick-actions-anchor" class="fs-sidebar-actions">
+                        </div>
+                    <div id="fs-details-payload" class="fs-main-details">
+                        </div>
+                </div>
+            </div>
+        </div>
+
         <div id="relationship-modal" class="modal hidden">
             <div class="modal-content">
                 <h3>Link Cross-Entity Relationship</h3>
                 <form id="relation-form" onsubmit="saveNewRelationship(event)">
-                    <div class="form-group">
-                        <label>Select Primary Entity:</label>
-                        <select id="modal-entity-a" required></select>
-                    </div>
-                    
+                    <div class="form-group"><label>Select Primary Entity:</label><select id="modal-entity-a" required></select></div>
                     <div class="form-group">
                         <label>Relationship Configuration:</label>
                         <select id="modal-relation-type" onchange="toggleRelationshipFields()" required>
@@ -65,27 +99,15 @@
                             <option value="family">Extended Family / Neighbor Boundary</option>
                         </select>
                     </div>
-
-                    <div class="form-group">
-                        <label>Select Target Entity to Link:</label>
-                        <select id="modal-entity-b" required></select>
-                    </div>
-
-                    <div class="form-group id="custom-note-group">
-                        <label>Relationship Note / Tag Identifier:</label>
-                        <input type="text" id="modal-relation-note" placeholder="e.g., Neighbor who has key, Primary Co-op vet">
-                    </div>
-
+                    <div class="form-group"><label>Select Target Entity to Link:</label><select id="modal-entity-b" required></select></div>
+                    <div class="form-group"><label>Relationship Note:</label><input type="text" id="modal-relation-note" placeholder="e.g., Authorized drop-off"></div>
                     <div class="modal-actions">
                         <button type="button" class="btn" onclick="closeRelationshipModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Establish Link & Sync</button>
+                        <button type="submit" class="btn btn-primary">Establish Link</button>
                     </div>
                 </form>
             </div>
         </div>
-
-        <section id="calendar-view" class="view-panel hidden"><h2>Calendar</h2></section>
-        <section id="owner-view" class="view-panel hidden"><h2>Owner Portal</h2></section>
     </main>
 
     <script src="app.js"></script>
