@@ -9,26 +9,10 @@
     --success-text: #065f46;
     --danger: #fee2e2;
     --danger-text: #991b1b;
-    --warning: #fef3c7;
-    --warning-text: #92400e;
 }
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background-color: var(--background);
-    color: var(--text);
-    margin: 0;
-}
-
-/* Navbar Base */
-.navbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: var(--surface);
-    padding: 1rem 2rem;
-    border-bottom: 1px solid var(--border);
-}
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--background); color: var(--text); margin: 0; }
+.navbar { display: flex; justify-content: space-between; align-items: center; background-color: var(--surface); padding: 1rem 2rem; border-bottom: 1px solid var(--border); }
 .logo { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
 .nav-btn { background: none; border: none; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-radius: 0.375rem; margin-left: 0.5rem; }
 .nav-btn.active, .nav-btn:hover { background-color: var(--primary); color: white; }
@@ -36,122 +20,45 @@ body {
 .view-panel { display: flex; flex-direction: column; gap: 1.5rem; }
 .hidden { display: none !important; }
 
-/* CRM Header Controllers */
-.crm-header {
-    background: var(--surface);
-    padding: 1.5rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-.controls-row {
-    display: flex;
-    gap: 1rem;
-}
-#crm-search {
-    flex: 1;
-    padding: 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    font-size: 1rem;
-}
+/* CRM Header Setup */
+.crm-header { background: var(--surface); padding: 1.5rem; border-radius: 0.5rem; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 1rem; }
+.controls-row { display: flex; gap: 1rem; }
+#crm-search { flex: 1; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 1rem; }
+.filter-menu { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.filter-chip { background: #f3f4f6; border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; cursor: pointer; }
+.filter-chip.active, .filter-chip:hover { background: #374151; color: white; }
 
-/* Secondary Navigation Filter Submenu */
-.filter-menu {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-.filter-chip {
-    background: #f3f4f6;
-    border: 1px solid var(--border);
-    padding: 0.5rem 1rem;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    cursor: pointer;
-    font-weight: 500;
-    transition: all 0.2s ease;
-}
-.filter-chip.active, .filter-chip:hover {
-    background: #374151;
-    color: white;
-    border-color: #374151;
-}
+/* Structural Card Grid Outputs */
+.card-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(450px, 1fr)); gap: 1rem; }
+.list-layout { display: flex; flex-direction: column; gap: 0.5rem; }
 
-/* Entity Color Coding Badge System */
-.entity-badge {
-    font-size: 0.75rem;
-    font-weight: bold;
-    padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
-    text-transform: uppercase;
-}
+.crm-card { background: var(--surface); padding: 1.5rem; border-radius: 0.5rem; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem; }
+.item-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+.item-header h3 { margin: 0; }
+
+/* Read-Only Nested Sub-Block Containers */
+.crm-section-block { background: #f9fafb; border: 1px solid var(--border); padding: 0.75rem 1rem; border-radius: 0.375rem; margin-top: 0.25rem; }
+.crm-section-block h4 { margin: 0 0 0.5rem 0; font-size: 0.9rem; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; }
+.crm-section-block ul { margin: 0; padding-left: 1.25rem; font-size: 0.95rem; }
+.crm-section-block li { margin-bottom: 0.25rem; }
+
+/* Indented Client Tree Layout specific to Vets view */
+.indent-level-1 { margin-left: 1rem; border-left: 2px solid var(--border); padding-left: 0.75rem; margin-top: 0.5rem; }
+.indent-level-2 { margin-left: 1.5rem; font-size: 0.9rem; color: #4b5563; }
+
+/* Badges & Flags */
+.entity-badge { font-size: 0.7rem; font-weight: bold; padding: 0.2rem 0.6rem; border-radius: 9999px; text-transform: uppercase; }
 .entity-badge.household { background: #e0f2fe; color: #0369a1; }
 .entity-badge.person { background: #f3e8ff; color: #6b21a8; }
-.entity-badge.pet { background: #dcfce7; color: #166534; }
-.entity-badge.coi { background: #fef3c7; color: #92400e; }
+.entity-badge.pets { background: #dcfce7; color: #166534; }
+.entity-badge.vets { background: #fef3c7; color: #92400e; }
+.relation-tag { display: inline-block; background: #e5e7eb; color: #374151; font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 600; margin-left: 0.5rem; }
 
-/* LAYOUT CONFIGURATION 1: Default Visual Grid Cards */
-.card-layout {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
-    gap: 1rem;
-}
-.card-layout .crm-item {
-    background: var(--surface);
-    padding: 1.5rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--border);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-.card-layout .item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0.5rem;
-}
-.card-layout .item-header h3 { margin: 0; font-size: 1.2rem; }
-.card-layout .nested-details {
-    background: #f9fafb;
-    padding: 0.75rem;
-    border-radius: 0.375rem;
-    border: 1px solid var(--border);
-    font-size: 0.9rem;
-}
+/* Modals */
+.modal { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 1rem; }
+.form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 
-/* LAYOUT CONFIGURATION 2: Flattened Row List View Alternative */
-.list-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-.list-layout .crm-item {
-    background: var(--surface);
-    padding: 0.75rem 1.5rem;
-    border-radius: 0.375rem;
-    border: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.list-layout .item-header {
-    display: flex;
-    flex-direction: row-reverse;
-    gap: 1rem;
-    align-items: center;
-}
-.list-layout .item-header h3 { margin: 0; font-size: 1rem; }
-.list-layout .pin-note, .list-layout .nested-details, .list-layout p { display: none; } /* Hide heavy card junk in list layout */
-
-/* Inline alert banners */
-.pin-note { background: var(--warning); padding: 0.5rem 0.75rem; border-radius: 0.375rem; color: var(--warning-text); font-size: 0.9rem; margin: 0; }
-.health-indicator { padding: 0.35rem 0.5rem; border-radius: 0.25rem; font-size: 0.85rem; font-weight: 500; display: inline-block; }
-.health-indicator.success { background: var(--success); color: var(--success-text); }
-.health-indicator.danger { background: var(--danger); color: var(--danger-text); }
 .btn { background: #f3f4f6; border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-weight: 500; }
+.btn-primary { background: var(--primary); color: white; border: none; }
