@@ -12,6 +12,7 @@
         <div class="logo">🐾 Barkboard</div>
         <nav>
             <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
+            <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
             <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
             <button onclick="switchView('owner-view')" class="nav-btn">Owner Portal</button>
         </nav>
@@ -43,6 +44,47 @@
                 <div class="actions">
                     <button class="btn">+ Feeding Log</button>
                     <button class="btn">+ Potty Log</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="crm-view" class="view-panel hidden">
+            <h2>Household Registry (CRM)</h2>
+            <div class="crm-card">
+                <h3>The Miller Household</h3>
+                <p><strong>Primary Contact:</strong> John Miller (555-0192) | <strong>Secondary:</strong> Jane Miller</p>
+                <p class="pin-note">📌 <strong>Household Note:</strong> Gate code is #4412. Jane handles weekend drop-offs.</p>
+                
+                <div class="crm-grid">
+                    <div class="crm-sub-block">
+                        <h4>Pets in Household</h4>
+                        <ul>
+                            <li><strong>Max:</strong> Golden Retriever (3yo, 72 lbs) <br>✅ Vaccines Current</li>
+                            <li><strong>Bella:</strong> Siamese Cat (7yo, 11 lbs) <br>❌ Vaccines Expired</li>
+                        </ul>
+                    </div>
+                    <div class="crm-sub-block">
+                        <h4>Preferred Professionals & Vets</h4>
+                        <p><strong>Clinic:</strong> Oakridge Vet Clinic</p>
+                        <p><strong>Doctor:</strong> Dr. Arrington (555-9981)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="crm-card">
+                <h3>The Davis Household</h3>
+                <p><strong>Primary Contact:</strong> Alice Davis (555-3341)</p>
+                <div class="crm-grid">
+                    <div class="crm-sub-block">
+                        <h4>Pets in Household</h4>
+                        <ul>
+                            <li><strong>Luna:</strong> French Bulldog (2yo, 22 lbs) <br>✅ Vaccines Current</li>
+                        </ul>
+                    </div>
+                    <div class="crm-sub-block">
+                        <h4>Preferred Professionals & Vets</h4>
+                        <p><strong>Clinic:</strong> City Animal Hospital (555-1212)</p>
+                    </div>
                 </div>
             </div>
         </section>
