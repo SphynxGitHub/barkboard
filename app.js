@@ -120,12 +120,14 @@ function renderCRM() {
         if (currentEntityFilter === 'all' || currentEntityFilter === category) {
             window[category].forEach(item => {
                 if (!item.name.toLowerCase().includes(searchVal)) return;
+                
+                // Safe check to see if the entity has a parent household
                 const parentHId = item.householdId || '';
                 
                 container.innerHTML += `
                     <div class="crm-card" onclick="openFullscreenProfile('${category}', '${item.id}')">
                         <div class="item-header">
-                            <h3>${item.name}</h3>
+                            <div class="clickable-profile-zone"><h3>${item.name}</h3></div>
                             <span class="entity-badge ${category}">${category}</span>
                         </div>
                         <p>${item.contact || item.details || 'Registered Service Provider Profile Entry Card'}</p>
