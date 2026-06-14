@@ -1,41 +1,46 @@
-// Central Data State Arrays Model
-let households = [
+// --- CENTRAL APPLICATION DATABASE STATE MOCK ---
+var households = [
     { id: 'h-miller', name: 'The Miller Household', note: 'Gate code is #4412.', address: '742 Evergreen Terrace' },
     { id: 'h-davis', name: 'The Davis Household', note: 'Alice handles drop-offs.', address: '122 Maple Road' }
 ];
 
-let people = [
+var people = [
     { id: 'p-john', householdId: 'h-miller', name: 'John Miller', contact: '555-0192 | john.m@email.com', role: 'Primary' },
     { id: 'p-jane', householdId: 'h-miller', name: 'Jane Miller', contact: '555-0193', role: 'Secondary' },
     { id: 'p-alice', householdId: 'h-davis', name: 'Alice Davis', contact: '555-3341', role: 'Primary' }
 ];
 
-let pets = [
-    { id: 'pet-max', householdId: 'h-miller', name: 'Max', details: 'Golden Retriever (3yo, 72 lbs)', status: '✅ Vaccines Current' },
-    { id: 'pet-bella', householdId: 'h-miller', name: 'Bella', details: 'Siamese Cat (7yo, 11 lbs)', status: '❌ Vaccines Expired' },
-    { id: 'pet-luna', householdId: 'h-davis', name: 'Luna', details: 'French Bulldog (2yo, 22 lbs)', status: '✅ Vaccines Current' }
+var pets = [
+    { id: 'pet-max', householdId: 'h-miller', name: 'Max', details: 'Golden Retriever (3yo, 72 lbs)', status: '✅ Vaccines Current', room: 'Luxury Suite #5' },
+    { id: 'pet-bella', householdId: 'h-miller', name: 'Bella', details: 'Siamese Cat (7yo, 11 lbs)', status: '❌ Vaccines Expired', room: 'Cat Condo A' },
+    { id: 'pet-luna', householdId: 'h-davis', name: 'Luna', details: 'French Bulldog (2yo, 22 lbs)', status: '✅ Vaccines Current', room: 'Standard Run B' }
 ];
 
-let vets = [
+var vets = [
     { id: 'v-oakridge', name: 'Oakridge Vet Clinic', details: 'Dr. Arrington | 555-9981' },
     { id: 'v-city', name: 'City Animal Hospital', details: 'Emergency Dispatch | 555-1212' }
 ];
 
-let crossRelationships = [
+var crossRelationships = [
     { entityId: 'h-miller', targetId: 'v-oakridge', type: 'vet', note: 'Primary Care' },
     { entityId: 'h-davis', targetId: 'v-city', type: 'vet', note: 'Emergency Backup Only' }
 ];
 
-let currentEntityFilter = 'all';
-let isCardLayoutMode = true;
+var currentEntityFilter = 'all';
+var isCardLayoutMode = true;
 
+// Initial execution hook on load
 document.addEventListener("DOMContentLoaded", () => {
-    renderCRM();
+    renderAllDashboards();
 });
 
+/**
+ * Global Routing Manager
+ */
 function switchView(viewId) {
     document.querySelectorAll('.view-panel').forEach(panel => panel.classList.add('hidden'));
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    
     document.getElementById(viewId).classList.remove('hidden');
     
     const activeBtn = Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.getAttribute('onclick').includes(viewId));
@@ -46,7 +51,7 @@ function setEntityFilter(filterType) {
     currentEntityFilter = filterType;
     document.querySelectorAll('.filter-chip').forEach(chip => chip.classList.remove('active'));
     document.getElementById(`filter-${filterType}`).classList.add('active');
-    renderCRM();
+    renderAllDashboards();
 }
 
 function toggleLayout() {
@@ -56,91 +61,129 @@ function toggleLayout() {
     
     container.className = isCardLayoutMode ? 'card-layout' : 'list-layout';
     toggleBtn.innerText = isCardLayoutMode ? '📋 Switch to List View' : '🗂️ Switch to Card View';
-    renderCRM();
+    renderAllDashboards();
 }
 
 /**
- * GENERATOR UTILITY: Standardizes Quick Action Button Configurations
+ * REUSABLE ACTIONS UTILITY FOR HOUSEHOLDS
  */
 function generateQuickActionsHTML(householdId) {
     return `
         <div class="qa-container" onclick="event.stopPropagation();">
-            <button class="qa-icon-btn" data-tooltip="Book Visit" onclick="executeAction('Book Visit', '${householdId}')">📅<span>Book Visit</span></button>
-            <button class="qa-icon-btn" data-tooltip="Add Pet" onclick="executeAction('Add Pet', '${householdId}')">🐕<span>Add Pet</span></button>
-            <button class="qa-icon-btn" data-tooltip="Add Person" onclick="executeAction('Add Person', '${householdId}')">👤<span>Add Person</span></button>
-            <button class="qa-icon-btn" data-tooltip="Add Vet" onclick="executeAction('Add Vet', '${householdId}')">🏥<span>Add Vet</span></button>
-            <button class="qa-icon-btn" data-tooltip="Request Payment" onclick="executeAction('Request Payment', '${householdId}')">💳<span>Request Payment</span></button>
-            <button class="qa-icon-btn" data-tooltip="Send Email" onclick="executeAction('Send Email', '${householdId}')">✉️<span>Send Email</span></button>
+            <div class="qa-icon-btn" data-tooltip="Book Visit" onclick="executeAction('Book Visit', '${householdId}')">📅<span>Book Visit</span></div>
+            <div class="qa-icon-btn" data-tooltip="Add Pet" onclick="executeAction('Add Pet', '${householdId}')">🐕<span>Add Pet</span></div>
+            <div class="qa-icon-btn" data-tooltip="Add Person" onclick="executeAction('Add Person', '${householdId}')">👤<span>Add Person</span></button></div>
+            <div class="qa-icon-btn" data-tooltip="Add Vet" onclick="executeAction('Add Vet', '${householdId}')">🏥<span>Add Vet</span></div>
+            <div class="qa-icon-btn" data-tooltip="Request Payment" onclick="executeAction('Request Payment', '${householdId}')">💳<span>Request Payment</span></div>
+            <div class="qa-icon-btn" data-tooltip="Send Email" onclick="executeAction('Send Email', '${householdId}')">✉️<span>Send Email</span></div>
         </div>
     `;
 }
 
 function executeAction(actionName, id) {
-    alert(`System Operation Dispatched:\n[${actionName}] event triggered for target registration sequence entry reference ID: ${id}`);
+    alert(`CRM Dispatch Event:\n[${actionName}] requested for household target mapping key: ${id}`);
 }
 
 /**
- * RE-ENGINEERED CRM ENGINE: Injects global click handles to load full profiles
+ * MASTER ENGINE: Repaints all dashboard layers from centralized state arrays
  */
-function renderCRM() {
-    const container = document.getElementById('crm-list-container');
-    const searchVal = document.getElementById('crm-search').value.toLowerCase();
-    container.innerHTML = '';
-
-    // Households Layout Render Execution
-    if (currentEntityFilter === 'all' || currentEntityFilter === 'household') {
-        households.forEach(h => {
-            if (!h.name.toLowerCase().includes(searchVal)) return;
-            const hPeople = people.filter(p => p.householdId === h.id);
-            const hPets = pets.filter(p => p.householdId === h.id);
-            const actionsHTML = generateQuickActionsHTML(h.id);
-
-            container.innerHTML += `
-                <div class="crm-card" onclick="openFullscreenProfile('household', '${h.id}')">
+function renderAllDashboards() {
+    const searchVal = document.getElementById('crm-search') ? document.getElementById('crm-search').value.toLowerCase() : '';
+    
+    // ---------------- PANEL 1: STAFF DASHBOARD REPAINT ----------------
+    const staffGuestsContainer = document.getElementById('staff-guests-container');
+    if (staffGuestsContainer) {
+        staffGuestsContainer.innerHTML = '';
+        // Set dynamic live capacity counter metric
+        document.getElementById('stat-kennels').innerText = `${pets.length} / 20`;
+        
+        pets.forEach(pet => {
+            const hOwner = households.find(h => h.id === pet.householdId);
+            const isAlert = pet.status.includes('Expired');
+            
+            staffGuestsContainer.innerHTML += `
+                <div class="crm-card ${isAlert ? 'warning' : ''}">
                     <div class="item-header">
-                        <div class="clickable-profile-zone"><h3>${h.name}</h3></div>
-                        <span class="entity-badge household">Household</span>
+                        <h3>${pet.name} <span class="badge luxury">${pet.room}</span></h3>
+                        <span class="entity-badge pets">Pet Guest</span>
                     </div>
-                    ${isCardLayoutMode ? `<p class="pin-note">📌 <strong>Alert:</strong> ${h.note}</p>` : ''}
-                    <div class="crm-section-block">
-                        <h4>Members</h4>
-                        <ul>
-                            ${hPeople.map(p => `<li>👤 ${p.name} (${p.role})</li>`).join('')}
-                            ${hPets.map(p => `<li>🐾 ${p.name} - ${p.details}</li>`).join('')}
-                        </ul>
+                    <p><strong>Attributes:</strong> ${pet.details} | <strong>Family:</strong> ${hOwner.name}</p>
+                    ${isAlert ? `<p class="pin-note">📌 <strong>Expired Vaccination Alert:</strong> Update medical sheets immediately.</p>` : ''}
+                    <div class="qa-container">
+                        <button class="btn" onclick="alert('Feeding event logged for ${pet.name}')">+ Feeding Log</button>
+                        <button class="btn" onclick="alert('Potty event logged for ${pet.name}')">+ Potty Log</button>
                     </div>
-                    ${actionsHTML}
                 </div>
             `;
         });
     }
 
-    // Secondary items check for individual rows context routing
-    ['people', 'pets', 'vets'].forEach(category => {
-        if (currentEntityFilter === 'all' || currentEntityFilter === category) {
-            window[category].forEach(item => {
-                if (!item.name.toLowerCase().includes(searchVal)) return;
-                
-                // Safe check to see if the entity has a parent household
-                const parentHId = item.householdId || '';
-                
-                container.innerHTML += `
-                    <div class="crm-card" onclick="openFullscreenProfile('${category}', '${item.id}')">
+    // ---------------- PANEL 2: PEOPLE & PETS CRM REPAINT ----------------
+    const crmContainer = document.getElementById('crm-list-container');
+    if (crmContainer) {
+        crmContainer.innerHTML = '';
+
+        if (currentEntityFilter === 'all' || currentEntityFilter === 'household') {
+            households.forEach(h => {
+                if (!h.name.toLowerCase().includes(searchVal)) return;
+                const hPeople = people.filter(p => p.householdId === h.id);
+                const hPets = pets.filter(p => p.householdId === h.id);
+                const hVets = crossRelationships.filter(r => r.entityId === h.id && r.type === 'vet').map(r => vets.find(v => v.id === r.targetId));
+
+                crmContainer.innerHTML += `
+                    <div class="crm-card" onclick="openFullscreenProfile('household', '${h.id}')">
                         <div class="item-header">
-                            <div class="clickable-profile-zone"><h3>${item.name}</h3></div>
-                            <span class="entity-badge ${category}">${category}</span>
+                            <div class="clickable-profile-zone"><h3>${h.name}</h3></div>
+                            <span class="entity-badge household">Household</span>
                         </div>
-                        <p>${item.contact || item.details || 'Registered Service Provider Profile Entry Card'}</p>
-                        ${parentHId ? generateQuickActionsHTML(parentHId) : ''}
+                        ${isCardLayoutMode ? `<p class="pin-note">📌 <strong>Household Context:</strong> ${h.note}</p>` : ''}
+                        <div class="crm-section-block">
+                            <h4>Members Structure</h4>
+                            <ul>
+                                ${hPeople.map(p => `<li>👤 ${p.name} (${p.role})</li>`).join('')}
+                                ${hPets.map(p => `<li>🐾 ${p.name} - ${p.details}</li>`).join('')}
+                            </ul>
+                        </div>
+                        ${generateQuickActionsHTML(h.id)}
                     </div>
                 `;
             });
         }
-    });
+
+        ['people', 'pets', 'vets'].forEach(category => {
+            if (currentEntityFilter === 'all' || currentEntityFilter === category) {
+                window[category].forEach(item => {
+                    if (!item.name.toLowerCase().includes(searchVal)) return;
+                    const parentHId = item.householdId || '';
+                    
+                    crmContainer.innerHTML += `
+                        <div class="crm-card" onclick="openFullscreenProfile('${category}', '${item.id}')">
+                            <div class="item-header">
+                                <div class="clickable-profile-zone"><h3>${item.name}</h3></div>
+                                <span class="entity-badge ${category}">${category}</span>
+                            </div>
+                            <p>${item.contact || item.details || 'Registered COI Enterprise Network Row Data'}</p>
+                            ${parentHId ? generateQuickActionsHTML(parentHId) : ''}
+                        </div>
+                    `;
+                });
+            }
+        });
+    }
+
+    // ---------------- PANEL 3: RESOURCE CALENDAR REPAINT ----------------
+    const calendarBody = document.getElementById('calendar-body-target');
+    if (calendarBody) {
+        calendarBody.innerHTML = `
+            <tr><td><strong>Luxury Suite #5</strong></td><td class="booked" colspan="2">Max (The Millers)</td><td class="available">Available</td><td class="available">Available</td></tr>
+            <tr><td><strong>Standard Run B</strong></td><td class="booked" colspan="4">Luna (The Davis Family)</td></tr>
+            <tr><td><strong>Cat Condo A</strong></td><td class="available">Available</td><td class="booked">Bella (The Millers)</td><td class="available">Available</td><td class="available">Available</td></tr>
+        `;
+    }
 }
 
 /**
- * FULL SCREEN CRM PROFILE GENERATION ENGINE
+ * FULL SCREEN COMMAND PROFILE HOOK OVERLAY
  */
 function openFullscreenProfile(type, id) {
     const overlay = document.getElementById('fullscreen-modal');
@@ -155,40 +198,33 @@ function openFullscreenProfile(type, id) {
         const h = households.find(x => x.id === id);
         const hPeople = people.filter(p => p.householdId === h.id);
         const hPets = pets.filter(p => p.householdId === h.id);
-        const hVets = crossRelationships.filter(r => r.entityId === h.id && r.type === 'vet').map(r => vets.find(v => v.id === r.targetId));
-
-        title.innerText = `${h.name} - Master Command Profile`;
-        actionsAnchor.innerHTML = `<h4>Household Actions</h4>` + generateQuickActionsHTML(h.id);
+        
+        title.innerText = `${h.name} - Master Profile`;
+        actionsAnchor.innerHTML = `<h4>Quick Operations</h4>` + generateQuickActionsHTML(h.id);
         
         payloadAnchor.innerHTML = `
-            <div class="crm-section-block"><h3>Physical Location</h3><p>📍 ${h.address}</p></div>
-            <div class="crm-section-block"><h3>Administrative Internal System Log Context</h3><p>${h.note}</p></div>
+            <div class="crm-section-block"><h4>📍 Street Address</h4><p>${h.address}</p></div>
+            <div class="crm-section-block"><h4>📝 Notes Context</h4><p>${h.note}</p></div>
             <div class="crm-section-block">
-                <h3>Family Members (People)</h3>
-                <ul>${hPeople.map(p => `<li>👤 <strong>${p.name}</strong> - Access Role Classification: ${p.role} Contact Card (${p.contact})</li>`).join('')}</ul>
+                <h4>Household Human Members</h4>
+                <ul>${hPeople.map(p => `<li>👤 <strong>${p.name}</strong> - Contact Type: ${p.role} (${p.contact})</li>`).join('')}</ul>
             </div>
             <div class="crm-section-block">
-                <h3>Animal Profiles (Pets)</h3>
-                <ul>${hPets.map(p => `<li>🐾 <strong>${p.name}</strong> - ${p.details} | Health Prerequisites Check: <strong>${p.status}</strong></li>`).join('')}</ul>
-            </div>
-            <div class="crm-section-block">
-                <h3>Linked Primary Care Centers of Influence</h3>
-                <ul>${hVets.map(v => `<li>🏥 <strong>${v.name}</strong> - Provider Data: ${v.details}</li>`).join('')}</ul>
+                <h4>Registered Animals</h4>
+                <ul>${hPets.map(p => `<li>🐾 <strong>${p.name}</strong> - ${p.details} | Safety Clearance: <strong>${p.status}</strong></li>`).join('')}</ul>
             </div>
         `;
     } else {
-        // Universal single asset profile lookup routing fallback
         let targetItem = [...people, ...pets, ...vets].find(x => x.id === id);
-        title.innerText = `${targetItem.name} - Individual Node Card File`;
+        title.innerText = `${targetItem.name} - Node File`;
         if (targetItem.householdId) {
-            actionsAnchor.innerHTML = `<h4>Parent Actions</h4>` + generateQuickActionsHTML(targetItem.householdId);
+            actionsAnchor.innerHTML = `<h4>Quick Operations</h4>` + generateQuickActionsHTML(targetItem.householdId);
         }
         payloadAnchor.innerHTML = `
-            <div class="crm-section-block"><h3>System Reference Attributes</h3><p>${targetItem.contact || targetItem.details || 'No data notes compiled.'}</p></div>
-            ${targetItem.status ? `<div class="crm-section-block"><h3>Health Status Log</h3><p>${targetItem.status}</p></div>` : ''}
+            <div class="crm-section-block"><h4>Attributes & Metadata</h4><p>${targetItem.contact || targetItem.details || 'No data records listed.'}</p></div>
+            ${targetItem.status ? `<div class="crm-section-block"><h4>Health Status Flag</h4><p>${targetItem.status}</p></div>` : ''}
         `;
     }
-
     overlay.classList.remove('hidden');
 }
 
@@ -196,7 +232,7 @@ function closeFullscreenProfile() {
     document.getElementById('fullscreen-modal').classList.add('hidden');
 }
 
-/* Modal Creation utility triggers */
+/* Secondary relationship modal utilities */
 function openRelationshipModal() {
     const selectA = document.getElementById('modal-entity-a');
     selectA.innerHTML = '';
@@ -219,8 +255,8 @@ function saveNewRelationship(e) {
         entityId: document.getElementById('modal-entity-a').value,
         targetId: document.getElementById('modal-entity-b').value,
         type: document.getElementById('modal-relation-type').value,
-        note: document.getElementById('modal-relation-note').value || 'Linked Node'
+        note: document.getElementById('modal-relation-note').value || 'Linked Node Link'
     });
     closeRelationshipModal();
-    renderCRM();
+    renderAllDashboards();
 }
