@@ -710,6 +710,179 @@
         .owner-more-item .omi-label { font-size: 0.92rem; font-weight: 500; color: inherit; }
         .owner-more-item.active .omi-label { color: var(--owner-primary); font-weight: 600; }
 
+
+        /* ══ BUSINESS MANAGEMENT ══ */
+        .biz-subnav { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:1.5rem; overflow-x:auto; }
+        .biz-tab { background:none; border:none; padding:0.7rem 1.1rem; font-size:0.88rem; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap; font-weight:500; transition:all 0.15s; }
+        .biz-tab:hover { color:var(--primary); }
+        .biz-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+        .biz-section { display:none; }
+        .biz-section.active { display:block; }
+
+        .biz-date-toolbar { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:1rem 1.25rem; margin-bottom:1.25rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap; justify-content:space-between; }
+        .biz-select { padding:0.45rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; font-size:0.88rem; font-family:inherit; width:auto; }
+        .biz-date-input { padding:0.45rem 0.65rem; border:1px solid var(--border); border-radius:0.375rem; font-size:0.85rem; width:auto; }
+        .biz-custom-dates { display:flex; }
+
+        .stat-card.biz-clickable { cursor:pointer; transition:border-color 0.15s, box-shadow 0.15s; text-align:center; }
+        .stat-card.biz-clickable:hover { border-color:#a5b4fc; box-shadow:0 2px 8px rgba(79,70,229,0.1); }
+        .stat-card-hint { font-size:0.72rem; color:var(--primary); margin-top:0.4rem; font-weight:500; }
+
+        .biz-detail-panel { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; margin-top:1.25rem; overflow:hidden; }
+        .biz-detail-panel.hidden { display:none; }
+        .biz-detail-header { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.25rem; border-bottom:1px solid var(--border); background:#f9fafb; }
+        .biz-detail-header h3 { margin:0; font-size:0.95rem; }
+        .biz-detail-close { background:none; border:none; font-size:1.1rem; cursor:pointer; color:var(--text-muted); padding:0; }
+        .biz-detail-close:hover { color:var(--text); }
+        #biz-detail-body { padding:0; }
+
+        /* Payment rows in detail panel */
+        .biz-pay-row { display:flex; align-items:center; gap:1rem; padding:0.75rem 1.25rem; border-bottom:1px solid #f3f4f6; }
+        .biz-pay-row:last-child { border-bottom:none; }
+        .biz-pay-info { flex:1; min-width:0; }
+        .biz-pay-info strong { font-size:0.88rem; display:block; }
+        .biz-pay-info span { font-size:0.75rem; color:var(--text-muted); }
+        .biz-pay-amount { font-size:0.95rem; font-weight:700; color:var(--primary); white-space:nowrap; }
+
+        /* LTV household block */
+        .ltv-household { border-bottom:1px solid var(--border); }
+        .ltv-household:last-child { border-bottom:none; }
+        .ltv-hh-header { display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.25rem; cursor:pointer; gap:1rem; }
+        .ltv-hh-header:hover { background:#f9fafb; }
+        .ltv-hh-name { font-weight:600; font-size:0.9rem; }
+        .ltv-hh-meta { font-size:0.78rem; color:var(--text-muted); margin-top:0.1rem; }
+        .ltv-hh-value { font-size:1rem; font-weight:700; color:var(--primary); white-space:nowrap; }
+        .ltv-payments { background:#f9fafb; border-top:1px solid var(--border); display:none; }
+        .ltv-payments.open { display:block; }
+        .ltv-pay-item { padding:0.5rem 1.25rem 0.5rem 2.5rem; border-bottom:1px solid #f3f4f6; display:flex; justify-content:space-between; font-size:0.82rem; }
+        .ltv-pay-item:last-child { border-bottom:none; }
+
+        /* Retention rows */
+        .ret-row { display:flex; align-items:center; gap:1rem; padding:0.75rem 1.25rem; border-bottom:1px solid #f3f4f6; }
+        .ret-row:last-child { border-bottom:none; }
+        .ret-info { flex:1; }
+        .ret-info strong { font-size:0.88rem; display:block; }
+        .ret-info span { font-size:0.75rem; color:var(--text-muted); }
+        .ret-badge { font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:9999px; white-space:nowrap; flex-shrink:0; }
+        .ret-badge.active { background:var(--success); color:var(--success-text); }
+        .ret-badge.inactive { background:var(--danger); color:var(--danger-text); }
+        .ret-days { font-size:0.78rem; color:var(--text-muted); white-space:nowrap; }
+
+        /* Package stats */
+        .pkg-row { padding:1rem 1.25rem; border-bottom:1px solid var(--border); }
+        .pkg-row:last-child { border-bottom:none; }
+        .pkg-row h4 { margin:0 0 0.5rem; font-size:0.9rem; }
+        .pkg-stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem; margin-top:0.5rem; }
+        .pkg-stat { background:#f9fafb; border-radius:0.375rem; padding:0.5rem 0.65rem; }
+        .pkg-stat-val { font-size:1rem; font-weight:700; color:var(--text); }
+        .pkg-stat-lbl { font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-top:0.1rem; }
+
+        /* Resource management */
+        .resource-item { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:1rem 1.25rem; display:flex; align-items:flex-start; gap:1rem; }
+        .resource-item-info { flex:1; min-width:0; }
+        .resource-item-info h4 { margin:0 0 0.2rem; font-size:0.92rem; }
+        .resource-item-info p { margin:0; font-size:0.8rem; color:var(--text-muted); }
+        .resource-item-actions { display:flex; gap:0.4rem; flex-shrink:0; }
+        .resource-blackout-tag { display:inline-block; font-size:0.72rem; background:var(--danger); color:var(--danger-text); padding:0.15rem 0.5rem; border-radius:0.25rem; margin-top:0.35rem; }
+
+        /* Availability closures */
+        .closure-item { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:1rem 1.25rem; display:flex; align-items:center; gap:1rem; }
+        .closure-item.type-closure { border-left:3px solid var(--danger-text); }
+        .closure-item.type-reduced { border-left:3px solid #f59e0b; }
+        .closure-item.type-holiday { border-left:3px solid var(--primary); }
+        .closure-info { flex:1; }
+        .closure-info h4 { margin:0 0 0.2rem; font-size:0.9rem; }
+        .closure-info p { margin:0; font-size:0.8rem; color:var(--text-muted); }
+        .closure-type-pill { font-size:0.68rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; text-transform:uppercase; white-space:nowrap; }
+        .closure-type-pill.closure { background:var(--danger); color:var(--danger-text); }
+        .closure-type-pill.reduced { background:var(--warning); color:var(--warning-text); }
+        .closure-type-pill.holiday { background:#ede9fe; color:#5b21b6; }
+
+        .biz-empty { padding:2rem; text-align:center; color:var(--text-muted); font-size:0.88rem; }
+
+        @media (max-width:768px) {
+            .biz-subnav { gap:0; }
+            .biz-tab { font-size:0.8rem; padding:0.6rem 0.85rem; flex-shrink:0; }
+            .pkg-stats-grid { grid-template-columns:repeat(2,1fr); }
+            .biz-date-toolbar { flex-direction:column; align-items:flex-start; gap:0.65rem; }
+        }
+
+
+        /* ══ STAFF MANAGEMENT ══ */
+        .staff-card { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:1rem 1.25rem; display:flex; gap:1rem; align-items:flex-start; }
+        .staff-avatar { width:42px; height:42px; border-radius:50%; background:#ede9fe; color:#5b21b6; display:flex; align-items:center; justify-content:center; font-size:1rem; font-weight:700; flex-shrink:0; }
+        .staff-info { flex:1; min-width:0; }
+        .staff-info h4 { margin:0 0 0.15rem; font-size:0.92rem; }
+        .staff-info p  { margin:0; font-size:0.8rem; color:var(--text-muted); }
+        .staff-role-pill { font-size:0.68rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; background:#ede9fe; color:#5b21b6; display:inline-block; margin-top:0.3rem; }
+        .staff-assigned-pets { margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.3rem; }
+        .staff-pet-chip { font-size:0.72rem; background:#dcfce7; color:#166534; padding:0.15rem 0.45rem; border-radius:9999px; }
+        .staff-actions { display:flex; gap:0.4rem; flex-shrink:0; align-self:flex-start; }
+
+        .staff-avail-item { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:0.85rem 1.25rem; display:flex; align-items:center; gap:1rem; }
+        .staff-avail-item.type-vacation { border-left:3px solid var(--primary); }
+        .staff-avail-item.type-sick { border-left:3px solid var(--danger-text); }
+        .staff-avail-item.type-training { border-left:3px solid #f59e0b; }
+        .staff-avail-item.type-other { border-left:3px solid var(--text-muted); }
+        .sav-info { flex:1; }
+        .sav-info strong { font-size:0.88rem; display:block; }
+        .sav-info span { font-size:0.78rem; color:var(--text-muted); }
+        .sav-type-pill { font-size:0.68rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; text-transform:uppercase; white-space:nowrap; }
+        .sav-type-pill.vacation { background:#ede9fe; color:#5b21b6; }
+        .sav-type-pill.sick { background:var(--danger); color:var(--danger-text); }
+        .sav-type-pill.training { background:var(--warning); color:var(--warning-text); }
+        .sav-type-pill.other { background:#f3f4f6; color:#4b5563; }
+
+        .assignment-item { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:0.85rem 1.25rem; display:flex; align-items:center; gap:1rem; }
+        .asgn-info { flex:1; }
+        .asgn-info strong { font-size:0.88rem; }
+        .asgn-info span { font-size:0.78rem; color:var(--text-muted); display:block; margin-top:0.1rem; }
+        .asgn-role-pill { font-size:0.68rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; white-space:nowrap; }
+        .asgn-role-pill.primary { background:#dbeafe; color:#1e40af; }
+        .asgn-role-pill.trainer { background:#fef3c7; color:#92400e; }
+        .asgn-role-pill.backup  { background:#f3f4f6; color:#4b5563; }
+
+        .staff-task-item { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:0.75rem 1.1rem; display:flex; align-items:flex-start; gap:0.75rem; }
+        .staff-task-item.done .stsk-text { text-decoration:line-through; color:var(--text-muted); }
+        .stsk-check { width:18px; height:18px; border-radius:4px; border:2px solid var(--border); flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; }
+        .stsk-check.checked { background:var(--primary); border-color:var(--primary); }
+        .stsk-check.checked::after { content:"✓"; color:white; font-size:11px; font-weight:800; }
+        .stsk-body { flex:1; min-width:0; }
+        .stsk-text { font-size:0.88rem; color:var(--text); line-height:1.4; }
+        .stsk-meta { font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem; display:flex; gap:0.5rem; flex-wrap:wrap; }
+        .stsk-priority { font-size:0.65rem; font-weight:700; padding:0.1rem 0.4rem; border-radius:3px; text-transform:uppercase; }
+        .stsk-priority.high { background:var(--danger); color:var(--danger-text); }
+        .stsk-priority.normal { background:#f3f4f6; color:#4b5563; }
+        .stsk-priority.low { background:var(--success); color:var(--success-text); }
+
+
+        /* ── Availability engine UI ── */
+        .avail-result { display:flex; gap:0.85rem; align-items:flex-start; padding:1rem 1.25rem; border-radius:0.5rem; border:1px solid; margin-top:0.75rem; }
+        .avail-result.avail-ok { background:var(--success); border-color:#6ee7b7; color:var(--success-text); }
+        .avail-result.avail-no { background:var(--danger);  border-color:#fca5a5; color:var(--danger-text); }
+        .avail-result-icon { font-size:1.1rem; font-weight:800; flex-shrink:0; margin-top:1px; }
+        .avail-result strong { font-size:0.9rem; }
+
+        .avail-checker { background:var(--surface); border:1px solid var(--border); border-radius:0.5rem; padding:1.25rem; margin-bottom:1.25rem; }
+        .avail-checker-title { font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); font-weight:700; margin-bottom:0.75rem; }
+        .avail-checker-row { display:flex; gap:0.65rem; flex-wrap:wrap; align-items:flex-end; }
+        .avail-checker-row select, .avail-checker-row input[type=date] { flex:1; min-width:140px; }
+        .avail-checker-row .btn-primary { white-space:nowrap; flex-shrink:0; padding:0.5rem 1rem; font-size:0.85rem; }
+
+        /* Staff qualification tags */
+        .qual-tag { display:inline-flex; align-items:center; gap:0.3rem; font-size:0.72rem; font-weight:600; padding:0.2rem 0.55rem; border-radius:9999px; margin:0.15rem; }
+        .qual-tag .qual-cap { font-size:0.65rem; opacity:0.8; }
+
+        /* Qualifications editor in staff modal */
+        .qual-editor { border:1px solid var(--border); border-radius:0.375rem; max-height:200px; overflow-y:auto; }
+        .qual-row { display:flex; align-items:center; gap:0.65rem; padding:0.5rem 0.75rem; border-bottom:1px solid #f3f4f6; }
+        .qual-row:last-child { border-bottom:none; }
+        .qual-row input[type=checkbox] { width:auto; margin:0; flex-shrink:0; accent-color:var(--primary); }
+        .qual-row-label { flex:1; font-size:0.85rem; }
+        .qual-row-cap { width:60px; flex-shrink:0; }
+        .qual-row-cap input[type=number] { padding:0.25rem 0.4rem; font-size:0.82rem; text-align:center; width:100%; }
+        .qual-cap-label { font-size:0.68rem; color:var(--text-muted); text-align:center; display:block; margin-top:0.1rem; }
+
     </style>
 </head>
 <body>
@@ -723,9 +896,10 @@
         <div class="logo">🐾 Barkboard</div>
         <nav id="admin-nav">
             <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
+            <button onclick="switchView('staff-mgmt-view')" class="nav-btn">Staff</button>
             <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
             <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
-            <button onclick="switchView('biz-view')" class="nav-btn">Business Management</button>
+            <button onclick="switchView('biz-view')" class="nav-btn">Business</button>
         </nav>
         <nav id="owner-nav" class="hidden">
             <button onclick="switchOwnerTab('household')" class="nav-btn active" id="ownav-household">My Household</button>
@@ -739,9 +913,10 @@
     <div class="mobile-nav-drawer" id="mobile-nav-drawer">
         <div id="mobile-admin-links">
             <button onclick="mobileNav('staff-view')" class="nav-btn">📋 Staff Feed</button>
+            <button onclick="mobileNav('staff-mgmt-view')" class="nav-btn">👤 Staff</button>
             <button onclick="mobileNav('crm-view')" class="nav-btn">👥 People & Pets</button>
             <button onclick="mobileNav('calendar-view')" class="nav-btn">📅 Resource Grid</button>
-            <button onclick="mobileNav('biz-view')" class="nav-btn">📊 Business Management</button>
+            <button onclick="mobileNav('biz-view')" class="nav-btn">📊 Business</button>
         </div>
         <div id="mobile-owner-links" class="hidden">
             <button onclick="mobileOwnerNav('household')" class="nav-btn">🏠 My Household</button>
@@ -827,52 +1002,322 @@
 
         <!-- ═══ BUSINESS ═══ -->
         <section id="biz-view" class="view-panel hidden">
-            <h2>Business Management Dashboard</h2>
-            <div class="stats-grid">
-                <div class="stat-card"><h3>Gross Revenue (MTD)</h3><p class="revenue-color">$18,450</p></div>
-                <div class="stat-card"><h3>Avg. Lifetime Value</h3><p>$1,120</p></div>
-                <div class="stat-card"><h3>Retention Rate</h3><p class="success-color">94.2%</p></div>
-                <div class="stat-card"><h3>Active Packages</h3><p>38</p></div>
+
+            <!-- Biz sub-nav -->
+            <div class="biz-subnav">
+                <button class="biz-tab active" id="biztab-dashboard" onclick="switchBizTab('dashboard')">📊 Dashboard</button>
+                <button class="biz-tab" id="biztab-availability" onclick="switchBizTab('availability')">📅 Business Availability</button>
             </div>
-            <div class="chart-container-mock">
-                <h3>Sales & Bookings Performance</h3>
-                <div class="bar-chart-mock">
-                    <div class="bar-col" style="height:40%"><span class="bar-lbl">Mar</span><span class="bar-val">$12k</span></div>
-                    <div class="bar-col" style="height:55%"><span class="bar-lbl">Apr</span><span class="bar-val">$15k</span></div>
-                    <div class="bar-col" style="height:75%"><span class="bar-lbl">May</span><span class="bar-val">$21k</span></div>
-                    <div class="bar-col active" style="height:90%"><span class="bar-lbl">Jun</span><span class="bar-val">$26k</span></div>
+
+            <!-- ── DASHBOARD TAB ── -->
+            <div id="bizsec-dashboard" class="biz-section active">
+                <div class="biz-date-toolbar">
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                        <select id="biz-date-preset" onchange="onBizPresetChange()" class="biz-select">
+                            <option value="mtd">Month to Date</option>
+                            <option value="last30">Last 30 Days</option>
+                            <option value="last90">Last 90 Days</option>
+                            <option value="ytd">Year to Date</option>
+                            <option value="custom">Custom Range…</option>
+                        </select>
+                        <span id="biz-date-range-label" style="font-size:0.82rem;color:var(--text-muted);"></span>
+                    </div>
+                    <div id="biz-custom-dates" style="display:none;gap:0.5rem;align-items:center;flex-wrap:wrap;" class="biz-custom-dates">
+                        <input type="date" id="biz-date-from" onchange="renderBizDashboard()" class="biz-date-input">
+                        <span style="font-size:0.82rem;color:var(--text-muted);">to</span>
+                        <input type="date" id="biz-date-to" onchange="renderBizDashboard()" class="biz-date-input">
+                    </div>
+                </div>
+
+                <!-- Clickable stat cards -->
+                <div class="stats-grid" id="biz-stat-grid">
+                    <div class="stat-card biz-clickable" onclick="openBizDetail('revenue')">
+                        <h3>Gross Revenue</h3>
+                        <p class="revenue-color" id="biz-stat-revenue">—</p>
+                        <div class="stat-card-hint">View payments →</div>
+                    </div>
+                    <div class="stat-card biz-clickable" onclick="openBizDetail('ltv')">
+                        <h3>Avg. Lifetime Value</h3>
+                        <p id="biz-stat-ltv">—</p>
+                        <div class="stat-card-hint">By household →</div>
+                    </div>
+                    <div class="stat-card biz-clickable" onclick="openBizDetail('retention')">
+                        <h3>Retention Rate</h3>
+                        <p class="success-color" id="biz-stat-retention">—</p>
+                        <div class="stat-card-hint">View clients →</div>
+                    </div>
+                    <div class="stat-card biz-clickable" onclick="openBizDetail('packages')">
+                        <h3>Active Packages</h3>
+                        <p id="biz-stat-packages">—</p>
+                        <div class="stat-card-hint">View stats →</div>
+                    </div>
+                    <div class="stat-card biz-clickable" onclick="openBizDetail('staff-revenue')">
+                        <h3>Revenue by Staff</h3>
+                        <p id="biz-stat-staff-rev">—</p>
+                        <div class="stat-card-hint">Per staff member →</div>
+                    </div>
+                    <div class="stat-card biz-clickable" onclick="openBizDetail('staff-retention')">
+                        <h3>Staff Retention Index</h3>
+                        <p id="biz-stat-staff-ret">—</p>
+                        <div class="stat-card-hint">Client loyalty by staff →</div>
+                    </div>
+                </div>
+
+                <!-- Detail panel (slides in below stats) -->
+                <div id="biz-detail-panel" class="biz-detail-panel hidden">
+                    <div class="biz-detail-header">
+                        <h3 id="biz-detail-title">Detail</h3>
+                        <button onclick="closeBizDetail()" class="biz-detail-close">✕</button>
+                    </div>
+                    <div id="biz-detail-body"></div>
                 </div>
             </div>
+
+            <!-- ── AVAILABILITY TAB ── -->
+            <div id="bizsec-availability" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Business closures & staff away dates</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openAvailabilityModal(null)">+ Add closure</button>
+                </div>
+                <div id="availability-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
         </section>
+
+        <!-- Resource edit modal -->
+        <div id="resource-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:480px;">
+                <h3 id="resource-modal-title" style="margin:0 0 1rem;">Add Resource</h3>
+                <div class="form-group"><label>Name</label><input type="text" id="rm-name" placeholder="e.g. Luxury Suite #6"></div>
+                <div class="form-group"><label>Type</label>
+                    <select id="rm-type">
+                        <option>Dog Suite</option><option>Dog Run</option><option>Cat Suite</option><option>Training Room</option><option>Other</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Blackout dates (one per line: YYYY-MM-DD or YYYY-MM-DD:YYYY-MM-DD for ranges)</label>
+                    <textarea id="rm-blackouts" rows="4" placeholder="2026-07-04&#10;2026-12-24:2026-12-26"></textarea>
+                </div>
+                <div class="form-group"><label>Notes</label><input type="text" id="rm-notes" placeholder="e.g. Maintenance pending"></div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeResourceModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveResource()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Availability / closure modal -->
+        <div id="availability-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:440px;">
+                <h3 id="avail-modal-title" style="margin:0 0 1rem;">Add Closure</h3>
+                <div class="form-group"><label>Label</label><input type="text" id="av-label" placeholder="e.g. Staff Vacation"></div>
+                <div class="form-group"><label>Type</label>
+                    <select id="av-type">
+                        <option value="closure">Full Closure</option>
+                        <option value="reduced">Reduced Staff</option>
+                        <option value="holiday">Public Holiday</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Start date</label><input type="date" id="av-start"></div>
+                <div class="form-group"><label>End date</label><input type="date" id="av-end"></div>
+                <div class="form-group"><label>Notes</label><input type="text" id="av-notes" placeholder="Optional internal note"></div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeAvailabilityModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveAvailability()">Save</button>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ═══ STAFF MANAGEMENT ═══ -->
+        <section id="staff-mgmt-view" class="view-panel hidden">
+
+            <div class="biz-subnav">
+                <button class="biz-tab active" id="stftab-roster" onclick="switchStaffTab('roster')">👤 Roster</button>
+                <button class="biz-tab" id="stftab-availability" onclick="switchStaffTab('availability')">📅 Availability</button>
+                <button class="biz-tab" id="stftab-assignments" onclick="switchStaffTab('assignments')">🐾 Assignments</button>
+                <button class="biz-tab" id="stftab-tasks" onclick="switchStaffTab('tasks')">✅ Task List</button>
+            </div>
+
+            <!-- ── ROSTER ── -->
+            <div id="stfsec-roster" class="biz-section active">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Staff members</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openStaffModal(null)">+ Add staff</button>
+                </div>
+                <div id="staff-roster-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <!-- ── AVAILABILITY ── -->
+            <div id="stfsec-availability" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Staff availability & time off</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openStaffAvailModal(null)">+ Add time off</button>
+                </div>
+                <div id="staff-avail-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <!-- ── PET ASSIGNMENTS ── -->
+            <div id="stfsec-assignments" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Pet assignments</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openAssignmentModal()">+ Assign pet</button>
+                </div>
+                <div id="staff-assignments-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <!-- ── TASKS ── -->
+            <div id="stfsec-tasks" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Staff task list</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openStaffTaskModal(null)">+ Add task</button>
+                </div>
+                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+                    <select id="staff-task-filter" class="biz-select" onchange="renderStaffTasks()">
+                        <option value="all">All staff</option>
+                    </select>
+                    <select id="staff-task-status-filter" class="biz-select" onchange="renderStaffTasks()">
+                        <option value="all">All statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="done">Completed</option>
+                    </select>
+                </div>
+                <div id="staff-tasks-list" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
+            </div>
+
+        </section>
+
+        <!-- Staff member modal -->
+        <div id="staff-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:520px;">
+                <h3 id="staff-modal-title" style="margin:0 0 1rem;">Add Staff Member</h3>
+                <div class="form-group"><label>Name</label><input type="text" id="stf-name" placeholder="Full name"></div>
+                <div class="form-group"><label>Role</label>
+                    <select id="stf-role">
+                        <option>Trainer</option><option>Boarding Staff</option><option>Veterinary Tech</option><option>Manager</option><option>Other</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Contact</label><input type="text" id="stf-contact" placeholder="Phone or email"></div>
+                <div class="form-group"><label>Notes</label><input type="text" id="stf-notes" placeholder="e.g. Specialises in agility"></div>
+                <div class="form-group">
+                    <label>Service qualifications & daily capacity</label>
+                    <div class="qual-editor" id="stf-qual-editor">
+                        <!-- populated by openStaffModal() -->
+                    </div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.35rem;">Check a service to qualify this staff member. Set their max sessions per day (use 99 for unlimited boarding).</div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeStaffModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveStaffMember()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Staff availability modal -->
+        <div id="staff-avail-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:440px;">
+                <h3 id="staff-avail-modal-title" style="margin:0 0 1rem;">Add Time Off</h3>
+                <div class="form-group"><label>Staff member</label><select id="sav-who"></select></div>
+                <div class="form-group"><label>Type</label>
+                    <select id="sav-type">
+                        <option value="vacation">Vacation</option>
+                        <option value="sick">Sick leave</option>
+                        <option value="training">Training / conference</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Start date</label><input type="date" id="sav-start"></div>
+                <div class="form-group"><label>End date</label><input type="date" id="sav-end"></div>
+                <div class="form-group"><label>Notes</label><input type="text" id="sav-notes" placeholder="Optional"></div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeStaffAvailModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveStaffAvail()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignment modal -->
+        <div id="assignment-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:420px;">
+                <h3 style="margin:0 0 1rem;">Assign Pet to Staff</h3>
+                <div class="form-group"><label>Staff member</label><select id="asgn-staff"></select></div>
+                <div class="form-group"><label>Pet</label><select id="asgn-pet"></select></div>
+                <div class="form-group"><label>Role</label>
+                    <select id="asgn-role">
+                        <option value="primary">Primary carer</option>
+                        <option value="trainer">Trainer</option>
+                        <option value="backup">Backup / secondary</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeAssignmentModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveAssignment()">Assign</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Staff task modal -->
+        <div id="staff-task-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:440px;">
+                <h3 id="staff-task-modal-title" style="margin:0 0 1rem;">Add Task</h3>
+                <div class="form-group"><label>Assigned to</label><select id="stsk-who"></select></div>
+                <div class="form-group"><label>Task</label><input type="text" id="stsk-text" placeholder="Describe the task"></div>
+                <div class="form-group"><label>Due date</label><input type="date" id="stsk-due"></div>
+                <div class="form-group"><label>Priority</label>
+                    <select id="stsk-priority">
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeStaffTaskModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveStaffTask()">Save</button>
+                </div>
+            </div>
+        </div>
 
         <!-- ═══ CALENDAR ═══ -->
         <section id="calendar-view" class="view-panel hidden">
-            <h2>Boarding & Kennel Availability Grid</h2>
 
-            <div class="cal-toolbar">
-                <div class="cal-nav">
-                    <button class="cal-nav-btn" onclick="shiftCalWeek(-1)">← Prev</button>
-                    <button class="cal-nav-btn today" onclick="resetCalWeek()">Today</button>
-                    <button class="cal-nav-btn" onclick="shiftCalWeek(1)">Next →</button>
-                </div>
-                <span class="cal-week-label" id="cal-week-label"></span>
-                <div class="cal-legend">
-                    <div class="cal-legend-item"><div class="cal-legend-dot booked"></div>Booked</div>
-                    <div class="cal-legend-item"><div class="cal-legend-dot available"></div>Available</div>
-                    <div class="cal-legend-item"><div class="cal-legend-dot partial"></div>Partial</div>
-                </div>
+            <!-- Cal sub-nav -->
+            <div class="biz-subnav">
+                <button class="biz-tab active" id="caltab-grid" onclick="switchCalTab('grid')">📅 Availability Grid</button>
+                <button class="biz-tab" id="caltab-resources" onclick="switchCalTab('resources')">🏠 Manage Resources</button>
             </div>
 
-            <!-- Desktop: table -->
-            <div class="table-wrap cal-table-wrap">
-                <table class="calendar-table">
-                    <thead id="cal-thead"></thead>
-                    <tbody id="calendar-body-target"></tbody>
-                </table>
+            <!-- ── GRID TAB ── -->
+            <div id="calsec-grid" class="biz-section active">
+                <div class="cal-toolbar">
+                    <div class="cal-nav">
+                        <button class="cal-nav-btn" onclick="shiftCalWeek(-1)">← Prev</button>
+                        <button class="cal-nav-btn today" onclick="resetCalWeek()">Today</button>
+                        <button class="cal-nav-btn" onclick="shiftCalWeek(1)">Next →</button>
+                    </div>
+                    <span class="cal-week-label" id="cal-week-label"></span>
+                    <div class="cal-legend">
+                        <div class="cal-legend-item"><div class="cal-legend-dot booked"></div>Booked</div>
+                        <div class="cal-legend-item"><div class="cal-legend-dot available"></div>Available</div>
+                        <div class="cal-legend-item"><div class="cal-legend-dot partial"></div>Partial</div>
+                    </div>
+                </div>
+                <div class="table-wrap cal-table-wrap">
+                    <table class="calendar-table">
+                        <thead id="cal-thead"></thead>
+                        <tbody id="calendar-body-target"></tbody>
+                    </table>
+                </div>
+                <div class="cal-cards" id="cal-cards"></div>
             </div>
 
-            <!-- Mobile: cards -->
-            <div class="cal-cards" id="cal-cards"></div>
+            <!-- ── MANAGE RESOURCES TAB ── -->
+            <div id="calsec-resources" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Resource spaces</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openResourceModal(null)">+ Add resource</button>
+                </div>
+                <div id="resource-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
         </section>
 
         <!-- ═══════════════════════════════════
@@ -1183,6 +1628,9 @@
         const activeBtn = Array.from(document.querySelectorAll('#admin-nav .nav-btn'))
             .find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(viewId));
         if (activeBtn) activeBtn.classList.add('active');
+        if (viewId === 'biz-view') renderBizDashboard();
+        if (viewId === 'calendar-view') { renderCalendar(); switchCalTab('grid'); }
+        if (viewId === 'staff-mgmt-view') initStaffView();
     }
 
     function switchOwnerTab(section) {
@@ -1433,10 +1881,25 @@
         `;
 
         // ── Bookings section ──
+        // Build service options for availability checker
+        const trainingServices = serviceTypes.filter(s=>s.category==='training');
+        const boardingServices = serviceTypes.filter(s=>s.category==='boarding');
+        const allServiceOpts   = serviceTypes.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+
         document.getElementById('owner-bookings-content').innerHTML = `
-            <div class="section-header-row">
+            <!-- Availability checker -->
+            <div class="avail-checker">
+                <div class="avail-checker-title">Check availability</div>
+                <div class="avail-checker-row">
+                    <select id="avail-check-service">${allServiceOpts}</select>
+                    <input type="date" id="avail-check-date" value="2026-07-03">
+                    <button class="btn-primary" onclick="checkAvailabilityUI()">Check →</button>
+                </div>
+                <div id="avail-check-result"></div>
+            </div>
+
+            <div class="section-header-row" style="margin-bottom:1rem;">
                 <h3>Upcoming reservations</h3>
-                <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="alert('Booking flow would open here')">+ New Booking</button>
             </div>
             <div style="display:flex;flex-direction:column;gap:1rem;">
                 ${hBookings.map(b => `
@@ -2629,6 +3092,1129 @@
     function closeOwnerDrawer() {
         document.getElementById('owner-more-drawer').classList.remove('open');
         document.getElementById('owner-more-overlay').classList.remove('open');
+    }
+
+
+    /* ═══════════════════════════════════════════════
+       BUSINESS MANAGEMENT DATA
+    ═══════════════════════════════════════════════ */
+
+    // Enrich payment history with householdId + ISO dates for filtering
+    var allPayments = [
+        { id:'pay1', householdId:'h-miller', household:'The Miller Household', description:'Luxury Suite Boarding (4 nights)', service:'Luxury Suite Boarding', amount:220, date:'2026-06-14', status:'paid' },
+        { id:'pay2', householdId:'h-miller', household:'The Miller Household', description:'Cat Condo Boarding (3 nights)', service:'Cat Condo Boarding', amount:105, date:'2026-05-06', status:'paid' },
+        { id:'pay3', householdId:'h-miller', household:'The Miller Household', description:'Private Agility Training', service:'Private Agility Training', amount:75, date:'2026-04-18', status:'paid' },
+        { id:'pay4', householdId:'h-miller', household:'The Miller Household', description:'Luxury Suite Boarding (3 nights)', service:'Luxury Suite Boarding', amount:165, date:'2026-02-17', status:'paid' },
+        { id:'pay5', householdId:'h-davis',  household:'The Davis Household',  description:'Standard Boarding (13 nights)', service:'Standard Boarding', amount:455, date:'2026-06-14', status:'paid' }
+    ];
+
+    // Resource management data (seeded from calendar resources)
+    var managedResources = [
+        { id:'r1', name:'Luxury Suite #1', type:'Dog Suite', notes:'', blackouts:[] },
+        { id:'r2', name:'Luxury Suite #2', type:'Dog Suite', notes:'', blackouts:[] },
+        { id:'r3', name:'Luxury Suite #3', type:'Dog Suite', notes:'', blackouts:[] },
+        { id:'r4', name:'Luxury Suite #4', type:'Dog Suite', notes:'', blackouts:[] },
+        { id:'r5', name:'Luxury Suite #5', type:'Dog Suite', notes:'', blackouts:[] },
+        { id:'r6', name:'Standard Run A',  type:'Dog Run',   notes:'', blackouts:[] },
+        { id:'r7', name:'Standard Run B',  type:'Dog Run',   notes:'', blackouts:[] },
+        { id:'r8', name:'Standard Run C',  type:'Dog Run',   notes:'', blackouts:[] },
+        { id:'r9', name:'Cat Condo A',     type:'Cat Suite', notes:'', blackouts:['2026-06-20:2026-06-22'] },
+        { id:'r10', name:'Cat Condo B',    type:'Cat Suite', notes:'Deep clean scheduled', blackouts:['2026-07-01'] }
+    ];
+
+    var businessClosures = [
+        { id:'cl1', label:'Independence Day', type:'holiday', start:'2026-07-04', end:'2026-07-04', notes:'Facility closed' },
+        { id:'cl2', label:'Staff Vacation Week', type:'closure', start:'2026-08-10', end:'2026-08-14', notes:'All staff away — no boarding' },
+        { id:'cl3', label:'Holiday Season (Reduced)', type:'reduced', start:'2026-12-24', end:'2026-12-26', notes:'Emergency care only' }
+    ];
+
+    var editingResourceId = null;
+    var editingClosureId  = null;
+    var nextResourceId    = 20;
+    var nextClosureId     = 10;
+
+    // Biz dashboard state
+    var bizDatePreset = 'mtd';
+    var bizDateFrom   = null;
+    var bizDateTo     = null;
+    var bizDetailOpen = null;
+
+    /* ── Date helpers ── */
+    function today() { return new Date(2026, 5, 14); } // Jun 14 2026
+    function isoToDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
+    function dateToIso(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    function fmtDate(iso) { return isoToDate(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+    function daysBetween(a,b) { return Math.round((isoToDate(b)-isoToDate(a))/86400000); }
+
+    function getBizDateRange() {
+        const t = today();
+        const iso = dateToIso(t);
+        if (bizDatePreset === 'mtd') {
+            return { from: dateToIso(new Date(t.getFullYear(),t.getMonth(),1)), to: iso };
+        } else if (bizDatePreset === 'last30') {
+            const f = new Date(t); f.setDate(t.getDate()-30);
+            return { from: dateToIso(f), to: iso };
+        } else if (bizDatePreset === 'last90') {
+            const f = new Date(t); f.setDate(t.getDate()-90);
+            return { from: dateToIso(f), to: iso };
+        } else if (bizDatePreset === 'ytd') {
+            return { from: dateToIso(new Date(t.getFullYear(),0,1)), to: iso };
+        } else {
+            return { from: bizDateFrom || dateToIso(new Date(t.getFullYear(),t.getMonth(),1)), to: bizDateTo || iso };
+        }
+    }
+
+    function getFilteredPayments() {
+        const { from, to } = getBizDateRange();
+        return allPayments.filter(p => p.date >= from && p.date <= to);
+    }
+
+    /* ── Biz tab switching ── */
+    function switchBizTab(tab) {
+        document.querySelectorAll('.biz-tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.biz-section').forEach(s => s.classList.remove('active'));
+        document.getElementById('biztab-'+tab).classList.add('active');
+        document.getElementById('bizsec-'+tab).classList.add('active');
+        if (tab === 'dashboard') renderBizDashboard();
+        if (tab === 'resources') renderResourceList();
+        if (tab === 'availability') renderAvailabilityList();
+    }
+
+    function onBizPresetChange() {
+        bizDatePreset = document.getElementById('biz-date-preset').value;
+        const customDiv = document.getElementById('biz-custom-dates');
+        customDiv.style.display = bizDatePreset === 'custom' ? 'flex' : 'none';
+        renderBizDashboard();
+    }
+
+    /* ── Dashboard render ── */
+    function renderBizDashboard() {
+        const { from, to } = getBizDateRange();
+        document.getElementById('biz-date-range-label').textContent = fmtDate(from) + ' – ' + fmtDate(to);
+
+        const filtered = getFilteredPayments();
+        const gross = filtered.reduce((s,p) => s+p.amount, 0);
+
+        // LTV: total per household / visits count
+        const hIds = households.map(h=>h.id);
+        const ltvVals = hIds.map(hid => {
+            const hpays = allPayments.filter(p=>p.householdId===hid);
+            return hpays.length ? hpays.reduce((s,p)=>s+p.amount,0)/hpays.length : 0;
+        });
+        const avgLtv = ltvVals.length ? Math.round(ltvVals.reduce((a,b)=>a+b,0)/ltvVals.length) : 0;
+
+        // Retention: household visited in last 90 days
+        const cutoff = dateToIso(new Date(today().getTime()-90*86400000));
+        const activeHH = households.filter(h => allPayments.some(p=>p.householdId===h.id && p.date>=cutoff));
+        const retRate = households.length ? Math.round(activeHH.length/households.length*100) : 0;
+
+        // Active packages = unique services in all payments
+        const services = [...new Set(allPayments.map(p=>p.service))];
+
+        document.getElementById('biz-stat-revenue').textContent = '$'+gross.toLocaleString();
+        document.getElementById('biz-stat-ltv').textContent = '$'+avgLtv.toLocaleString();
+        document.getElementById('biz-stat-retention').textContent = retRate+'%';
+        document.getElementById('biz-stat-packages').textContent = services.length+' services';
+
+        // Staff revenue: top earner by sessions in the date range
+        const staffRevData = buildStaffRevenueData(from, to);
+        const topStaff = staffRevData.sort((a,b)=>b.revenue-a.revenue)[0];
+        const staffRevEl = document.getElementById('biz-stat-staff-rev');
+        if (staffRevEl) staffRevEl.textContent = topStaff ? '$'+topStaff.revenue.toLocaleString() : '—';
+
+        // Staff retention index: avg clients-per-staff across active staff
+        const staffRetEl = document.getElementById('biz-stat-staff-ret');
+        if (staffRetEl) {
+            const activeStaff = staffMembers.filter(s=>{
+                const quals = staffQualifications[s.id]||[];
+                return quals.length > 0;
+            });
+            const totalAssignments = petAssignments.length;
+            const avgClientsPerStaff = activeStaff.length ? (totalAssignments/activeStaff.length).toFixed(1) : '—';
+            staffRetEl.textContent = avgClientsPerStaff+' pets/staff';
+        }
+
+        if (bizDetailOpen) openBizDetail(bizDetailOpen);
+    }
+
+    function openBizDetail(type) {
+        bizDetailOpen = type;
+        const panel = document.getElementById('biz-detail-panel');
+        const title = document.getElementById('biz-detail-title');
+        const body  = document.getElementById('biz-detail-body');
+        panel.classList.remove('hidden');
+        const { from, to } = getBizDateRange();
+        const filtered = getFilteredPayments();
+
+        if (type === 'revenue') {
+            title.textContent = 'Payments — '+fmtDate(from)+' to '+fmtDate(to);
+            const total = filtered.reduce((s,p)=>s+p.amount,0);
+            let html = `<div style="padding:0.75rem 1.25rem;background:#f9fafb;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.8rem;color:var(--text-muted);">${filtered.length} transactions</span>
+                <span style="font-weight:700;font-size:1rem;color:var(--primary);">$${total.toLocaleString()} total</span>
+            </div>`;
+            if (!filtered.length) html += '<div class="biz-empty">No payments in this date range.</div>';
+            else filtered.forEach(p => {
+                html += `<div class="biz-pay-row">
+                    <div class="biz-pay-info">
+                        <strong>${p.description}</strong>
+                        <span>${p.household} · ${fmtDate(p.date)}</span>
+                    </div>
+                    <div class="biz-pay-amount">$${p.amount}</div>
+                </div>`;
+            });
+            body.innerHTML = html;
+
+        } else if (type === 'ltv') {
+            title.textContent = 'Lifetime Value by Household';
+            let html = '';
+            households.forEach(h => {
+                const hpays = allPayments.filter(p=>p.householdId===h.id);
+                const total = hpays.reduce((s,p)=>s+p.amount,0);
+                const avg   = hpays.length ? Math.round(total/hpays.length) : 0;
+                const divId = 'ltv-pays-'+h.id;
+                html += `<div class="ltv-household">
+                    <div class="ltv-hh-header" onclick="toggleLtvPayments('${divId}')">
+                        <div>
+                            <div class="ltv-hh-name">${h.name}</div>
+                            <div class="ltv-hh-meta">${hpays.length} payments · $${total} total</div>
+                        </div>
+                        <div class="ltv-hh-value">$${avg}<span style="font-size:0.72rem;font-weight:400;color:var(--text-muted);"> avg</span></div>
+                    </div>
+                    <div class="ltv-payments" id="${divId}">
+                        ${hpays.map(p=>`<div class="ltv-pay-item"><span style="color:var(--text-muted);">${fmtDate(p.date)} · ${p.description}</span><span style="font-weight:600;">$${p.amount}</span></div>`).join('')}
+                        ${!hpays.length ? '<div style="padding:0.5rem 1.25rem 0.5rem 2.5rem;font-size:0.82rem;color:var(--text-muted);">No payments on record.</div>' : ''}
+                    </div>
+                </div>`;
+            });
+            body.innerHTML = html;
+
+        } else if (type === 'retention') {
+            title.textContent = 'Client Retention';
+            const cutoff = dateToIso(new Date(today().getTime()-90*86400000));
+            let html = `<div style="padding:0.75rem 1.25rem;background:#f9fafb;border-bottom:1px solid var(--border);font-size:0.8rem;color:var(--text-muted);">Active = visited within last 90 days</div>`;
+            households.forEach(h => {
+                const hpays = allPayments.filter(p=>p.householdId===h.id).sort((a,b)=>b.date.localeCompare(a.date));
+                const lastPay = hpays[0];
+                const isActive = lastPay && lastPay.date >= cutoff;
+                const daysSince = lastPay ? daysBetween(lastPay.date, dateToIso(today())) : null;
+                html += `<div class="ret-row">
+                    <div class="ret-info">
+                        <strong>${h.name}</strong>
+                        <span>${lastPay ? 'Last visit: '+fmtDate(lastPay.date) : 'No visits on record'}</span>
+                    </div>
+                    ${daysSince !== null ? `<span class="ret-days">${daysSince}d ago</span>` : ''}
+                    <span class="ret-badge ${isActive?'active':'inactive'}">${isActive?'Active':'Inactive'}</span>
+                </div>`;
+            });
+            body.innerHTML = html;
+
+        } else if (type === 'packages') {
+            title.textContent = 'Service Package Stats';
+            const services = [...new Set(allPayments.map(p=>p.service))];
+            let html = '';
+            services.forEach(svc => {
+                const pays = allPayments.filter(p=>p.service===svc).sort((a,b)=>b.date.localeCompare(a.date));
+                const total = pays.reduce((s,p)=>s+p.amount,0);
+                const last  = pays[0];
+                const daysSince = last ? daysBetween(last.date, dateToIso(today())) : null;
+                const avgAmt = pays.length ? Math.round(total/pays.length) : 0;
+                html += `<div class="pkg-row">
+                    <h4>${svc}</h4>
+                    <div class="pkg-stats-grid">
+                        <div class="pkg-stat"><div class="pkg-stat-val">${pays.length}</div><div class="pkg-stat-lbl">Purchases</div></div>
+                        <div class="pkg-stat"><div class="pkg-stat-val">$${total.toLocaleString()}</div><div class="pkg-stat-lbl">Revenue</div></div>
+                        <div class="pkg-stat"><div class="pkg-stat-val">$${avgAmt}</div><div class="pkg-stat-lbl">Avg. price</div></div>
+                        <div class="pkg-stat"><div class="pkg-stat-val">${daysSince !== null ? daysSince+'d' : '—'}</div><div class="pkg-stat-lbl">Since last purchase</div></div>
+                        <div class="pkg-stat"><div class="pkg-stat-val">${last ? fmtDate(last.date) : '—'}</div><div class="pkg-stat-lbl">Last purchase</div></div>
+                        <div class="pkg-stat"><div class="pkg-stat-val">${[...new Set(pays.map(p=>p.householdId))].length}</div><div class="pkg-stat-lbl">Unique clients</div></div>
+                    </div>
+                </div>`;
+            });
+            body.innerHTML = html || '<div class="biz-empty">No service data found.</div>';
+
+        } else if (type === 'staff-revenue') {
+            const { from, to } = getBizDateRange();
+            title.textContent = 'Revenue by Staff — '+fmtDate(from)+' to '+fmtDate(to);
+            const staffRevData = buildStaffRevenueData(from, to).sort((a,b)=>b.revenue-a.revenue);
+            const grandTotal = staffRevData.reduce((s,r)=>s+r.revenue,0);
+            let html = `<div style="padding:0.75rem 1.25rem;background:#f9fafb;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.8rem;color:var(--text-muted);">${staffMembers.length} staff members</span>
+                <span style="font-weight:700;font-size:1rem;color:var(--primary);">$${grandTotal.toLocaleString()} total</span>
+            </div>`;
+            staffRevData.forEach(r => {
+                const pct = grandTotal ? Math.round(r.revenue/grandTotal*100) : 0;
+                const divId = 'srev-pays-'+r.staff.id;
+                html += `<div class="ltv-household">
+                    <div class="ltv-hh-header" onclick="toggleLtvPayments('${divId}')">
+                        <div style="display:flex;align-items:center;gap:0.65rem;">
+                            <div style="width:34px;height:34px;border-radius:50%;background:#ede9fe;color:#5b21b6;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;flex-shrink:0;">${r.staff.initials}</div>
+                            <div>
+                                <div class="ltv-hh-name">${r.staff.name}</div>
+                                <div class="ltv-hh-meta">${r.staff.role} · ${r.sessions} sessions · ${pct}% of total</div>
+                            </div>
+                        </div>
+                        <div class="ltv-hh-value">$${r.revenue.toLocaleString()}</div>
+                    </div>
+                    <!-- Revenue bar -->
+                    <div style="padding:0 1.25rem 0.5rem;background:#f9fafb;border-top:1px solid #f3f4f6;">
+                        <div style="height:6px;background:#e5e7eb;border-radius:3px;margin:0.5rem 0 0.35rem;">
+                            <div style="height:6px;width:${pct}%;background:var(--primary);border-radius:3px;transition:width 0.4s;"></div>
+                        </div>
+                    </div>
+                    <div class="ltv-payments" id="${divId}">
+                        <div style="padding:0.5rem 1.25rem;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);font-weight:700;">Services delivered</div>
+                        ${r.serviceBreakdown.map(sb=>`
+                            <div class="ltv-pay-item">
+                                <span style="color:var(--text-muted);">${sb.name}</span>
+                                <span style="font-weight:600;">${sb.count} sessions · $${sb.revenue}</span>
+                            </div>`).join('')}
+                        ${!r.serviceBreakdown.length ? '<div style="padding:0.5rem 1.25rem 0.75rem 1.25rem;font-size:0.82rem;color:var(--text-muted);">No sessions in this period.</div>' : ''}
+                        <div style="padding:0.5rem 1.25rem;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);font-weight:700;border-top:1px solid #f3f4f6;margin-top:0.25rem;">Assigned pets</div>
+                        ${r.assignedPets.map(p=>`
+                            <div class="ltv-pay-item">
+                                <span style="color:var(--text-muted);">${p.species==='dog'?'🐕':'🐈'} ${p.name} · ${p.details}</span>
+                                <span class="asgn-role-pill ${p.role}" style="font-size:0.7rem;">${p.role}</span>
+                            </div>`).join('')}
+                        ${!r.assignedPets.length ? '<div style="padding:0.5rem 1.25rem 0.75rem 1.25rem;font-size:0.82rem;color:var(--text-muted);">No pets assigned.</div>' : ''}
+                    </div>
+                </div>`;
+            });
+            if (!staffRevData.length) html += '<div class="biz-empty">No staff data available.</div>';
+            body.innerHTML = html;
+
+        } else if (type === 'staff-retention') {
+            title.textContent = 'Client Retention by Staff Member';
+            const cutoff90 = dateToIso(new Date(today().getTime()-90*86400000));
+            let html = `<div style="padding:0.75rem 1.25rem;background:#f9fafb;border-bottom:1px solid var(--border);font-size:0.8rem;color:var(--text-muted);">
+                Shows each staff member's assigned pets and whether their households are active (visited within 90 days)
+            </div>`;
+            staffMembers.forEach(s => {
+                const assignedPets = getStaffPets(s.id);
+                const quals = (staffQualifications[s.id]||[]).map(q=>{
+                    const svc = serviceTypes.find(x=>x.id===q.serviceId);
+                    return svc ? svc.name : q.serviceId;
+                });
+                // Unique households for this staff via their assigned pets
+                const hIds = [...new Set(assignedPets.map(p=>p.householdId))];
+                const hRows = hIds.map(hid=>{
+                    const h = households.find(x=>x.id===hid);
+                    if (!h) return null;
+                    const hpays = allPayments.filter(p=>p.householdId===hid).sort((a,b)=>b.date.localeCompare(a.date));
+                    const lastPay = hpays[0];
+                    const isActive = lastPay && lastPay.date >= cutoff90;
+                    const daysSince = lastPay ? daysBetween(lastPay.date, dateToIso(today())) : null;
+                    const hPets = assignedPets.filter(p=>p.householdId===hid);
+                    return { h, lastPay, isActive, daysSince, hPets };
+                }).filter(Boolean);
+
+                const activeCount = hRows.filter(r=>r.isActive).length;
+                const retPct = hRows.length ? Math.round(activeCount/hRows.length*100) : null;
+
+                html += `<div class="ltv-household">
+                    <div style="padding:0.85rem 1.25rem;background:#f9fafb;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0.75rem;">
+                        <div style="width:36px;height:36px;border-radius:50%;background:#ede9fe;color:#5b21b6;display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;flex-shrink:0;">${s.initials}</div>
+                        <div style="flex:1;">
+                            <div style="font-weight:600;font-size:0.9rem;">${s.name}</div>
+                            <div style="font-size:0.75rem;color:var(--text-muted);">${s.role}${quals.length?' · '+quals.join(', '):''}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            ${retPct!==null ? `<div style="font-size:1rem;font-weight:700;color:${retPct>=80?'var(--success-text)':retPct>=50?'var(--warning-text)':'var(--danger-text)'};">${retPct}%</div>
+                            <div style="font-size:0.72rem;color:var(--text-muted);">${activeCount}/${hRows.length} active</div>`
+                            : '<div style="font-size:0.82rem;color:var(--text-muted);">No clients</div>'}
+                        </div>
+                    </div>
+                    ${hRows.map(r=>`
+                        <div class="ret-row" style="padding-left:2rem;">
+                            <div class="ret-info">
+                                <strong>${r.h.name}</strong>
+                                <span>${r.hPets.map(p=>`${p.species==='dog'?'🐕':'🐈'} ${p.name} (${p.role})`).join(' · ')}
+                                · ${r.lastPay?'Last visit '+fmtDate(r.lastPay.date):'No visits'}</span>
+                            </div>
+                            ${r.daysSince!==null?`<span class="ret-days">${r.daysSince}d ago</span>`:''}
+                            <span class="ret-badge ${r.isActive?'active':'inactive'}">${r.isActive?'Active':'Inactive'}</span>
+                        </div>`).join('')}
+                    ${!hRows.length?'<div style="padding:0.65rem 1.25rem 0.65rem 2rem;font-size:0.82rem;color:var(--text-muted);">No household clients assigned.</div>':''}
+                </div>`;
+            });
+            body.innerHTML = html;
+        }
+
+        panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    function closeBizDetail() {
+        bizDetailOpen = null;
+        document.getElementById('biz-detail-panel').classList.add('hidden');
+    }
+
+    function toggleLtvPayments(id) {
+        document.getElementById(id).classList.toggle('open');
+    }
+
+    /**
+     * Build per-staff revenue data for a date range.
+     * Attribution: visits are attributed to the staff member recorded on the visit.
+     * We match visit.staff names to staffMembers by name prefix.
+     */
+    function buildStaffRevenueData(fromIso, toIso) {
+        // Build a map of staff name → staffMember (using first-name + initial match)
+        function matchStaff(visitStaffName) {
+            return staffMembers.find(s => {
+                const parts = s.name.split(' ');
+                return visitStaffName.startsWith(parts[0]) ||
+                       s.name.toLowerCase() === visitStaffName.toLowerCase();
+            });
+        }
+
+        // Flatten all visits with ISO dates
+        const allVisits = Object.entries(visits).flatMap(([hid, vlist]) =>
+            vlist.map(v => ({ ...v, householdId: hid, isoDate: paymentDateFromVisit(v) }))
+        );
+
+        // Filter to date range
+        const filtered = allVisits.filter(v => v.isoDate >= fromIso && v.isoDate <= toIso);
+
+        return staffMembers.map(s => {
+            // Sessions attributed to this staff member by name match
+            const staffVisits = filtered.filter(v => {
+                const matched = matchStaff(v.staff);
+                return matched && matched.id === s.id;
+            });
+            const revenue = staffVisits.reduce((sum, v) => sum + v.amount, 0);
+
+            // Break down by service
+            const svcMap = {};
+            staffVisits.forEach(v => {
+                if (!svcMap[v.service]) svcMap[v.service] = { count:0, revenue:0 };
+                svcMap[v.service].count++;
+                svcMap[v.service].revenue += v.amount;
+            });
+            const serviceBreakdown = Object.entries(svcMap).map(([name, d]) => ({ name, ...d }))
+                .sort((a,b) => b.revenue - a.revenue);
+
+            const assignedPets = getStaffPets(s.id);
+
+            return { staff:s, sessions:staffVisits.length, revenue, serviceBreakdown, assignedPets };
+        });
+    }
+
+    /** Convert visit checkOut date string to ISO (visits store dates as 'Jun 14, 2026' format) */
+    function paymentDateFromVisit(v) {
+        // Match payment dates from allPayments by description overlap, else parse checkOut
+        const match = allPayments.find(p =>
+            p.householdId === v.householdId &&
+            p.description.toLowerCase().includes(v.service.toLowerCase().split(' ')[0].toLowerCase())
+        );
+        if (match) return match.date;
+        // Fallback: parse checkOut string
+        try {
+            const d = new Date(v.checkOut);
+            if (!isNaN(d)) return dateToIso(d);
+        } catch(e) {}
+        return '2026-01-01';
+    }
+
+    /* ── Resource management ── */
+    function renderResourceList() {
+        const el = document.getElementById('resource-list');
+        if (!managedResources.length) { el.innerHTML = '<div class="biz-empty">No resources yet. Add one above.</div>'; return; }
+        const typeOrder = ['Dog Suite','Dog Run','Cat Suite','Training Room','Other'];
+        const grouped = {};
+        typeOrder.forEach(t => grouped[t]=[]);
+        managedResources.forEach(r => { (grouped[r.type]||(grouped['Other'])).push(r); });
+        let html = '';
+        typeOrder.forEach(type => {
+            if (!grouped[type]||!grouped[type].length) return;
+            html += `<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);font-weight:700;margin:0.75rem 0 0.35rem;">${type}</div>`;
+            grouped[type].forEach(r => {
+                const blackoutHtml = r.blackouts.length
+                    ? r.blackouts.map(b=>`<span class="resource-blackout-tag">🚫 ${b.includes(':')?b.replace(':','→'):b}</span>`).join(' ')
+                    : '<span style="font-size:0.78rem;color:var(--text-muted);">No blackouts</span>';
+                html += `<div class="resource-item">
+                    <div class="resource-item-info">
+                        <h4>${r.name}</h4>
+                        <p>${r.notes || 'No notes'}</p>
+                        <div style="margin-top:0.35rem;">${blackoutHtml}</div>
+                    </div>
+                    <div class="resource-item-actions">
+                        <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openResourceModal('${r.id}')">Edit</button>
+                        <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteResource('${r.id}')">Remove</button>
+                    </div>
+                </div>`;
+            });
+        });
+        el.innerHTML = html;
+    }
+
+    function openResourceModal(id) {
+        editingResourceId = id;
+        const r = id ? managedResources.find(x=>x.id===id) : null;
+        document.getElementById('resource-modal-title').textContent = r ? 'Edit Resource' : 'Add Resource';
+        document.getElementById('rm-name').value     = r ? r.name : '';
+        document.getElementById('rm-type').value     = r ? r.type : 'Dog Suite';
+        document.getElementById('rm-blackouts').value= r ? r.blackouts.join('\n') : '';
+        document.getElementById('rm-notes').value    = r ? r.notes : '';
+        document.getElementById('resource-modal').classList.remove('hidden');
+    }
+    function closeResourceModal() { document.getElementById('resource-modal').classList.add('hidden'); }
+    function saveResource() {
+        const name = document.getElementById('rm-name').value.trim();
+        if (!name) return alert('Please enter a name.');
+        const data = {
+            name, type: document.getElementById('rm-type').value,
+            notes: document.getElementById('rm-notes').value.trim(),
+            blackouts: document.getElementById('rm-blackouts').value.split('\n').map(s=>s.trim()).filter(Boolean)
+        };
+        if (editingResourceId) {
+            const r = managedResources.find(x=>x.id===editingResourceId);
+            Object.assign(r, data);
+            // Also sync to calendar resources array
+            const cr = resources.find(x=>x.id===editingResourceId);
+            if (cr) { cr.name=data.name; cr.type=data.type; }
+        } else {
+            const newId = 'r'+nextResourceId++;
+            managedResources.push({ id:newId, ...data });
+            resources.push({ id:newId, name:data.name, type:data.type });
+        }
+        closeResourceModal();
+        renderResourceList();
+        renderCalendar();
+    }
+    function deleteResource(id) {
+        if (!confirm('Remove this resource?')) return;
+        managedResources = managedResources.filter(x=>x.id!==id);
+        resources        = resources.filter(x=>x.id!==id);
+        renderResourceList();
+        renderCalendar();
+    }
+
+    /* ── Business availability / closures ── */
+    function renderAvailabilityList() {
+        const el = document.getElementById('availability-list');
+        if (!businessClosures.length) { el.innerHTML = '<div class="biz-empty">No closures scheduled.</div>'; return; }
+        const sorted = [...businessClosures].sort((a,b)=>a.start.localeCompare(b.start));
+        el.innerHTML = sorted.map(c => {
+            const span = c.start===c.end ? fmtDate(c.start) : fmtDate(c.start)+' → '+fmtDate(c.end);
+            return `<div class="closure-item type-${c.type}">
+                <div class="closure-info">
+                    <h4>${c.label}</h4>
+                    <p>${span}${c.notes?' · '+c.notes:''}</p>
+                </div>
+                <span class="closure-type-pill ${c.type}">${c.type==='closure'?'Closed':c.type==='reduced'?'Reduced':'Holiday'}</span>
+                <div style="display:flex;gap:0.4rem;">
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openAvailabilityModal('${c.id}')">Edit</button>
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteClosure('${c.id}')">Remove</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function openAvailabilityModal(id) {
+        editingClosureId = id;
+        const c = id ? businessClosures.find(x=>x.id===id) : null;
+        document.getElementById('avail-modal-title').textContent = c ? 'Edit Closure' : 'Add Closure';
+        document.getElementById('av-label').value = c ? c.label : '';
+        document.getElementById('av-type').value  = c ? c.type  : 'closure';
+        document.getElementById('av-start').value = c ? c.start : '';
+        document.getElementById('av-end').value   = c ? c.end   : '';
+        document.getElementById('av-notes').value = c ? c.notes : '';
+        document.getElementById('availability-modal').classList.remove('hidden');
+    }
+    function closeAvailabilityModal() { document.getElementById('availability-modal').classList.add('hidden'); }
+    function saveAvailability() {
+        const label = document.getElementById('av-label').value.trim();
+        const start = document.getElementById('av-start').value;
+        const end   = document.getElementById('av-end').value || start;
+        if (!label||!start) return alert('Please fill in a label and start date.');
+        const data = { label, type:document.getElementById('av-type').value, start, end, notes:document.getElementById('av-notes').value.trim() };
+        if (editingClosureId) {
+            const c = businessClosures.find(x=>x.id===editingClosureId);
+            Object.assign(c, data);
+        } else {
+            businessClosures.push({ id:'cl'+nextClosureId++, ...data });
+        }
+        closeAvailabilityModal();
+        renderAvailabilityList();
+    }
+    function deleteClosure(id) {
+        if (!confirm('Remove this closure?')) return;
+        businessClosures = businessClosures.filter(x=>x.id!==id);
+        renderAvailabilityList();
+    }
+
+
+    /* ═══════════════════════════════════════════════
+       STAFF MANAGEMENT DATA & LOGIC
+    ═══════════════════════════════════════════════ */
+
+    // ── Service catalogue ──
+    // Each service has a serviceType that determines which staff can deliver it.
+    // Boarding services are handled by boarding staff and don't consume a per-day "session" slot.
+    var serviceTypes = [
+        { id:'svc-agility',     name:'Agility Training',        category:'training', color:'#ede9fe', textColor:'#5b21b6' },
+        { id:'svc-obedience',   name:'Obedience Training',      category:'training', color:'#dbeafe', textColor:'#1e40af' },
+        { id:'svc-socialization', name:'Socialization Session',  category:'training', color:'#fef3c7', textColor:'#92400e' },
+        { id:'svc-crate',       name:'Crate Training',          category:'training', color:'#d1fae5', textColor:'#065f46' },
+        { id:'svc-recall',      name:'Recall & Leash Work',     category:'training', color:'#fce7f3', textColor:'#9d174d' },
+        { id:'svc-boarding-luxury', name:'Luxury Suite Boarding', category:'boarding', color:'#e0f2fe', textColor:'#0369a1' },
+        { id:'svc-boarding-std',  name:'Standard Boarding',     category:'boarding', color:'#f3f4f6', textColor:'#4b5563' },
+        { id:'svc-boarding-cat',  name:'Cat Condo Boarding',    category:'boarding', color:'#fdf4ff', textColor:'#7e22ce' }
+    ];
+
+    // Per-staff qualifications: which services can they deliver, and how many sessions per day max?
+    // staffQualifications[staffId] = [ { serviceId, dailyMax } ]
+    var staffQualifications = {
+        's1': [
+            { serviceId:'svc-agility',       dailyMax:4 },
+            { serviceId:'svc-recall',        dailyMax:4 },
+            { serviceId:'svc-obedience',     dailyMax:3 }
+        ],
+        's2': [
+            { serviceId:'svc-boarding-luxury', dailyMax:99 },
+            { serviceId:'svc-boarding-std',    dailyMax:99 },
+            { serviceId:'svc-obedience',       dailyMax:2 },
+            { serviceId:'svc-crate',           dailyMax:3 }
+        ],
+        's3': [
+            { serviceId:'svc-boarding-cat',    dailyMax:99 },
+            { serviceId:'svc-boarding-std',    dailyMax:99 },
+            { serviceId:'svc-socialization',   dailyMax:3 },
+            { serviceId:'svc-crate',           dailyMax:2 }
+        ]
+    };
+
+    // Scheduled bookings that consume staff capacity (date → serviceId → staffId → count)
+    // This is the live capacity ledger — new bookings write here
+    var staffBookingLedger = {
+        '2026-06-14': { 'svc-agility': {'s1':1}, 'svc-obedience': {'s2':1}, 'svc-crate': {'s2':1} },
+        '2026-06-14': { 'svc-agility': {'s1':2} }   // Maria has 2 agility sessions already today
+    };
+    // Normalise to clean structure
+    staffBookingLedger = {
+        '2026-06-14': { 'svc-agility':{'s1':2}, 'svc-obedience':{'s2':1}, 'svc-crate':{'s3':1} },
+        '2026-07-03': { 'svc-boarding-luxury':{'s2':3} }
+    };
+
+    var staffMembers = [
+        { id:'s1', name:'Maria C.', role:'Trainer', contact:'maria@barkboard.com', notes:'Lead agility trainer', initials:'MC' },
+        { id:'s2', name:'Kayla R.', role:'Boarding Staff', contact:'kayla@barkboard.com', notes:'Senior boarding attendant', initials:'KR' },
+        { id:'s3', name:'Tom H.',   role:'Boarding Staff', contact:'tom@barkboard.com',   notes:'Cat specialist', initials:'TH' }
+    ];
+
+    var staffAvailability = [
+        { id:'sa1', staffId:'s1', type:'vacation', start:'2026-07-14', end:'2026-07-18', notes:'Pre-booked holiday' },
+        { id:'sa2', staffId:'s3', type:'training', start:'2026-06-20', end:'2026-06-20', notes:'Feline behaviour workshop' }
+    ];
+
+    // staffId → petId assignments
+    var petAssignments = [
+        { id:'pa1', staffId:'s1', petId:'pet-max',   role:'trainer'  },
+        { id:'pa2', staffId:'s2', petId:'pet-max',   role:'primary'  },
+        { id:'pa3', staffId:'s2', petId:'pet-luna',  role:'primary'  },
+        { id:'pa4', staffId:'s3', petId:'pet-bella', role:'primary'  }
+    ];
+
+    var staffTasks = [
+        { id:'stsk1', staffId:'s2', text:'Complete daily feeding log for all suites', due:'2026-06-14', priority:'high',   done:false },
+        { id:'stsk2', staffId:'s3', text:'Update Bella\'s health record after vet call', due:'2026-06-15', priority:'high',   done:false },
+        { id:'stsk3', staffId:'s1', text:'Prepare agility Level 3 course layout',      due:'2026-06-16', priority:'normal', done:false },
+        { id:'stsk4', staffId:'s2', text:'Restock kennel cleaning supplies',            due:'2026-06-14', priority:'low',    done:true  }
+    ];
+
+    var editingStaffId       = null;
+    var editingStaffAvailId  = null;
+    var editingStaffTaskId   = null;
+    var nextStaffId          = 10;
+    var nextStaffAvailId     = 10;
+    var nextAssignId         = 10;
+    var nextStaffTaskId      = 10;
+
+    /* ── tab switch ── */
+    function switchStaffTab(tab) {
+        document.querySelectorAll('[id^="stftab-"]').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('[id^="stfsec-"]').forEach(s=>s.classList.remove('active'));
+        document.getElementById('stftab-'+tab).classList.add('active');
+        document.getElementById('stfsec-'+tab).classList.add('active');
+        if (tab==='roster')       renderStaffRoster();
+        if (tab==='availability') renderStaffAvailability();
+        if (tab==='assignments')  renderStaffAssignments();
+        if (tab==='tasks')        renderStaffTasks();
+    }
+
+    function switchCalTab(tab) {
+        document.querySelectorAll('[id^="caltab-"]').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('[id^="calsec-"]').forEach(s=>s.classList.remove('active'));
+        document.getElementById('caltab-'+tab).classList.add('active');
+        document.getElementById('calsec-'+tab).classList.add('active');
+        if (tab==='grid')      renderCalendar();
+        if (tab==='resources') renderResourceList();
+    }
+
+    /* helper: get assigned pets for a staff member */
+    function getStaffPets(staffId) {
+        return petAssignments
+            .filter(a=>a.staffId===staffId)
+            .map(a=>{ const p=pets.find(x=>x.id===a.petId); return p?{...p,role:a.role,assignId:a.id}:null; })
+            .filter(Boolean);
+    }
+
+    /* ── ROSTER ── */
+    function renderStaffRoster() {
+        const el = document.getElementById('staff-roster-list');
+        if (!staffMembers.length) { el.innerHTML='<div class="biz-empty">No staff members yet.</div>'; return; }
+        el.innerHTML = staffMembers.map(s=>{
+            const assignedPets = getStaffPets(s.id);
+            const quals = staffQualifications[s.id] || [];
+            const petsHtml = assignedPets.length
+                ? assignedPets.map(p=>`<span class="staff-pet-chip">${p.species==='dog'?'🐕':'🐈'} ${p.name}</span>`).join('')
+                : '<span style="font-size:0.75rem;color:var(--text-muted);">No pets assigned</span>';
+            const qualsHtml = quals.length
+                ? quals.map(q=>{
+                    const svc = serviceTypes.find(x=>x.id===q.serviceId);
+                    return svc ? `<span class="qual-tag" style="background:${svc.color};color:${svc.textColor};">${svc.name}<span class="qual-cap"> · ${q.dailyMax==='99'||q.dailyMax===99?'∞':q.dailyMax+'/day'}</span></span>` : '';
+                  }).join('')
+                : '<span style="font-size:0.75rem;color:var(--text-muted);">No qualifications set</span>';
+            return `<div class="staff-card">
+                <div class="staff-avatar">${s.initials}</div>
+                <div class="staff-info">
+                    <h4>${s.name}</h4>
+                    <p>${s.contact}</p>
+                    ${s.notes?`<p>${s.notes}</p>`:''}
+                    <span class="staff-role-pill">${s.role}</span>
+                    <div style="margin-top:0.5rem;">
+                        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:700;margin-bottom:0.3rem;">Qualified services</div>
+                        <div style="display:flex;flex-wrap:wrap;">${qualsHtml}</div>
+                    </div>
+                    <div style="margin-top:0.5rem;">
+                        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:700;margin-bottom:0.3rem;">Assigned pets</div>
+                        <div class="staff-assigned-pets">${petsHtml}</div>
+                    </div>
+                </div>
+                <div class="staff-actions">
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openStaffModal('${s.id}')">Edit</button>
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteStaff('${s.id}')">Remove</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function openStaffModal(id) {
+        editingStaffId = id;
+        const s = id ? staffMembers.find(x=>x.id===id) : null;
+        document.getElementById('staff-modal-title').textContent = s?'Edit Staff Member':'Add Staff Member';
+        document.getElementById('stf-name').value    = s?s.name:'';
+        document.getElementById('stf-role').value    = s?s.role:'Trainer';
+        document.getElementById('stf-contact').value = s?s.contact:'';
+        document.getElementById('stf-notes').value   = s?s.notes:'';
+
+        // Build qualification editor
+        const currentQuals = s ? (staffQualifications[s.id]||[]) : [];
+        const editor = document.getElementById('stf-qual-editor');
+        editor.innerHTML = serviceTypes.map(svc => {
+            const q = currentQuals.find(q=>q.serviceId===svc.id);
+            const checked = q ? 'checked' : '';
+            const cap = q ? q.dailyMax : (svc.category==='boarding'?99:3);
+            return `<div class="qual-row">
+                <input type="checkbox" id="qual-chk-${svc.id}" ${checked}>
+                <label class="qual-row-label" for="qual-chk-${svc.id}">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${svc.color};border:1px solid ${svc.textColor};margin-right:4px;vertical-align:middle;"></span>
+                    ${svc.name}
+                </label>
+                <div class="qual-row-cap">
+                    <input type="number" id="qual-cap-${svc.id}" value="${cap}" min="1" max="99">
+                    <span class="qual-cap-label">max/day</span>
+                </div>
+            </div>`;
+        }).join('');
+
+        document.getElementById('staff-modal').classList.remove('hidden');
+    }
+    function closeStaffModal() { document.getElementById('staff-modal').classList.add('hidden'); }
+    function saveStaffMember() {
+        const name = document.getElementById('stf-name').value.trim();
+        if (!name) return alert('Please enter a name.');
+        const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+        const data = { name, role:document.getElementById('stf-role').value, contact:document.getElementById('stf-contact').value.trim(), notes:document.getElementById('stf-notes').value.trim(), initials };
+        const targetId = editingStaffId || ('s'+nextStaffId++);
+        if (editingStaffId) { Object.assign(staffMembers.find(x=>x.id===editingStaffId), data); }
+        else { staffMembers.push({ id:targetId, ...data }); }
+
+        // Save qualifications
+        const quals = serviceTypes
+            .filter(svc => document.getElementById('qual-chk-'+svc.id)?.checked)
+            .map(svc => ({
+                serviceId: svc.id,
+                dailyMax:  parseInt(document.getElementById('qual-cap-'+svc.id)?.value)||1
+            }));
+        staffQualifications[targetId] = quals;
+
+        closeStaffModal();
+        renderStaffRoster();
+        populateStaffSelects();
+    }
+    function deleteStaff(id) {
+        if (!confirm('Remove this staff member?')) return;
+        staffMembers = staffMembers.filter(x=>x.id!==id);
+        petAssignments = petAssignments.filter(x=>x.staffId!==id);
+        staffAvailability = staffAvailability.filter(x=>x.staffId!==id);
+        staffTasks = staffTasks.filter(x=>x.staffId!==id);
+        renderStaffRoster();
+        populateStaffSelects();
+    }
+
+    /* ── AVAILABILITY ── */
+    function renderStaffAvailability() {
+        const el = document.getElementById('staff-avail-list');
+        populateStaffSelects();
+        if (!staffAvailability.length) { el.innerHTML='<div class="biz-empty">No time-off records.</div>'; return; }
+        const sorted = [...staffAvailability].sort((a,b)=>a.start.localeCompare(b.start));
+        el.innerHTML = sorted.map(a=>{
+            const s = staffMembers.find(x=>x.id===a.staffId);
+            const span = a.start===a.end ? fmtDate(a.start) : fmtDate(a.start)+' → '+fmtDate(a.end);
+            return `<div class="staff-avail-item type-${a.type}">
+                <div class="sav-info">
+                    <strong>${s?s.name:'Unknown'}</strong>
+                    <span>${span}${a.notes?' · '+a.notes:''}</span>
+                </div>
+                <span class="sav-type-pill ${a.type}">${a.type}</span>
+                <div style="display:flex;gap:0.4rem;">
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openStaffAvailModal('${a.id}')">Edit</button>
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteStaffAvail('${a.id}')">Remove</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function openStaffAvailModal(id) {
+        editingStaffAvailId = id;
+        const a = id ? staffAvailability.find(x=>x.id===id) : null;
+        populateStaffSelects();
+        document.getElementById('staff-avail-modal-title').textContent = a?'Edit Time Off':'Add Time Off';
+        document.getElementById('sav-who').value   = a?a.staffId:(staffMembers[0]?staffMembers[0].id:'');
+        document.getElementById('sav-type').value  = a?a.type:'vacation';
+        document.getElementById('sav-start').value = a?a.start:'';
+        document.getElementById('sav-end').value   = a?a.end:'';
+        document.getElementById('sav-notes').value = a?a.notes:'';
+        document.getElementById('staff-avail-modal').classList.remove('hidden');
+    }
+    function closeStaffAvailModal() { document.getElementById('staff-avail-modal').classList.add('hidden'); }
+    function saveStaffAvail() {
+        const staffId = document.getElementById('sav-who').value;
+        const start   = document.getElementById('sav-start').value;
+        if (!staffId||!start) return alert('Please select a staff member and start date.');
+        const end = document.getElementById('sav-end').value || start;
+        const data = { staffId, type:document.getElementById('sav-type').value, start, end, notes:document.getElementById('sav-notes').value.trim() };
+        if (editingStaffAvailId) { Object.assign(staffAvailability.find(x=>x.id===editingStaffAvailId), data); }
+        else { staffAvailability.push({ id:'sa'+nextStaffAvailId++, ...data }); }
+        closeStaffAvailModal();
+        renderStaffAvailability();
+    }
+    function deleteStaffAvail(id) {
+        staffAvailability = staffAvailability.filter(x=>x.id!==id);
+        renderStaffAvailability();
+    }
+
+    /* ── PET ASSIGNMENTS ── */
+    function renderStaffAssignments() {
+        const el = document.getElementById('staff-assignments-list');
+        populateStaffSelects();
+        if (!petAssignments.length) { el.innerHTML='<div class="biz-empty">No assignments yet.</div>'; return; }
+        // Group by staff member
+        let html = '';
+        staffMembers.forEach(s=>{
+            const aPets = getStaffPets(s.id);
+            if (!aPets.length) return;
+            html += `<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);font-weight:700;margin:0.75rem 0 0.35rem;">${s.name} · ${s.role}</div>`;
+            aPets.forEach(p=>{
+                const hh = households.find(h=>h.id===p.householdId);
+                html += `<div class="assignment-item">
+                    <span style="font-size:1.2rem;">${p.species==='dog'?'🐕':'🐈'}</span>
+                    <div class="asgn-info">
+                        <strong>${p.name}</strong>
+                        <span>${p.details}${hh?' · '+hh.name:''}</span>
+                    </div>
+                    <span class="asgn-role-pill ${p.role}">${p.role}</span>
+                    <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.55rem;color:var(--danger-text);" onclick="removeAssignment('${p.assignId}')">Remove</button>
+                </div>`;
+            });
+        });
+        el.innerHTML = html || '<div class="biz-empty">No assignments yet.</div>';
+    }
+
+    function openAssignmentModal() {
+        populateStaffSelects();
+        const petSel = document.getElementById('asgn-pet');
+        petSel.innerHTML = pets.map(p=>`<option value="${p.id}">${p.name} (${p.species})</option>`).join('');
+        document.getElementById('assignment-modal').classList.remove('hidden');
+    }
+    function closeAssignmentModal() { document.getElementById('assignment-modal').classList.add('hidden'); }
+    function saveAssignment() {
+        const staffId = document.getElementById('asgn-staff').value;
+        const petId   = document.getElementById('asgn-pet').value;
+        const role    = document.getElementById('asgn-role').value;
+        if (!staffId||!petId) return alert('Please select staff and pet.');
+        // Prevent duplicate
+        if (petAssignments.some(a=>a.staffId===staffId&&a.petId===petId)) return alert('Already assigned.');
+        petAssignments.push({ id:'pa'+nextAssignId++, staffId, petId, role });
+        closeAssignmentModal();
+        renderStaffAssignments();
+        // Sync back to pet profile if owner portal is open
+        if (currentOwnerHouseholdId) syncOwnerTrainingSection();
+    }
+    function removeAssignment(id) {
+        petAssignments = petAssignments.filter(x=>x.id!==id);
+        renderStaffAssignments();
+    }
+
+    /* ── TASKS ── */
+    function renderStaffTasks() {
+        const el = document.getElementById('staff-tasks-list');
+        const filterStaff  = document.getElementById('staff-task-filter')?.value || 'all';
+        const filterStatus = document.getElementById('staff-task-status-filter')?.value || 'all';
+        let tasks = [...staffTasks];
+        if (filterStaff  !== 'all') tasks = tasks.filter(t=>t.staffId===filterStaff);
+        if (filterStatus === 'pending') tasks = tasks.filter(t=>!t.done);
+        if (filterStatus === 'done')    tasks = tasks.filter(t=>t.done);
+        tasks.sort((a,b)=>{ if(a.done!==b.done) return a.done?1:-1; return a.due.localeCompare(b.due); });
+        if (!tasks.length) { el.innerHTML='<div class="biz-empty">No tasks match this filter.</div>'; return; }
+        el.innerHTML = tasks.map(t=>{
+            const s = staffMembers.find(x=>x.id===t.staffId);
+            const overdue = !t.done && t.due < dateToIso(today());
+            return `<div class="staff-task-item ${t.done?'done':''}">
+                <div class="stsk-check ${t.done?'checked':''}" onclick="toggleStaffTask('${t.id}')"></div>
+                <div class="stsk-body">
+                    <div class="stsk-text">${t.text}</div>
+                    <div class="stsk-meta">
+                        <span>👤 ${s?s.name:'Unassigned'}</span>
+                        <span style="color:${overdue?'var(--danger-text)':'inherit'};">📅 Due ${fmtDate(t.due)}${overdue?' · OVERDUE':''}</span>
+                        <span class="stsk-priority ${t.priority}">${t.priority}</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:0.35rem;flex-shrink:0;">
+                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openStaffTaskModal('${t.id}')">Edit</button>
+                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteStaffTask('${t.id}')">✕</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function toggleStaffTask(id) {
+        const t = staffTasks.find(x=>x.id===id);
+        if (t) t.done = !t.done;
+        renderStaffTasks();
+    }
+
+    function openStaffTaskModal(id) {
+        editingStaffTaskId = id;
+        const t = id ? staffTasks.find(x=>x.id===id) : null;
+        populateStaffSelects();
+        document.getElementById('staff-task-modal-title').textContent = t?'Edit Task':'Add Task';
+        document.getElementById('stsk-who').value      = t?t.staffId:(staffMembers[0]?staffMembers[0].id:'');
+        document.getElementById('stsk-text').value     = t?t.text:'';
+        document.getElementById('stsk-due').value      = t?t.due:'';
+        document.getElementById('stsk-priority').value = t?t.priority:'normal';
+        document.getElementById('staff-task-modal').classList.remove('hidden');
+    }
+    function closeStaffTaskModal() { document.getElementById('staff-task-modal').classList.add('hidden'); }
+    function saveStaffTask() {
+        const staffId = document.getElementById('stsk-who').value;
+        const text    = document.getElementById('stsk-text').value.trim();
+        const due     = document.getElementById('stsk-due').value;
+        if (!text||!due) return alert('Please fill in the task and due date.');
+        const data = { staffId, text, due, priority:document.getElementById('stsk-priority').value, done:false };
+        if (editingStaffTaskId) {
+            const t = staffTasks.find(x=>x.id===editingStaffTaskId);
+            Object.assign(t, data);
+        } else {
+            staffTasks.push({ id:'stsk'+nextStaffTaskId++, ...data });
+        }
+        closeStaffTaskModal();
+        renderStaffTasks();
+    }
+    function deleteStaffTask(id) {
+        staffTasks = staffTasks.filter(x=>x.id!==id);
+        renderStaffTasks();
+    }
+
+    /* populate staff dropdowns across all modals + task filter */
+    function populateStaffSelects() {
+        const opts = staffMembers.map(s=>`<option value="${s.id}">${s.name} · ${s.role}</option>`).join('');
+        ['sav-who','asgn-staff','stsk-who'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=opts; });
+        const filterSel = document.getElementById('staff-task-filter');
+        if (filterSel) filterSel.innerHTML = '<option value="all">All staff</option>'+opts;
+    }
+
+    /* switchView hook for staff-mgmt-view */
+    function initStaffView() {
+        populateStaffSelects();
+        renderStaffRoster();
+    }
+
+
+    /* ═══════════════════════════════════════════════
+       AVAILABILITY ENGINE
+       Checks: business open AND resource free AND
+       ∃ staff: qualified + not on leave + under daily capacity
+    ═══════════════════════════════════════════════ */
+
+    /**
+     * Is the business open on isoDate?
+     * Returns { open:bool, reason:string }
+     */
+    function checkBusinessOpen(isoDate) {
+        const closure = businessClosures.find(c => isoDate >= c.start && isoDate <= c.end);
+        if (!closure) return { open:true, reason:'' };
+        if (closure.type === 'reduced') return { open:true, reduced:true, reason:'Reduced hours: '+closure.label };
+        return { open:false, reason:closure.label };
+    }
+
+    /**
+     * Is a specific resource available on isoDate?
+     * Returns { available:bool, reason:string }
+     */
+    function checkResourceAvailable(resourceId, isoDate) {
+        const r = managedResources.find(x=>x.id===resourceId);
+        if (!r) return { available:false, reason:'Resource not found' };
+        for (const b of (r.blackouts||[])) {
+            if (b.includes(':')) {
+                const [s,e] = b.split(':');
+                if (isoDate >= s && isoDate <= e) return { available:false, reason:'Blackout: '+r.name };
+            } else {
+                if (isoDate === b) return { available:false, reason:'Blackout: '+r.name };
+            }
+        }
+        // Check calBookings for this resource
+        const di = dayIndex(isoToDate(isoDate));
+        const booked = calBookings.find(cb=>cb.resourceId===resourceId && di>=cb.start && di<=cb.end);
+        if (booked) return { available:false, reason:'Booked: '+booked.guest };
+        return { available:true, reason:'' };
+    }
+
+    /**
+     * Is a staff member on leave on isoDate?
+     */
+    function isStaffOnLeave(staffId, isoDate) {
+        return staffAvailability.some(a => a.staffId===staffId && isoDate>=a.start && isoDate<=a.end);
+    }
+
+    /**
+     * How many sessions has a staff member already been booked for a service on isoDate?
+     */
+    function getStaffBookingCount(staffId, serviceId, isoDate) {
+        const day = staffBookingLedger[isoDate];
+        if (!day) return 0;
+        const svc = day[serviceId];
+        if (!svc) return 0;
+        return svc[staffId] || 0;
+    }
+
+    /**
+     * Get all staff who can deliver serviceId on isoDate, with their capacity status.
+     * Returns array of { staff, qualified:bool, onLeave:bool, booked:int, dailyMax:int, available:bool }
+     */
+    function getStaffAvailabilityForService(serviceId, isoDate) {
+        return staffMembers.map(s => {
+            const quals = staffQualifications[s.id] || [];
+            const qual  = quals.find(q => q.serviceId === serviceId);
+            if (!qual) return null; // not qualified
+            const onLeave = isStaffOnLeave(s.id, isoDate);
+            const booked  = getStaffBookingCount(s.id, serviceId, isoDate);
+            const available = !onLeave && booked < qual.dailyMax;
+            return { staff:s, qualified:true, onLeave, booked, dailyMax:qual.dailyMax, available };
+        }).filter(Boolean);
+    }
+
+    /**
+     * Full availability check for a service on a date.
+     * Returns { available:bool, reasons:string[], staffStatus:array }
+     */
+    function checkFullAvailability(serviceId, isoDate, resourceId) {
+        const reasons = [];
+
+        // Layer 1: Business
+        const biz = checkBusinessOpen(isoDate);
+        if (!biz.open) return { available:false, reasons:['Business closed: '+biz.reason], staffStatus:[] };
+        if (biz.reduced) reasons.push('⚠ '+biz.reason);
+
+        // Layer 2: Resource (only if a specific resource matters for this service)
+        if (resourceId) {
+            const res = checkResourceAvailable(resourceId, isoDate);
+            if (!res.available) return { available:false, reasons:['Resource unavailable: '+res.reason], staffStatus:[] };
+        }
+
+        // Layer 3 + 4: Staff qualified + not on leave + under capacity
+        const staffStatus = getStaffAvailabilityForService(serviceId, isoDate);
+        if (!staffStatus.length) {
+            return { available:false, reasons:['No staff qualified for this service'], staffStatus:[] };
+        }
+        const anyAvailable = staffStatus.some(s => s.available);
+        if (!anyAvailable) {
+            const leaveNames  = staffStatus.filter(s=>s.onLeave).map(s=>s.staff.name);
+            const fullNames   = staffStatus.filter(s=>!s.onLeave && !s.available).map(s=>s.staff.name+' ('+s.booked+'/'+s.dailyMax+')');
+            if (leaveNames.length)  reasons.push('On leave: '+leaveNames.join(', '));
+            if (fullNames.length)   reasons.push('At capacity: '+fullNames.join(', '));
+            return { available:false, reasons, staffStatus };
+        }
+
+        return { available:true, reasons, staffStatus };
+    }
+
+    /**
+     * Record a new booking in the ledger (call when a booking is confirmed).
+     * staffId = null means auto-assign the first available.
+     * Returns the assigned staffId or null if none available.
+     */
+    function recordStaffBooking(serviceId, isoDate, preferredStaffId) {
+        const staffStatus = getStaffAvailabilityForService(serviceId, isoDate);
+        let chosen = preferredStaffId
+            ? staffStatus.find(s=>s.staff.id===preferredStaffId && s.available)
+            : staffStatus.find(s=>s.available);
+        if (!chosen) return null;
+
+        if (!staffBookingLedger[isoDate]) staffBookingLedger[isoDate] = {};
+        if (!staffBookingLedger[isoDate][serviceId]) staffBookingLedger[isoDate][serviceId] = {};
+        staffBookingLedger[isoDate][serviceId][chosen.staff.id] =
+            (staffBookingLedger[isoDate][serviceId][chosen.staff.id] || 0) + 1;
+        return chosen.staff.id;
+    }
+
+    /* ══ Availability checker UI (used in owner booking flow) ══ */
+    function checkAvailabilityUI() {
+        const serviceId = document.getElementById('avail-check-service')?.value;
+        const isoDate   = document.getElementById('avail-check-date')?.value;
+        const resultEl  = document.getElementById('avail-check-result');
+        if (!serviceId || !isoDate || !resultEl) return;
+
+        const result = checkFullAvailability(serviceId, isoDate, null);
+        const svc    = serviceTypes.find(s=>s.id===serviceId);
+
+        let html = '';
+        if (result.available) {
+            const avail = result.staffStatus.filter(s=>s.available);
+            html = `<div class="avail-result avail-ok">
+                <div class="avail-result-icon">✓</div>
+                <div>
+                    <strong>${svc?.name} — Available on ${fmtDate(isoDate)}</strong>
+                    <div style="margin-top:0.35rem;font-size:0.8rem;">
+                        ${avail.map(s=>`${s.staff.name} (${s.booked}/${s.dailyMax} sessions booked)`).join(' · ')}
+                    </div>
+                    ${result.reasons.length ? '<div style="margin-top:0.25rem;font-size:0.78rem;color:var(--warning-text);">'+result.reasons.join(' · ')+'</div>' : ''}
+                </div>
+            </div>`;
+        } else {
+            html = `<div class="avail-result avail-no">
+                <div class="avail-result-icon">✕</div>
+                <div>
+                    <strong>${svc?.name} — Unavailable on ${fmtDate(isoDate)}</strong>
+                    <div style="margin-top:0.35rem;font-size:0.8rem;">${result.reasons.join(' · ')}</div>
+                    ${result.staffStatus.length ? `<div style="margin-top:0.4rem;font-size:0.78rem;color:var(--text-muted);">
+                        ${result.staffStatus.map(s=>`${s.staff.name}: ${s.onLeave?'on leave':s.booked+'/'+s.dailyMax+' sessions'}`).join(' · ')}
+                    </div>` : ''}
+                </div>
+            </div>`;
+        }
+        resultEl.innerHTML = html;
     }
 
     </script>
