@@ -5,23 +5,299 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barkboard Portal</title>
     <link rel="icon" href="https://fav.farm/🐾" />
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --background: #f9fafb;
+            --surface: #ffffff;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --success: #d1fae5;
+            --success-text: #065f46;
+            --danger: #fee2e2;
+            --danger-text: #991b1b;
+            --warning: #fef3c7;
+            --warning-text: #92400e;
+            --owner-primary: #0e7490;
+            --owner-primary-hover: #155e75;
+            --owner-surface: #f0f9ff;
+            --owner-accent: #e0f2fe;
+        }
+
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--background); color: var(--text); margin: 0; }
+
+        /* ── NAVBAR ── */
+        .navbar { display: flex; justify-content: space-between; align-items: center; background-color: var(--surface); padding: 1rem 2rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+        .navbar.owner-mode { background-color: #0c4a6e; border-bottom-color: #075985; }
+        .logo { font-size: 1.4rem; font-weight: 700; color: var(--primary); letter-spacing: -0.02em; }
+        .navbar.owner-mode .logo { color: #bae6fd; }
+        .nav-btn { background: none; border: none; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; border-radius: 0.375rem; margin-left: 0.25rem; color: var(--text); transition: background 0.15s; }
+        .nav-btn.active, .nav-btn:hover { background-color: var(--primary); color: white; }
+        .navbar.owner-mode .nav-btn { color: #bae6fd; }
+        .navbar.owner-mode .nav-btn.active, .navbar.owner-mode .nav-btn:hover { background-color: #0369a1; color: white; }
+
+        /* Owner mode banner */
+        .owner-banner { background: #0c4a6e; color: #bae6fd; padding: 0.5rem 2rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; border-bottom: 1px solid #075985; }
+        .owner-banner strong { color: #7dd3fc; }
+        .exit-owner-btn { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #bae6fd; padding: 0.3rem 0.8rem; border-radius: 0.3rem; cursor: pointer; font-size: 0.8rem; }
+        .exit-owner-btn:hover { background: rgba(255,255,255,0.2); }
+
+        /* ── CONTAINER ── */
+        .container { max-width: 1100px; margin: 2rem auto; padding: 0 1.5rem; }
+        .view-panel { display: flex; flex-direction: column; gap: 1.5rem; }
+        .hidden { display: none !important; }
+
+        /* ── STATS GRID ── */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .stat-card { background: var(--surface); padding: 1.5rem; border-radius: 0.5rem; border: 1px solid var(--border); text-align: center; }
+        .stat-card h3 { margin: 0; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-card p { margin: 0.5rem 0 0; font-size: 1.75rem; font-weight: 700; color: var(--text); }
+        .stat-card.alert { background-color: var(--warning); border-color: #d97706; }
+        .stat-card.alert p { color: var(--warning-text); }
+
+        /* ── CRM ── */
+        .crm-header { background: var(--surface); padding: 1.5rem; border-radius: 0.5rem; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 1rem; }
+        .controls-row { display: flex; gap: 1rem; align-items: center; }
+        #crm-search { flex: 1; padding: 0.65rem 0.85rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.95rem; }
+        .filter-menu { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .filter-chip { background: #f3f4f6; border: 1px solid var(--border); padding: 0.4rem 1rem; border-radius: 9999px; font-size: 0.82rem; cursor: pointer; transition: all 0.15s; }
+        .filter-chip.active, .filter-chip:hover { background: #374151; color: white; border-color: #374151; }
+
+        /* ── CARD LAYOUTS ── */
+        .card-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 1rem; }
+        .list-layout { display: flex; flex-direction: column; gap: 0.4rem; }
+        .crm-card { background: var(--surface); padding: 1.25rem 1.5rem; border-radius: 0.5rem; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+        .crm-card:hover { border-color: #a5b4fc; box-shadow: 0 2px 8px rgba(79,70,229,0.08); }
+        .crm-card.warning { border-left: 3px solid #f59e0b; }
+        .list-layout .crm-card { flex-direction: row; align-items: center; padding: 0.6rem 1.2rem; gap: 1rem; }
+        .list-layout .pin-note, .list-layout .crm-section-block, .list-layout .qa-container { display: none !important; }
+        .list-layout .item-header { border: none; padding: 0; flex-direction: row-reverse; }
+
+        .item-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 0.65rem; }
+        .item-header h3 { margin: 0; font-size: 1rem; }
+        .clickable-profile-zone:hover h3 { color: var(--primary); text-decoration: underline; }
+
+        /* ── BADGES ── */
+        .entity-badge { font-size: 0.62rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .entity-badge.household { background: #e0f2fe; color: #0369a1; }
+        .entity-badge.people { background: #f3e8ff; color: #6b21a8; }
+        .entity-badge.pets { background: #dcfce7; color: #166534; }
+        .entity-badge.vets { background: #fef3c7; color: #92400e; }
+        .badge { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 9999px; }
+        .badge.luxury { background: #ede9fe; color: #5b21b6; }
+        .badge.status-ok { background: var(--success); color: var(--success-text); }
+        .badge.status-warn { background: var(--danger); color: var(--danger-text); }
+
+        .pin-note { background: var(--warning); padding: 0.5rem 0.75rem; border-radius: 0.375rem; color: var(--warning-text); font-size: 0.83rem; margin: 0; }
+        .crm-section-block { background: #f9fafb; border: 1px solid var(--border); padding: 0.75rem 1rem; border-radius: 0.375rem; }
+        .crm-section-block h4 { margin: 0 0 0.5rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .crm-section-block ul { margin: 0; padding-left: 1.25rem; font-size: 0.88rem; line-height: 1.7; }
+
+        /* ── QUICK ACTIONS ── */
+        .qa-container { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+        .qa-icon-btn { background: #f3f4f6; border: 1px solid var(--border); width: 34px; height: 34px; border-radius: 0.375rem; display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; position: relative; }
+        .qa-icon-btn span { display: none; }
+        .qa-icon-btn:hover { background: var(--primary); border-color: var(--primary); }
+        .qa-icon-btn::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background: #1f2937; color: white; font-size: 0.73rem; padding: 0.25rem 0.55rem; border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 50; }
+        .qa-icon-btn:hover::after { opacity: 1; }
+        .fs-sidebar-actions .qa-container { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+        .fs-sidebar-actions .qa-icon-btn { width: 100%; height: auto; padding: 0.55rem 1rem; justify-content: flex-start; gap: 0.75rem; }
+        .fs-sidebar-actions .qa-icon-btn span { display: inline-block; font-size: 0.88rem; font-weight: 500; }
+
+        /* ── FULLSCREEN MODAL ── */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .fullscreen-content { background: var(--background); width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow-y: auto; }
+        .fullscreen-header { background: var(--surface); padding: 1.25rem 2rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+        .fullscreen-header-actions { display: flex; gap: 0.75rem; align-items: center; }
+        .close-fs-btn { background: #ef4444; color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 0.375rem; font-weight: 600; cursor: pointer; font-size: 0.88rem; }
+        .view-as-owner-btn { background: var(--owner-primary); color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 0.375rem; font-weight: 600; cursor: pointer; font-size: 0.88rem; display: flex; align-items: center; gap: 0.4rem; }
+        .view-as-owner-btn:hover { background: var(--owner-primary-hover); }
+        .fs-body-layout { display: grid; grid-template-columns: 260px 1fr; gap: 2rem; max-width: 1200px; width: 100%; margin: 2rem auto; padding: 0 1.5rem; }
+        .fs-sidebar-actions { background: var(--surface); padding: 1.25rem; border-radius: 0.5rem; border: 1px solid var(--border); height: max-content; }
+        .fs-sidebar-actions h4 { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+        .fs-main-details { display: flex; flex-direction: column; gap: 1.25rem; }
+
+        /* ── RELATIONSHIP MODAL ── */
+        .modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; }
+        .form-group label { font-weight: 500; font-size: 0.85rem; color: var(--text-muted); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+        input, select, textarea { width: 100%; padding: 0.65rem 0.85rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.95rem; font-family: inherit; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+        textarea { resize: vertical; min-height: 80px; }
+
+        /* ── BUTTONS ── */
+        .btn { background: #f3f4f6; border: 1px solid var(--border); padding: 0.45rem 0.9rem; border-radius: 0.375rem; cursor: pointer; font-weight: 500; font-size: 0.88rem; transition: background 0.12s; }
+        .btn:hover { background: #e5e7eb; }
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 0.65rem 1.4rem; border-radius: 0.375rem; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .toggle-layout-btn { white-space: nowrap; }
+
+        /* ── BUSINESS VIEW ── */
+        .chart-container-mock { background: var(--surface); border: 1px solid var(--border); padding: 1.75rem; border-radius: 0.5rem; }
+        .bar-chart-mock { display: flex; align-items: flex-end; justify-content: space-around; height: 220px; border-bottom: 2px solid var(--border); padding-top: 1.5rem; margin-top: 1rem; }
+        .bar-col { background: #c7d2fe; width: 60px; border-radius: 4px 4px 0 0; position: relative; display: flex; justify-content: center; }
+        .bar-col.active { background: var(--primary); }
+        .bar-lbl { position: absolute; top: 105%; font-size: 0.82rem; color: var(--text-muted); }
+        .bar-val { position: absolute; bottom: 105%; font-size: 0.85rem; font-weight: 600; }
+        .revenue-color { color: var(--primary); }
+        .success-color { color: #10b981; }
+
+        /* ── CALENDAR ── */
+        .calendar-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 0.5rem; overflow: hidden; }
+        .calendar-table th, .calendar-table td { border: 1px solid var(--border); padding: 0.9rem 1rem; text-align: center; font-size: 0.9rem; }
+        .calendar-table th { background: #f3f4f6; color: #4b5563; font-weight: 600; font-size: 0.82rem; text-transform: uppercase; }
+        .calendar-table td.booked { background-color: #dbeafe; color: #1e40af; font-weight: 500; }
+        .calendar-table td.available { color: #10b981; }
+
+        /* ── BOOKING WIZARD ── */
+        .booking-wizard { background: var(--surface); padding: 2rem; border-radius: 0.5rem; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 1rem; max-width: 600px; }
+        .booking-wizard label { font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.1rem; display: block; }
+        .date-row { display: flex; gap: 1rem; }
+        .date-row div { flex: 1; }
+        .health-banner { padding: 0.85rem 1rem; border-radius: 0.375rem; font-size: 0.9rem; }
+        .health-banner.success { background: var(--success); color: var(--success-text); }
+
+        /* ═══════════════════════════════════
+           OWNER PORTAL STYLES
+           ═══════════════════════════════════ */
+
+        /* Owner portal section tabs */
+        .owner-section-nav { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; overflow-x: auto; }
+        .owner-tab-btn { background: none; border: none; padding: 0.7rem 1.1rem; font-size: 0.88rem; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; font-weight: 500; transition: all 0.15s; }
+        .owner-tab-btn:hover { color: var(--owner-primary); }
+        .owner-tab-btn.active { color: var(--owner-primary); border-bottom-color: var(--owner-primary); }
+
+        /* Owner portal sections */
+        .owner-section { display: none; }
+        .owner-section.active { display: block; }
+
+        /* Owner portal header bar */
+        .owner-portal-header { background: linear-gradient(135deg, #0c4a6e 0%, #0e7490 100%); border-radius: 0.75rem; padding: 1.75rem 2rem; margin-bottom: 1.5rem; color: white; display: flex; justify-content: space-between; align-items: flex-end; }
+        .owner-portal-header h2 { margin: 0 0 0.25rem; font-size: 1.4rem; font-weight: 700; }
+        .owner-portal-header p { margin: 0; font-size: 0.9rem; opacity: 0.8; }
+        .owner-header-badge { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 0.5rem; padding: 0.5rem 1rem; font-size: 0.82rem; text-align: right; }
+        .owner-header-badge span { display: block; font-size: 1.1rem; font-weight: 700; }
+
+        /* Owner info cards */
+        .owner-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+        .owner-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; }
+        .owner-card h4 { margin: 0 0 0.75rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .owner-card .card-value { font-size: 1rem; font-weight: 500; color: var(--text); }
+        .owner-card .card-sub { font-size: 0.83rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+        /* Pet profile cards in owner portal */
+        .pet-profile-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem 1.5rem; display: flex; gap: 1.25rem; align-items: flex-start; }
+        .pet-avatar { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+        .pet-avatar.dog { background: #fef3c7; }
+        .pet-avatar.cat { background: #f3e8ff; }
+        .pet-info { flex: 1; }
+        .pet-info h3 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+        .pet-info p { margin: 0 0 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+        .pet-health-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .health-tag { font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 9999px; }
+        .health-tag.ok { background: var(--success); color: var(--success-text); }
+        .health-tag.warn { background: var(--danger); color: var(--danger-text); }
+        .health-tag.neutral { background: #f3f4f6; color: #4b5563; }
+
+        /* Visit history table */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+        .data-table th { background: #f9fafb; border-bottom: 2px solid var(--border); padding: 0.65rem 1rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
+        .data-table td { padding: 0.75rem 1rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        .data-table tr:last-child td { border-bottom: none; }
+        .data-table tr:hover td { background: #f9fafb; }
+        .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
+
+        /* Status pills */
+        .status-pill { display: inline-block; font-size: 0.73rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .status-pill.completed { background: var(--success); color: var(--success-text); }
+        .status-pill.upcoming { background: #dbeafe; color: #1e40af; }
+        .status-pill.cancelled { background: var(--danger); color: var(--danger-text); }
+        .status-pill.pending { background: var(--warning); color: var(--warning-text); }
+
+        /* Booking cards in owner portal */
+        .booking-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem 1.5rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+        .booking-card-left h4 { margin: 0 0 0.2rem; font-size: 1rem; }
+        .booking-card-left p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+        .booking-card-right { text-align: right; flex-shrink: 0; }
+        .booking-price { font-size: 1.2rem; font-weight: 700; color: var(--owner-primary); }
+        .booking-price-note { font-size: 0.77rem; color: var(--text-muted); }
+
+        /* Payment rows */
+        .payment-summary { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; padding: 1.25rem 1.5rem; display: flex; gap: 2rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .payment-summary-item h4 { margin: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--owner-primary); }
+        .payment-summary-item p { margin: 0.25rem 0 0; font-size: 1.4rem; font-weight: 700; color: #0c4a6e; }
+
+        /* Communication thread */
+        .message-thread { display: flex; flex-direction: column; gap: 1rem; }
+        .message-bubble { padding: 0.85rem 1rem; border-radius: 0.5rem; max-width: 82%; }
+        .message-bubble.from-staff { background: #f3f4f6; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .message-bubble.from-owner { background: #e0f2fe; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .message-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; }
+        .message-text { font-size: 0.9rem; line-height: 1.5; margin: 0; }
+        .compose-area { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; display: flex; gap: 0.75rem; align-items: flex-end; margin-top: 1rem; }
+        .compose-area textarea { flex: 1; min-height: 60px; border-radius: 0.375rem; padding: 0.65rem; font-size: 0.9rem; }
+
+        /* Notes */
+        .note-card { background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.5rem; padding: 1rem 1.25rem; }
+        .note-card .note-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+        .note-card .note-author { font-size: 0.78rem; font-weight: 600; color: #92400e; }
+        .note-card .note-date { font-size: 0.75rem; color: var(--text-muted); }
+        .note-card p { margin: 0; font-size: 0.9rem; color: #78350f; line-height: 1.5; }
+
+        /* Documents */
+        .doc-row { display: flex; align-items: center; gap: 1rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid #f3f4f6; }
+        .doc-row:last-child { border-bottom: none; }
+        .doc-icon { font-size: 1.4rem; flex-shrink: 0; }
+        .doc-info { flex: 1; }
+        .doc-info strong { font-size: 0.9rem; display: block; }
+        .doc-info span { font-size: 0.78rem; color: var(--text-muted); }
+        .doc-download { color: var(--owner-primary); font-size: 0.82rem; font-weight: 500; cursor: pointer; white-space: nowrap; background: none; border: none; padding: 0; }
+        .doc-download:hover { text-decoration: underline; }
+
+        /* Vet cards in owner portal */
+        .vet-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem 1.5rem; display: flex; gap: 1.25rem; align-items: flex-start; }
+        .vet-icon { width: 44px; height: 44px; background: #fef3c7; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+        .vet-info h4 { margin: 0 0 0.2rem; font-size: 1rem; }
+        .vet-info p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+        .vet-note-tag { display: inline-block; margin-top: 0.5rem; font-size: 0.75rem; padding: 0.15rem 0.55rem; border-radius: 9999px; background: var(--warning); color: var(--warning-text); }
+
+        /* Section header row */
+        .section-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .section-header-row h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+
+        /* Divider label */
+        .section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600; margin: 1.25rem 0 0.75rem; }
+    </style>
 </head>
 <body>
 
-    <header class="navbar">
+    <div id="owner-banner" class="owner-banner hidden">
+        <div>👁️ Admin preview — viewing portal as: <strong id="owner-banner-name">—</strong></div>
+        <button class="exit-owner-btn" onclick="exitOwnerView()">✕ Exit Owner View</button>
+    </div>
+
+    <header id="main-navbar" class="navbar">
         <div class="logo">🐾 Barkboard</div>
-        <nav>
+        <nav id="admin-nav">
             <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
             <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
             <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
             <button onclick="switchView('biz-view')" class="nav-btn">Business Management</button>
-            <button onclick="switchView('owner-view')" class="nav-btn">Owner Portal</button>
+        </nav>
+        <nav id="owner-nav" class="hidden">
+            <button onclick="switchOwnerTab('household')" class="nav-btn active" id="ownav-household">My Household</button>
+            <button onclick="switchOwnerTab('bookings')" class="nav-btn" id="ownav-bookings">Bookings</button>
+            <button onclick="switchOwnerTab('visits')" class="nav-btn" id="ownav-visits">Visit History</button>
         </nav>
     </header>
 
     <main class="container">
-        
+
+        <!-- ═══ STAFF FEED ═══ -->
         <section id="staff-view" class="view-panel">
             <h2>Today's Overview</h2>
             <div class="stats-grid">
@@ -38,18 +314,18 @@
                     <p>$1,240</p>
                 </div>
             </div>
-            
             <h2>Current Active Guests</h2>
             <div id="staff-guests-container" class="card-layout"></div>
         </section>
 
+        <!-- ═══ CRM ═══ -->
         <section id="crm-view" class="view-panel hidden">
             <div class="crm-header">
-                <h2>Registry Directory & Global Relations</h2>
+                <h2 style="margin:0;">Registry Directory & Global Relations</h2>
                 <div class="controls-row">
                     <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()">
                     <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
-                    <button class="btn btn-primary" onclick="openRelationshipModal()">🔗 Link New Relationship</button>
+                    <button class="btn btn-primary" onclick="openRelationshipModal()">🔗 Link Relationship</button>
                 </div>
                 <div class="filter-menu">
                     <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
@@ -62,28 +338,30 @@
             <div id="crm-list-container" class="card-layout"></div>
         </section>
 
+        <!-- ═══ BUSINESS ═══ -->
         <section id="biz-view" class="view-panel hidden">
             <h2>Business Management Dashboard</h2>
             <div class="stats-grid">
-                <div class="stat-card"><h3>Gross Revenue (Mtd)</h3><p class="revenue-color">$18,450</p></div>
-                <div class="stat-card"><h3>Average Lifetime Value (LTV)</h3><p>$1,120</p></div>
+                <div class="stat-card"><h3>Gross Revenue (MTD)</h3><p class="revenue-color">$18,450</p></div>
+                <div class="stat-card"><h3>Avg. Lifetime Value</h3><p>$1,120</p></div>
                 <div class="stat-card"><h3>Retention Rate</h3><p class="success-color">94.2%</p></div>
-                <div class="stat-card"><h3>Active Subscription Packages</h3><p>38</p></div>
+                <div class="stat-card"><h3>Active Packages</h3><p>38</p></div>
             </div>
             <div class="chart-container-mock">
-                <h3>Sales & Bookings Performance Over Time</h3>
+                <h3>Sales & Bookings Performance</h3>
                 <div class="bar-chart-mock">
-                    <div class="bar-col" style="height: 40%"><span class="bar-lbl">Mar</span><span class="bar-val">$12k</span></div>
-                    <div class="bar-col" style="height: 55%"><span class="bar-lbl">Apr</span><span class="bar-val">$15k</span></div>
-                    <div class="bar-col" style="height: 75%"><span class="bar-lbl">May</span><span class="bar-val">$21k</span></div>
-                    <div class="bar-col active" style="height: 90%"><span class="bar-lbl">Jun</span><span class="bar-val">$26k</span></div>
+                    <div class="bar-col" style="height:40%"><span class="bar-lbl">Mar</span><span class="bar-val">$12k</span></div>
+                    <div class="bar-col" style="height:55%"><span class="bar-lbl">Apr</span><span class="bar-val">$15k</span></div>
+                    <div class="bar-col" style="height:75%"><span class="bar-lbl">May</span><span class="bar-val">$21k</span></div>
+                    <div class="bar-col active" style="height:90%"><span class="bar-lbl">Jun</span><span class="bar-val">$26k</span></div>
                 </div>
             </div>
         </section>
 
+        <!-- ═══ CALENDAR ═══ -->
         <section id="calendar-view" class="view-panel hidden">
             <h2>Boarding & Kennel Availability Grid</h2>
-            <div class="crm-card">
+            <div class="table-wrap">
                 <table class="calendar-table">
                     <thead>
                         <tr>
@@ -98,41 +376,84 @@
                 </table>
             </div>
         </section>
-        
+
+        <!-- ═══════════════════════════════════
+             OWNER PORTAL VIEW
+             ═══════════════════════════════════ -->
         <section id="owner-view" class="view-panel hidden">
-            <h2>Welcome back, John! 👋</h2>
-            <div class="booking-wizard">
-                <h3>Book a New Stay for Your Pets</h3>
-                <label>Select Service:</label>
-                <select id="booking-service-select">
-                    <option value="55">Luxury Suite Boarding ($55/night)</option>
-                    <option value="35">Standard Boarding ($35/night)</option>
-                    <option value="75">Private Agility Training ($75/session)</option>
-                </select>
-                <div class="date-row">
-                    <div>
-                        <label>Check-In:</label>
-                        <input type="date" value="2026-07-03">
-                    </div>
-                    <div>
-                        <label>Check-Out:</label>
-                        <input type="date" value="2026-07-07">
-                    </div>
-                </div>
-                <div class="health-banner success">
-                    ✅ Household health safety checks passed. Max's vaccinations are active.
-                </div>
-                <label>Special Packing Instructions & Personal Items:</label>
-                <textarea placeholder="List toys, specific leash styles, or custom food bags..."></textarea>
-                <button class="btn-primary" onclick="alert('Booking processing via mock Stripe gateway!')">Proceed to Secure Checkout</button>
+
+            <!-- Dynamic header filled by renderOwnerPortal() -->
+            <div id="owner-portal-header-block"></div>
+
+            <!-- Section tab nav -->
+            <nav class="owner-section-nav">
+                <button class="owner-tab-btn active" onclick="switchOwnerSection('household')" id="otab-household">🏠 Household</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('pets')" id="otab-pets">🐾 Pets</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('vets')" id="otab-vets">🏥 Vets</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('visits')" id="otab-visits">📋 Visits</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('bookings')" id="otab-bookings">📅 Bookings</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('payment')" id="otab-payment">💳 Payment</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('communications')" id="otab-communications">✉️ Communications</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('notes')" id="otab-notes">📝 Notes</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('documents')" id="otab-documents">📁 Documents</button>
+            </nav>
+
+            <!-- ── Household ── -->
+            <div id="owner-sec-household" class="owner-section active">
+                <div id="owner-household-content"></div>
             </div>
+
+            <!-- ── Pets ── -->
+            <div id="owner-sec-pets" class="owner-section">
+                <div id="owner-pets-content"></div>
+            </div>
+
+            <!-- ── Vets ── -->
+            <div id="owner-sec-vets" class="owner-section">
+                <div id="owner-vets-content"></div>
+            </div>
+
+            <!-- ── Visits ── -->
+            <div id="owner-sec-visits" class="owner-section">
+                <div id="owner-visits-content"></div>
+            </div>
+
+            <!-- ── Bookings ── -->
+            <div id="owner-sec-bookings" class="owner-section">
+                <div id="owner-bookings-content"></div>
+            </div>
+
+            <!-- ── Payment ── -->
+            <div id="owner-sec-payment" class="owner-section">
+                <div id="owner-payment-content"></div>
+            </div>
+
+            <!-- ── Communications ── -->
+            <div id="owner-sec-communications" class="owner-section">
+                <div id="owner-communications-content"></div>
+            </div>
+
+            <!-- ── Notes ── -->
+            <div id="owner-sec-notes" class="owner-section">
+                <div id="owner-notes-content"></div>
+            </div>
+
+            <!-- ── Documents ── -->
+            <div id="owner-sec-documents" class="owner-section">
+                <div id="owner-documents-content"></div>
+            </div>
+
         </section>
 
+        <!-- ── Fullscreen household/entity profile ── -->
         <div id="fullscreen-modal" class="modal hidden">
             <div class="fullscreen-content">
                 <div class="fullscreen-header">
-                    <h2 id="fs-title">Profile View</h2>
-                    <button class="close-fs-btn" onclick="closeFullscreenProfile()">✕ Close Profile</button>
+                    <h2 id="fs-title" style="margin:0;">Profile View</h2>
+                    <div class="fullscreen-header-actions">
+                        <button id="view-as-owner-btn" class="view-as-owner-btn hidden" onclick="activateOwnerViewFromProfile()">👁 View as Owner</button>
+                        <button class="close-fs-btn" onclick="closeFullscreenProfile()">✕ Close</button>
+                    </div>
                 </div>
                 <div class="fs-body-layout">
                     <div id="fs-quick-actions-anchor" class="fs-sidebar-actions"></div>
@@ -141,30 +462,719 @@
             </div>
         </div>
 
+        <!-- ── Relationship modal ── -->
         <div id="relationship-modal" class="modal hidden">
             <div class="modal-content">
-                <h3>Link Cross-Entity Relationship</h3>
+                <h3 style="margin:0;">Link Cross-Entity Relationship</h3>
                 <form id="relation-form" onsubmit="saveNewRelationship(event)">
-                    <div class="form-group"><label>Primary Entity:</label><select id="modal-entity-a" required></select></div>
+                    <div class="form-group"><label>Primary Entity</label><select id="modal-entity-a" required></select></div>
                     <div class="form-group">
-                        <label>Relationship Configuration:</label>
+                        <label>Relationship Type</label>
                         <select id="modal-relation-type" onchange="toggleRelationshipFields()" required>
                             <option value="vet">Uses Veterinary Clinic / COI</option>
-                            <option value="emergency">Emergency Contact Connection</option>
+                            <option value="emergency">Emergency Contact</option>
                             <option value="family">Extended Family / Neighbor</option>
                         </select>
                     </div>
-                    <div class="form-group"><label>Link Target Entity:</label><select id="modal-entity-b" required></select></div>
-                    <div class="form-group"><label>Relationship Note:</label><input type="text" id="modal-relation-note" placeholder="e.g., Preferred emergency facility"></div>
+                    <div class="form-group"><label>Link Target</label><select id="modal-entity-b" required></select></div>
+                    <div class="form-group"><label>Note</label><input type="text" id="modal-relation-note" placeholder="e.g., Preferred emergency facility"></div>
                     <div class="modal-actions">
                         <button type="button" class="btn" onclick="closeRelationshipModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Establish Link</button>
+                        <button type="submit" class="btn-primary">Establish Link</button>
                     </div>
                 </form>
             </div>
         </div>
+
     </main>
 
-    <script src="app.js"></script>
+    <script>
+    /* ═══════════════════════════════════════════════
+       DATA STORE
+    ═══════════════════════════════════════════════ */
+    var households = [
+        { id: 'h-miller', name: 'The Miller Household', note: 'Gate code is #4412. Prefer early morning drop-off.', address: '742 Evergreen Terrace, Springfield, IL 62701' },
+        { id: 'h-davis', name: 'The Davis Household', note: 'Alice handles all drop-offs and pickups.', address: '122 Maple Road, Springfield, IL 62704' }
+    ];
+
+    var people = [
+        { id: 'p-john', householdId: 'h-miller', name: 'John Miller', contact: '555-0192 | john.m@email.com', role: 'Primary' },
+        { id: 'p-jane', householdId: 'h-miller', name: 'Jane Miller', contact: '555-0193 | jane.m@email.com', role: 'Secondary' },
+        { id: 'p-alice', householdId: 'h-davis', name: 'Alice Davis', contact: '555-3341 | alice.d@email.com', role: 'Primary' }
+    ];
+
+    var pets = [
+        { id: 'pet-max', householdId: 'h-miller', name: 'Max', species: 'dog', details: 'Golden Retriever · 3 yrs · 72 lbs', status: 'current', room: 'Luxury Suite #5', vaccineExpiry: 'Dec 2026', allergies: 'None', food: 'Blue Buffalo Large Breed, 2 cups twice daily' },
+        { id: 'pet-bella', householdId: 'h-miller', name: 'Bella', species: 'cat', details: 'Siamese Cat · 7 yrs · 11 lbs', status: 'expired', room: 'Cat Condo A', vaccineExpiry: 'Mar 2024', allergies: 'Chicken proteins', food: 'Royal Canin Siamese, ¼ cup twice daily' },
+        { id: 'pet-luna', householdId: 'h-davis', name: 'Luna', species: 'dog', details: 'French Bulldog · 2 yrs · 22 lbs', status: 'current', room: 'Standard Run B', vaccineExpiry: 'Sep 2026', allergies: 'None', food: 'Hill\'s Science Diet Small Breed, 1 cup twice daily' }
+    ];
+
+    var vets = [
+        { id: 'v-oakridge', name: 'Oakridge Vet Clinic', details: 'Dr. Arrington · 555-9981 · 300 Oak St, Springfield', specialty: 'Primary Care' },
+        { id: 'v-city', name: 'City Animal Hospital', details: 'Emergency Dispatch · 555-1212 · 88 Central Ave, Springfield', specialty: 'Emergency' }
+    ];
+
+    var crossRelationships = [
+        { entityId: 'h-miller', targetId: 'v-oakridge', type: 'vet', note: 'Primary Care' },
+        { entityId: 'h-davis', targetId: 'v-city', type: 'vet', note: 'Emergency Backup Only' }
+    ];
+
+    // Extended data for owner portal
+    var visits = {
+        'h-miller': [
+            { id: 'v1', petName: 'Max', service: 'Luxury Suite Boarding', checkIn: 'Jun 10, 2026', checkOut: 'Jun 14, 2026', nights: 4, amount: 220, staff: 'Kayla R.', status: 'completed', rating: '⭐⭐⭐⭐⭐' },
+            { id: 'v2', petName: 'Bella', service: 'Cat Condo Boarding', checkIn: 'May 3, 2026', checkOut: 'May 6, 2026', nights: 3, amount: 105, staff: 'Tom H.', status: 'completed', rating: '⭐⭐⭐⭐' },
+            { id: 'v3', petName: 'Max', service: 'Private Agility Training', checkIn: 'Apr 18, 2026', checkOut: 'Apr 18, 2026', nights: null, amount: 75, staff: 'Maria C.', status: 'completed', rating: '⭐⭐⭐⭐⭐' },
+            { id: 'v4', petName: 'Max', service: 'Luxury Suite Boarding', checkIn: 'Feb 14, 2026', checkOut: 'Feb 17, 2026', nights: 3, amount: 165, staff: 'Kayla R.', status: 'completed', rating: '⭐⭐⭐⭐⭐' }
+        ],
+        'h-davis': [
+            { id: 'v5', petName: 'Luna', service: 'Standard Boarding', checkIn: 'Jun 1, 2026', checkOut: 'Jun 14, 2026', nights: 13, amount: 455, staff: 'Tom H.', status: 'completed', rating: '⭐⭐⭐⭐' }
+        ]
+    };
+
+    var bookings = {
+        'h-miller': [
+            { id: 'b1', petName: 'Max', service: 'Luxury Suite Boarding', checkIn: 'Jul 3, 2026', checkOut: 'Jul 7, 2026', nights: 4, amount: 220, status: 'upcoming', confirmCode: 'BK-4421' },
+            { id: 'b2', petName: 'Max + Bella', service: 'Luxury Suite + Cat Condo', checkIn: 'Aug 21, 2026', checkOut: 'Aug 28, 2026', nights: 7, amount: 490, status: 'upcoming', confirmCode: 'BK-4488' }
+        ],
+        'h-davis': [
+            { id: 'b3', petName: 'Luna', service: 'Standard Boarding', checkIn: 'Jul 10, 2026', checkOut: 'Jul 14, 2026', nights: 4, amount: 140, status: 'upcoming', confirmCode: 'BK-4435' }
+        ]
+    };
+
+    var payments = {
+        'h-miller': {
+            balance: 0,
+            credit: 50,
+            totalSpend: 565,
+            cardOnFile: 'Visa ending 4411',
+            history: [
+                { date: 'Jun 14, 2026', description: 'Luxury Suite Boarding (4 nights)', amount: 220, status: 'paid' },
+                { date: 'May 6, 2026', description: 'Cat Condo Boarding (3 nights)', amount: 105, status: 'paid' },
+                { date: 'Apr 18, 2026', description: 'Private Agility Training', amount: 75, status: 'paid' },
+                { date: 'Feb 17, 2026', description: 'Luxury Suite Boarding (3 nights)', amount: 165, status: 'paid' }
+            ]
+        },
+        'h-davis': {
+            balance: 0,
+            credit: 0,
+            totalSpend: 455,
+            cardOnFile: 'Mastercard ending 8832',
+            history: [
+                { date: 'Jun 14, 2026', description: 'Standard Boarding (13 nights)', amount: 455, status: 'paid' }
+            ]
+        }
+    };
+
+    var communications = {
+        'h-miller': [
+            { from: 'staff', name: 'Barkboard Team', text: 'Hi John! Just a reminder that Max\'s boarding begins July 3rd. Please bring his Blue Buffalo food and any comfort items.', date: 'Jun 12, 2026 · 10:14 AM' },
+            { from: 'owner', name: 'John Miller', text: 'Thanks! Will do — I\'ll also pack his favorite rope toy. Can we arrange a mid-stay photo update?', date: 'Jun 12, 2026 · 11:32 AM' },
+            { from: 'staff', name: 'Barkboard Team', text: 'Absolutely! We\'ll send a photo update around day 2. Also noting Bella\'s vaccines are overdue — Dr. Arrington can fit her in before your August stay.', date: 'Jun 13, 2026 · 9:02 AM' }
+        ],
+        'h-davis': [
+            { from: 'staff', name: 'Barkboard Team', text: 'Luna has been an absolute joy this stay — she loves playtime with our team. We\'ll have a full report ready at pickup!', date: 'Jun 10, 2026 · 2:45 PM' },
+            { from: 'owner', name: 'Alice Davis', text: 'That\'s so great to hear! Looking forward to seeing her Sunday. Is there anything to prep for the July booking?', date: 'Jun 11, 2026 · 8:20 AM' }
+        ]
+    };
+
+    var notes = {
+        'h-miller': [
+            { author: 'Kayla R.', date: 'Jun 14, 2026', text: 'Max completed his stay in excellent spirits. Ate all meals. Enjoyed two off-leash play sessions daily. Recommend scheduling a bath add-on next visit.' },
+            { author: 'Tom H.', date: 'May 6, 2026', text: 'Bella was shy on day 1 but settled in by day 2. Keep in mind she prefers a quieter environment away from the dog suites.' },
+            { author: 'Maria C.', date: 'Apr 18, 2026', text: 'Agility training session went very well. Max is ready to advance to Level 2 obstacle drills. Owner requested monthly training sessions.' }
+        ],
+        'h-davis': [
+            { author: 'Tom H.', date: 'Jun 14, 2026', text: 'Luna is a high-energy dog who does best with the morning play group. Has shown zero aggression. Great candidate for our Doggy Daycare program.' }
+        ]
+    };
+
+    var documents = {
+        'h-miller': [
+            { name: 'Max — Vaccination Record 2025.pdf', type: 'PDF', size: '184 KB', date: 'Dec 2025' },
+            { name: 'Bella — Veterinary Health Certificate.pdf', type: 'PDF', size: '212 KB', date: 'Mar 2024' },
+            { name: 'Boarding Agreement — Miller Household.pdf', type: 'PDF', size: '98 KB', date: 'Jan 2025' },
+            { name: 'Max — Training Progress Report Q2 2026.pdf', type: 'PDF', size: '340 KB', date: 'Apr 2026' }
+        ],
+        'h-davis': [
+            { name: 'Luna — Vaccination Record 2025.pdf', type: 'PDF', size: '201 KB', date: 'Sep 2025' },
+            { name: 'Boarding Agreement — Davis Household.pdf', type: 'PDF', size: '98 KB', date: 'Mar 2025' }
+        ]
+    };
+
+    /* ═══════════════════════════════════════════════
+       APP STATE
+    ═══════════════════════════════════════════════ */
+    var currentEntityFilter = 'all';
+    var isCardLayoutMode = true;
+    var currentOwnerHouseholdId = null; // null = admin mode
+    var currentFsHouseholdId = null;    // tracks which household fullscreen is open for
+    var currentOwnerSection = 'household';
+
+    /* ═══════════════════════════════════════════════
+       INIT
+    ═══════════════════════════════════════════════ */
+    document.addEventListener('DOMContentLoaded', () => {
+        renderAllDashboards();
+    });
+
+    /* ═══════════════════════════════════════════════
+       ROUTING
+    ═══════════════════════════════════════════════ */
+    function switchView(viewId) {
+        document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('#admin-nav .nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(viewId).classList.remove('hidden');
+        const activeBtn = Array.from(document.querySelectorAll('#admin-nav .nav-btn'))
+            .find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(viewId));
+        if (activeBtn) activeBtn.classList.add('active');
+    }
+
+    function switchOwnerTab(section) {
+        switchOwnerSection(section);
+        if (document.getElementById('owner-view').classList.contains('hidden')) {
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById('owner-view').classList.remove('hidden');
+        }
+    }
+
+    function switchOwnerSection(section) {
+        currentOwnerSection = section;
+        document.querySelectorAll('.owner-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.owner-tab-btn').forEach(b => b.classList.remove('active'));
+        const sec = document.getElementById('owner-sec-' + section);
+        if (sec) sec.classList.add('active');
+        const tab = document.getElementById('otab-' + section);
+        if (tab) tab.classList.add('active');
+    }
+
+    function setEntityFilter(filterType) {
+        currentEntityFilter = filterType;
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        document.getElementById('filter-' + filterType).classList.add('active');
+        renderAllDashboards();
+    }
+
+    function toggleLayout() {
+        isCardLayoutMode = !isCardLayoutMode;
+        const container = document.getElementById('crm-list-container');
+        container.className = isCardLayoutMode ? 'card-layout' : 'list-layout';
+        document.querySelector('.toggle-layout-btn').innerText = isCardLayoutMode ? '📋 Switch to List View' : '🗂️ Switch to Card View';
+        renderAllDashboards();
+    }
+
+    /* ═══════════════════════════════════════════════
+       OWNER VIEW ACTIVATION
+    ═══════════════════════════════════════════════ */
+    function activateOwnerView(householdId) {
+        currentOwnerHouseholdId = householdId;
+        const h = households.find(x => x.id === householdId);
+
+        // Banner
+        document.getElementById('owner-banner').classList.remove('hidden');
+        document.getElementById('owner-banner-name').innerText = h.name;
+
+        // Nav swap
+        document.getElementById('admin-nav').classList.add('hidden');
+        document.getElementById('owner-nav').classList.remove('hidden');
+        document.getElementById('main-navbar').classList.add('owner-mode');
+
+        // Render owner portal
+        renderOwnerPortal(householdId);
+
+        // Switch to owner view
+        document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+        document.getElementById('owner-view').classList.remove('hidden');
+
+        // Reset to household tab
+        switchOwnerSection('household');
+    }
+
+    function activateOwnerViewFromProfile() {
+        if (currentFsHouseholdId) {
+            closeFullscreenProfile();
+            activateOwnerView(currentFsHouseholdId);
+        }
+    }
+
+    function exitOwnerView() {
+        currentOwnerHouseholdId = null;
+
+        document.getElementById('owner-banner').classList.add('hidden');
+        document.getElementById('admin-nav').classList.remove('hidden');
+        document.getElementById('owner-nav').classList.add('hidden');
+        document.getElementById('main-navbar').classList.remove('owner-mode');
+
+        switchView('crm-view');
+    }
+
+    /* ═══════════════════════════════════════════════
+       OWNER PORTAL RENDERER
+    ═══════════════════════════════════════════════ */
+    function renderOwnerPortal(householdId) {
+        const h = households.find(x => x.id === householdId);
+        const hPeople = people.filter(p => p.householdId === householdId);
+        const hPets = pets.filter(p => p.householdId === householdId);
+        const hVetRels = crossRelationships.filter(r => r.entityId === householdId && r.type === 'vet');
+        const hVisits = visits[householdId] || [];
+        const hBookings = bookings[householdId] || [];
+        const hPayments = payments[householdId] || { balance: 0, credit: 0, totalSpend: 0, cardOnFile: 'None on file', history: [] };
+        const hComms = communications[householdId] || [];
+        const hNotes = notes[householdId] || [];
+        const hDocs = documents[householdId] || [];
+
+        // Header
+        const totalStays = hVisits.filter(v => v.status === 'completed').length;
+        document.getElementById('owner-portal-header-block').innerHTML = `
+            <div class="owner-portal-header">
+                <div>
+                    <h2>Welcome back, ${hPeople[0] ? hPeople[0].name.split(' ')[0] : 'there'}! 👋</h2>
+                    <p>${h.address}</p>
+                </div>
+                <div class="owner-header-badge">
+                    Total visits<span>${totalStays}</span>
+                </div>
+            </div>
+        `;
+
+        // ── Household section ──
+        document.getElementById('owner-household-content').innerHTML = `
+            <div class="owner-info-grid">
+                <div class="owner-card">
+                    <h4>Household</h4>
+                    <div class="card-value">${h.name}</div>
+                    <div class="card-sub">${h.address}</div>
+                </div>
+                <div class="owner-card">
+                    <h4>Household note on file</h4>
+                    <div class="card-value" style="font-size:0.9rem;font-style:italic;color:var(--text-muted);">"${h.note}"</div>
+                </div>
+            </div>
+            <div class="section-label">Household members</div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Name</th><th>Role</th><th>Contact</th></tr></thead>
+                    <tbody>
+                        ${hPeople.map(p => `
+                            <tr>
+                                <td><strong>${p.name}</strong></td>
+                                <td><span class="status-pill ${p.role === 'Primary' ? 'upcoming' : 'completed'}">${p.role}</span></td>
+                                <td style="color:var(--text-muted);font-size:0.85rem;">${p.contact}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        // ── Pets section ──
+        document.getElementById('owner-pets-content').innerHTML = `
+            <div class="section-header-row">
+                <h3>Your pets</h3>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:1rem;">
+                ${hPets.map(pet => `
+                    <div class="pet-profile-card">
+                        <div class="pet-avatar ${pet.species}">${pet.species === 'dog' ? '🐕' : '🐈'}</div>
+                        <div class="pet-info">
+                            <h3>${pet.name}</h3>
+                            <p>${pet.details}</p>
+                            <div class="pet-health-row">
+                                <span class="health-tag ${pet.status === 'current' ? 'ok' : 'warn'}">
+                                    ${pet.status === 'current' ? '✓ Vaccines current' : '⚠ Vaccines expired'}
+                                </span>
+                                <span class="health-tag neutral">Expiry: ${pet.vaccineExpiry}</span>
+                                ${pet.allergies !== 'None' ? `<span class="health-tag warn">⚠ Allergy: ${pet.allergies}</span>` : '<span class="health-tag neutral">No known allergies</span>'}
+                            </div>
+                            <div class="section-label" style="margin-top:0.85rem;margin-bottom:0.35rem;">Feeding instructions</div>
+                            <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">${pet.food}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        // ── Vets section ──
+        const hVetData = hVetRels.map(rel => ({ vet: vets.find(v => v.id === rel.targetId), note: rel.note })).filter(x => x.vet);
+        document.getElementById('owner-vets-content').innerHTML = `
+            <div class="section-header-row">
+                <h3>Veterinary contacts</h3>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:1rem;">
+                ${hVetData.length ? hVetData.map(({ vet, note }) => `
+                    <div class="vet-card">
+                        <div class="vet-icon">🏥</div>
+                        <div class="vet-info">
+                            <h4>${vet.name}</h4>
+                            <p>${vet.details}</p>
+                            <span class="vet-note-tag">${note}</span>
+                        </div>
+                    </div>
+                `).join('') : '<p style="color:var(--text-muted);">No veterinary contacts linked yet.</p>'}
+            </div>
+        `;
+
+        // ── Visits section ──
+        document.getElementById('owner-visits-content').innerHTML = `
+            <div class="section-header-row">
+                <h3>${hVisits.length} completed visits</h3>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Pet</th><th>Service</th><th>Duration</th><th>Amount</th><th>Staff</th><th>Rating</th></tr></thead>
+                    <tbody>
+                        ${hVisits.map(v => `
+                            <tr>
+                                <td style="white-space:nowrap;font-size:0.83rem;color:var(--text-muted);">${v.checkIn}${v.checkOut !== v.checkIn ? ' → ' + v.checkOut : ''}</td>
+                                <td><strong>${v.petName}</strong></td>
+                                <td style="font-size:0.87rem;">${v.service}</td>
+                                <td style="font-size:0.83rem;color:var(--text-muted);">${v.nights ? v.nights + ' nights' : '1 session'}</td>
+                                <td style="font-weight:600;">$${v.amount}</td>
+                                <td style="font-size:0.83rem;color:var(--text-muted);">${v.staff}</td>
+                                <td>${v.rating}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        // ── Bookings section ──
+        document.getElementById('owner-bookings-content').innerHTML = `
+            <div class="section-header-row">
+                <h3>Upcoming reservations</h3>
+                <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="alert('Booking flow would open here')">+ New Booking</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:1rem;">
+                ${hBookings.map(b => `
+                    <div class="booking-card">
+                        <div class="booking-card-left">
+                            <h4>${b.service}</h4>
+                            <p>🐾 ${b.petName} · ${b.checkIn} → ${b.checkOut} · ${b.nights} nights</p>
+                            <p style="margin-top:0.3rem;font-size:0.78rem;color:var(--text-muted);">Confirmation: <strong>${b.confirmCode}</strong></p>
+                        </div>
+                        <div class="booking-card-right">
+                            <div class="booking-price">$${b.amount}</div>
+                            <div class="booking-price-note">$${Math.round(b.amount/b.nights)}/night</div>
+                            <span class="status-pill upcoming" style="margin-top:0.5rem;display:inline-block;">${b.status}</span>
+                        </div>
+                    </div>
+                `).join('')}
+                ${hBookings.length === 0 ? '<p style="color:var(--text-muted);">No upcoming bookings.</p>' : ''}
+            </div>
+        `;
+
+        // ── Payment section ──
+        document.getElementById('owner-payment-content').innerHTML = `
+            <div class="payment-summary">
+                <div class="payment-summary-item">
+                    <h4>Total spent</h4>
+                    <p>$${hPayments.totalSpend}</p>
+                </div>
+                <div class="payment-summary-item">
+                    <h4>Balance due</h4>
+                    <p>$${hPayments.balance}</p>
+                </div>
+                <div class="payment-summary-item">
+                    <h4>Account credit</h4>
+                    <p>$${hPayments.credit}</p>
+                </div>
+                <div class="payment-summary-item">
+                    <h4>Card on file</h4>
+                    <p style="font-size:1rem;">${hPayments.cardOnFile}</p>
+                </div>
+            </div>
+            <div class="section-label">Payment history</div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th></tr></thead>
+                    <tbody>
+                        ${hPayments.history.map(p => `
+                            <tr>
+                                <td style="font-size:0.83rem;color:var(--text-muted);white-space:nowrap;">${p.date}</td>
+                                <td style="font-size:0.88rem;">${p.description}</td>
+                                <td style="font-weight:600;">$${p.amount}</td>
+                                <td><span class="status-pill completed">${p.status}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        // ── Communications section ──
+        document.getElementById('owner-communications-content').innerHTML = `
+            <div class="section-header-row"><h3>Message history</h3></div>
+            <div class="message-thread">
+                ${hComms.map(m => `
+                    <div>
+                        <div class="message-bubble from-${m.from}">
+                            <p class="message-text">${m.text}</p>
+                        </div>
+                        <div class="message-meta" style="text-align:${m.from === 'owner' ? 'right' : 'left'}">${m.name} · ${m.date}</div>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="compose-area">
+                <textarea id="compose-text-${householdId}" placeholder="Type a message to Barkboard staff..."></textarea>
+                <button class="btn-primary" style="white-space:nowrap;" onclick="alert('Message sent!')">Send →</button>
+            </div>
+        `;
+
+        // ── Notes section ──
+        document.getElementById('owner-notes-content').innerHTML = `
+            <div class="section-header-row"><h3>Staff notes from your visits</h3></div>
+            <div style="display:flex;flex-direction:column;gap:0.85rem;">
+                ${hNotes.map(n => `
+                    <div class="note-card">
+                        <div class="note-header">
+                            <span class="note-author">${n.author}</span>
+                            <span class="note-date">${n.date}</span>
+                        </div>
+                        <p>${n.text}</p>
+                    </div>
+                `).join('')}
+                ${hNotes.length === 0 ? '<p style="color:var(--text-muted);">No notes from staff yet.</p>' : ''}
+            </div>
+        `;
+
+        // ── Documents section ──
+        document.getElementById('owner-documents-content').innerHTML = `
+            <div class="section-header-row">
+                <h3>Your documents</h3>
+                <button class="btn" onclick="alert('Upload dialog would open here')">⬆ Upload document</button>
+            </div>
+            <div class="table-wrap">
+                ${hDocs.map(d => `
+                    <div class="doc-row">
+                        <div class="doc-icon">📄</div>
+                        <div class="doc-info">
+                            <strong>${d.name}</strong>
+                            <span>${d.type} · ${d.size} · Added ${d.date}</span>
+                        </div>
+                        <button class="doc-download" onclick="alert('Download: ${d.name}')">⬇ Download</button>
+                    </div>
+                `).join('')}
+                ${hDocs.length === 0 ? '<div style="padding:1.5rem;color:var(--text-muted);text-align:center;">No documents on file.</div>' : ''}
+            </div>
+        `;
+    }
+
+    /* ═══════════════════════════════════════════════
+       QUICK ACTIONS
+    ═══════════════════════════════════════════════ */
+    function generateQuickActionsHTML(householdId) {
+        return `
+            <div class="qa-container" onclick="event.stopPropagation();">
+                <div class="qa-icon-btn" data-tooltip="Book Visit" onclick="executeAction('Book Visit','${householdId}')">📅<span>Book Visit</span></div>
+                <div class="qa-icon-btn" data-tooltip="Add Pet" onclick="executeAction('Add Pet','${householdId}')">🐕<span>Add Pet</span></div>
+                <div class="qa-icon-btn" data-tooltip="Add Person" onclick="executeAction('Add Person','${householdId}')">👤<span>Add Person</span></div>
+                <div class="qa-icon-btn" data-tooltip="Add Vet" onclick="executeAction('Add Vet','${householdId}')">🏥<span>Add Vet</span></div>
+                <div class="qa-icon-btn" data-tooltip="Request Payment" onclick="executeAction('Request Payment','${householdId}')">💳<span>Request Payment</span></div>
+                <div class="qa-icon-btn" data-tooltip="Send Email" onclick="executeAction('Send Email','${householdId}')">✉️<span>Send Email</span></div>
+                <div class="qa-icon-btn" data-tooltip="View as Owner" onclick="event.stopPropagation();activateOwnerView('${householdId}')" style="background:#e0f2fe;border-color:#7dd3fc;">👁<span>View as Owner</span></div>
+            </div>
+        `;
+    }
+
+    function executeAction(actionName, id) {
+        alert(`CRM Action: [${actionName}] for household: ${id}`);
+    }
+
+    /* ═══════════════════════════════════════════════
+       MASTER RENDER
+    ═══════════════════════════════════════════════ */
+    function renderAllDashboards() {
+        const searchVal = document.getElementById('crm-search') ? document.getElementById('crm-search').value.toLowerCase() : '';
+
+        // Staff feed
+        const staffGuestsContainer = document.getElementById('staff-guests-container');
+        if (staffGuestsContainer) {
+            staffGuestsContainer.innerHTML = '';
+            document.getElementById('stat-kennels').innerText = `${pets.length} / 20`;
+            pets.forEach(pet => {
+                const hOwner = households.find(h => h.id === pet.householdId);
+                const isAlert = pet.status === 'expired';
+                staffGuestsContainer.innerHTML += `
+                    <div class="crm-card ${isAlert ? 'warning' : ''}">
+                        <div class="item-header">
+                            <h3>${pet.name} <span class="badge luxury">${pet.room}</span></h3>
+                            <span class="entity-badge pets">Pet Guest</span>
+                        </div>
+                        <p style="margin:0;font-size:0.88rem;"><strong>Details:</strong> ${pet.details} &nbsp;·&nbsp; <strong>Household:</strong> ${hOwner.name}</p>
+                        ${isAlert ? `<p class="pin-note">📌 <strong>Vaccine alert:</strong> Update medical records before next stay.</p>` : ''}
+                        <div class="qa-container">
+                            <button class="btn" onclick="alert('Feeding logged for ${pet.name}')">+ Feeding Log</button>
+                            <button class="btn" onclick="alert('Potty logged for ${pet.name}')">+ Potty Log</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // CRM
+        const crmContainer = document.getElementById('crm-list-container');
+        if (crmContainer) {
+            crmContainer.innerHTML = '';
+            if (currentEntityFilter === 'all' || currentEntityFilter === 'household') {
+                households.forEach(h => {
+                    if (!h.name.toLowerCase().includes(searchVal)) return;
+                    const hPeople = people.filter(p => p.householdId === h.id);
+                    const hPets = pets.filter(p => p.householdId === h.id);
+                    crmContainer.innerHTML += `
+                        <div class="crm-card" onclick="openFullscreenProfile('household','${h.id}')">
+                            <div class="item-header">
+                                <div class="clickable-profile-zone"><h3>${h.name}</h3></div>
+                                <span class="entity-badge household">Household</span>
+                            </div>
+                            ${isCardLayoutMode ? `<p class="pin-note">📌 ${h.note}</p>` : ''}
+                            <div class="crm-section-block">
+                                <h4>Members</h4>
+                                <ul>
+                                    ${hPeople.map(p => `<li>👤 ${p.name} (${p.role})</li>`).join('')}
+                                    ${hPets.map(p => `<li>🐾 ${p.name} — ${p.details}</li>`).join('')}
+                                </ul>
+                            </div>
+                            ${generateQuickActionsHTML(h.id)}
+                        </div>
+                    `;
+                });
+            }
+            ['people', 'pets', 'vets'].forEach(category => {
+                if (currentEntityFilter === 'all' || currentEntityFilter === category) {
+                    window[category].forEach(item => {
+                        if (!item.name.toLowerCase().includes(searchVal)) return;
+                        const parentHId = item.householdId || '';
+                        crmContainer.innerHTML += `
+                            <div class="crm-card" onclick="openFullscreenProfile('${category}','${item.id}')">
+                                <div class="item-header">
+                                    <div class="clickable-profile-zone"><h3>${item.name}</h3></div>
+                                    <span class="entity-badge ${category}">${category.slice(0,-1)}</span>
+                                </div>
+                                <p style="margin:0;font-size:0.88rem;color:var(--text-muted);">${item.contact || item.details || 'Registered COI'}</p>
+                                ${parentHId ? generateQuickActionsHTML(parentHId) : ''}
+                            </div>
+                        `;
+                    });
+                }
+            });
+        }
+
+        // Calendar
+        const calendarBody = document.getElementById('calendar-body-target');
+        if (calendarBody) {
+            calendarBody.innerHTML = `
+                <tr><td><strong>Luxury Suite #5</strong></td><td class="booked" colspan="2">Max (The Millers)</td><td class="available">Available</td><td class="available">Available</td></tr>
+                <tr><td><strong>Standard Run B</strong></td><td class="booked" colspan="4">Luna (The Davis Family)</td></tr>
+                <tr><td><strong>Cat Condo A</strong></td><td class="available">Available</td><td class="booked">Bella (The Millers)</td><td class="available">Available</td><td class="available">Available</td></tr>
+            `;
+        }
+    }
+
+    /* ═══════════════════════════════════════════════
+       FULLSCREEN PROFILE
+    ═══════════════════════════════════════════════ */
+    function openFullscreenProfile(type, id) {
+        const overlay = document.getElementById('fullscreen-modal');
+        const title = document.getElementById('fs-title');
+        const actionsAnchor = document.getElementById('fs-quick-actions-anchor');
+        const payloadAnchor = document.getElementById('fs-details-payload');
+        const viewAsOwnerBtn = document.getElementById('view-as-owner-btn');
+
+        actionsAnchor.innerHTML = '';
+        payloadAnchor.innerHTML = '';
+        viewAsOwnerBtn.classList.add('hidden');
+        currentFsHouseholdId = null;
+
+        if (type === 'household') {
+            const h = households.find(x => x.id === id);
+            const hPeople = people.filter(p => p.householdId === h.id);
+            const hPets = pets.filter(p => p.householdId === h.id);
+            const hVetRels = crossRelationships.filter(r => r.entityId === h.id && r.type === 'vet');
+            const hVetData = hVetRels.map(r => vets.find(v => v.id === r.targetId)).filter(Boolean);
+            const hVisitCount = (visits[h.id] || []).length;
+            const hTotal = (payments[h.id] || {}).totalSpend || 0;
+
+            title.innerText = h.name;
+            currentFsHouseholdId = h.id;
+            viewAsOwnerBtn.classList.remove('hidden');
+
+            actionsAnchor.innerHTML = `<h4>Quick Operations</h4>` + generateQuickActionsHTML(h.id);
+
+            payloadAnchor.innerHTML = `
+                <div class="owner-info-grid" style="margin-bottom:0;">
+                    <div class="owner-card"><h4>Address</h4><div class="card-value" style="font-size:0.9rem;">${h.address}</div></div>
+                    <div class="owner-card"><h4>Total visits</h4><div class="card-value">${hVisitCount}</div></div>
+                    <div class="owner-card"><h4>Total spend</h4><div class="card-value" style="color:var(--primary);">$${hTotal}</div></div>
+                </div>
+                <div class="crm-section-block"><h4>Household note</h4><p style="margin:0;font-size:0.9rem;font-style:italic;">"${h.note}"</p></div>
+                <div class="crm-section-block">
+                    <h4>People</h4>
+                    <ul>${hPeople.map(p => `<li>👤 <strong>${p.name}</strong> — ${p.role} (${p.contact})</li>`).join('')}</ul>
+                </div>
+                <div class="crm-section-block">
+                    <h4>Pets</h4>
+                    <ul>${hPets.map(p => `<li>🐾 <strong>${p.name}</strong> — ${p.details} · <span style="color:${p.status==='current'?'#065f46':'#991b1b'}">${p.status === 'current' ? '✅ Vaccines current' : '❌ Vaccines expired'}</span></li>`).join('')}</ul>
+                </div>
+                ${hVetData.length ? `
+                <div class="crm-section-block">
+                    <h4>Veterinary contacts</h4>
+                    <ul>${hVetData.map(v => `<li>🏥 <strong>${v.name}</strong> — ${v.details}</li>`).join('')}</ul>
+                </div>` : ''}
+            `;
+        } else {
+            const targetItem = [...people, ...pets, ...vets].find(x => x.id === id);
+            title.innerText = targetItem.name + ' — Profile';
+            if (targetItem.householdId) {
+                currentFsHouseholdId = targetItem.householdId;
+                viewAsOwnerBtn.classList.remove('hidden');
+                actionsAnchor.innerHTML = `<h4>Quick Operations</h4>` + generateQuickActionsHTML(targetItem.householdId);
+            }
+            payloadAnchor.innerHTML = `
+                <div class="crm-section-block"><h4>Details</h4><p style="margin:0;">${targetItem.contact || targetItem.details || 'No data.'}</p></div>
+                ${targetItem.status ? `<div class="crm-section-block"><h4>Health Status</h4><p style="margin:0;">${targetItem.status === 'current' ? '✅ Vaccines current' : '❌ Vaccines expired'} · Expiry: ${targetItem.vaccineExpiry || '—'}</p></div>` : ''}
+                ${targetItem.allergies ? `<div class="crm-section-block"><h4>Allergies</h4><p style="margin:0;">${targetItem.allergies}</p></div>` : ''}
+                ${targetItem.food ? `<div class="crm-section-block"><h4>Feeding Instructions</h4><p style="margin:0;">${targetItem.food}</p></div>` : ''}
+            `;
+        }
+        overlay.classList.remove('hidden');
+    }
+
+    function closeFullscreenProfile() {
+        document.getElementById('fullscreen-modal').classList.add('hidden');
+        currentFsHouseholdId = null;
+    }
+
+    /* ═══════════════════════════════════════════════
+       RELATIONSHIP MODAL
+    ═══════════════════════════════════════════════ */
+    function openRelationshipModal() {
+        const selectA = document.getElementById('modal-entity-a');
+        selectA.innerHTML = '';
+        households.forEach(h => selectA.innerHTML += `<option value="${h.id}">${h.name}</option>`);
+        populateTargetDropdown();
+        document.getElementById('relationship-modal').classList.remove('hidden');
+    }
+    function closeRelationshipModal() { document.getElementById('relationship-modal').classList.add('hidden'); }
+    function toggleRelationshipFields() { populateTargetDropdown(); }
+    function populateTargetDropdown() {
+        const type = document.getElementById('modal-relation-type').value;
+        const selectB = document.getElementById('modal-entity-b');
+        selectB.innerHTML = '';
+        if (type === 'vet') { vets.forEach(v => selectB.innerHTML += `<option value="${v.id}">${v.name}</option>`); }
+        else { households.forEach(h => selectB.innerHTML += `<option value="${h.id}">${h.name}</option>`); }
+    }
+    function saveNewRelationship(e) {
+        e.preventDefault();
+        crossRelationships.push({
+            entityId: document.getElementById('modal-entity-a').value,
+            targetId: document.getElementById('modal-entity-b').value,
+            type: document.getElementById('modal-relation-type').value,
+            note: document.getElementById('modal-relation-note').value || 'Linked'
+        });
+        closeRelationshipModal();
+        renderAllDashboards();
+    }
+    </script>
 </body>
 </html>
