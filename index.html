@@ -135,6 +135,8 @@
         .btn-primary { background: var(--primary); color: white; border: none; padding: 0.65rem 1.4rem; border-radius: 0.375rem; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
         .btn-primary:hover { background: var(--primary-hover); }
         .toggle-layout-btn { white-space: nowrap; }
+        .rel-btn-icon { display: none; }
+        .rel-btn-text { display: inline; }
 
         /* ── BUSINESS VIEW ── */
         .chart-container-mock { background: var(--surface); border: 1px solid var(--border); padding: 1.75rem; border-radius: 0.5rem; }
@@ -147,11 +149,54 @@
         .success-color { color: #10b981; }
 
         /* ── CALENDAR ── */
+        /* ── RESOURCE GRID ── */
+        .cal-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 0.75rem; flex-wrap: wrap; }
+        .cal-week-label { font-size: 0.9rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+        .cal-nav { display: flex; gap: 0.4rem; align-items: center; }
+        .cal-nav-btn { background: var(--surface); border: 1px solid var(--border); padding: 0.35rem 0.75rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+        .cal-nav-btn:hover { background: #f3f4f6; }
+        .cal-nav-btn.today { background: var(--primary); color: white; border-color: var(--primary); }
+        .cal-legend { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+        .cal-legend-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text-muted); }
+        .cal-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+        .cal-legend-dot.booked { background: #bfdbfe; }
+        .cal-legend-dot.available { background: #d1fae5; }
+        .cal-legend-dot.partial { background: #fde68a; }
+
+        /* Desktop table view */
         .calendar-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 0.5rem; overflow: hidden; }
-        .calendar-table th, .calendar-table td { border: 1px solid var(--border); padding: 0.9rem 1rem; text-align: center; font-size: 0.9rem; }
-        .calendar-table th { background: #f3f4f6; color: #4b5563; font-weight: 600; font-size: 0.82rem; text-transform: uppercase; }
-        .calendar-table td.booked { background-color: #dbeafe; color: #1e40af; font-weight: 500; }
-        .calendar-table td.available { color: #10b981; }
+        .calendar-table th, .calendar-table td { border: 1px solid var(--border); padding: 0.75rem 0.85rem; text-align: center; font-size: 0.85rem; }
+        .calendar-table th { background: #f3f4f6; color: #4b5563; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .calendar-table th.today-col { background: #ede9fe; color: var(--primary); }
+        .calendar-table td.resource-label { text-align: left; font-weight: 600; font-size: 0.88rem; background: #fafafa; white-space: nowrap; }
+        .calendar-table td.resource-label .room-type { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; display: block; margin-top: 0.1rem; }
+        .calendar-table td.booked { background-color: #dbeafe; color: #1e40af; font-weight: 500; font-size: 0.82rem; }
+        .calendar-table td.available { background-color: #d1fae5; color: #065f46; font-size: 0.8rem; }
+        .calendar-table td.partial { background-color: #fef3c7; color: #92400e; font-weight: 500; font-size: 0.82rem; }
+
+        /* Mobile card view */
+        .cal-cards { display: none; flex-direction: column; gap: 0.75rem; }
+        .cal-resource-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
+        .cal-resource-card-header { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .cal-resource-card-header h4 { margin: 0; font-size: 0.9rem; font-weight: 600; }
+        .cal-resource-card-header span { font-size: 0.72rem; color: var(--text-muted); }
+        .cal-day-strip { display: grid; gap: 0; }
+        .cal-day-row { display: flex; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid #f3f4f6; gap: 0.75rem; }
+        .cal-day-row:last-child { border-bottom: none; }
+        .cal-day-label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); width: 44px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.04em; }
+        .cal-day-label.today { color: var(--primary); }
+        .cal-day-cell { flex: 1; font-size: 0.82rem; padding: 0.3rem 0.65rem; border-radius: 0.25rem; }
+        .cal-day-cell.booked { background: #dbeafe; color: #1e40af; font-weight: 500; }
+        .cal-day-cell.available { background: #d1fae5; color: #065f46; }
+        .cal-day-cell.partial { background: #fef3c7; color: #92400e; font-weight: 500; }
+
+        @media (max-width: 768px) {
+            .table-wrap.cal-table-wrap { display: none; }
+            .cal-cards { display: flex; }
+            .cal-toolbar { gap: 0.5rem; }
+            .cal-legend { display: none; }
+            .calendar-table { min-width: unset; }
+        }
 
         /* ── BOOKING WIZARD ── */
         .booking-wizard { background: var(--surface); padding: 2rem; border-radius: 0.5rem; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 1rem; max-width: 600px; }
@@ -271,6 +316,400 @@
 
         /* Divider label */
         .section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600; margin: 1.25rem 0 0.75rem; }
+
+        /* ── STAFF FEED TWO-COL LAYOUT ── */
+        .staff-feed-grid { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; align-items: start; }
+        @media (max-width: 900px) { .staff-feed-grid { grid-template-columns: 1fr; } }
+
+        /* ── TODAY'S TO-DO LIST ── */
+        .todo-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; display: flex; flex-direction: column; position: sticky; top: 72px; }
+        .todo-panel-header { padding: 1rem 1.25rem 0.75rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .todo-panel-header h3 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+        .todo-progress { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+        .todo-progress strong { color: var(--primary); }
+
+        .todo-section-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; padding: 0.75rem 1.25rem 0.35rem; }
+
+        .todo-item { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.6rem 1.25rem; transition: background 0.1s; cursor: pointer; }
+        .todo-item:hover { background: #f9fafb; }
+        .todo-item.done .todo-text { text-decoration: line-through; color: var(--text-muted); }
+        .todo-item.done .todo-meta { color: #d1d5db; }
+
+        .todo-check { width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .todo-check.checked { background: var(--primary); border-color: var(--primary); }
+        .todo-check.checked::after { content: '✓'; color: white; font-size: 10px; font-weight: 700; }
+        .todo-item.type-invoice .todo-check { border-color: #f59e0b; }
+        .todo-item.type-invoice .todo-check.checked { background: #f59e0b; border-color: #f59e0b; }
+        .todo-item.type-custom .todo-check { border-color: #8b5cf6; }
+        .todo-item.type-custom .todo-check.checked { background: #8b5cf6; border-color: #8b5cf6; }
+
+        .todo-body { flex: 1; min-width: 0; }
+        .todo-text { font-size: 0.875rem; color: var(--text); line-height: 1.4; }
+        .todo-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .todo-tag { display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .todo-tag.training { background: #dbeafe; color: #1e40af; }
+        .todo-tag.invoice { background: var(--warning); color: var(--warning-text); }
+        .todo-tag.custom { background: #ede9fe; color: #5b21b6; }
+
+        .todo-delete { background: none; border: none; color: #d1d5db; cursor: pointer; font-size: 1rem; padding: 0 0 0 0.25rem; line-height: 1; flex-shrink: 0; margin-top: 1px; }
+        .todo-delete:hover { color: #ef4444; }
+
+        /* Add task row */
+        .todo-add-row { padding: 0.75rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; align-items: center; }
+        .todo-add-input { flex: 1; padding: 0.45rem 0.65rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.85rem; font-family: inherit; color: var(--text); background: var(--background); }
+        .todo-add-input:focus { outline: 2px solid #8b5cf6; outline-offset: -1px; border-color: transparent; }
+        .todo-add-btn { background: #8b5cf6; color: white; border: none; border-radius: 0.375rem; padding: 0.45rem 0.75rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .todo-add-btn:hover { background: #7c3aed; }
+
+        /* Progress bar */
+        .todo-progress-bar-wrap { height: 3px; background: #f3f4f6; border-radius: 0 0 0.5rem 0.5rem; overflow: hidden; }
+        .todo-progress-bar { height: 100%; background: var(--primary); transition: width 0.3s ease; }
+
+        /* ── TRAINING SESSION SLIDE PANEL ── */
+        .session-panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 500; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
+        .session-panel-overlay.open { opacity: 1; pointer-events: all; }
+        .session-panel { position: fixed; top: 0; right: 0; width: 420px; max-width: 100vw; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); z-index: 501; display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.4,0,0.2,1); overflow: hidden; }
+        .session-panel.open { transform: translateX(0); }
+
+        .sp-header { padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.35rem; }
+        .sp-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+        .sp-title { font-size: 1rem; font-weight: 700; margin: 0; color: var(--text); line-height: 1.3; }
+        .sp-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-muted); line-height: 1; padding: 0; flex-shrink: 0; margin-top: 1px; }
+        .sp-close:hover { color: var(--text); }
+        .sp-meta-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .sp-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.73rem; padding: 0.2rem 0.55rem; border-radius: 9999px; font-weight: 600; }
+        .sp-badge.time { background: #dbeafe; color: #1e40af; }
+        .sp-badge.staff { background: #f3e8ff; color: #6b21a8; }
+        .sp-badge.location { background: #d1fae5; color: #065f46; }
+        .sp-badge.pet { background: #fef3c7; color: #92400e; }
+
+        /* progress ring area */
+        .sp-progress-strip { padding: 0.85rem 1.5rem; background: #f9fafb; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+        .sp-ring-wrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
+        .sp-ring-wrap svg { transform: rotate(-90deg); }
+        .sp-ring-bg { fill: none; stroke: #e5e7eb; stroke-width: 4; }
+        .sp-ring-fill { fill: none; stroke: var(--primary); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 0.3s ease; }
+        .sp-ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 700; color: var(--primary); }
+        .sp-progress-text { flex: 1; }
+        .sp-progress-text strong { font-size: 0.88rem; display: block; color: var(--text); }
+        .sp-progress-text span { font-size: 0.78rem; color: var(--text-muted); }
+
+        /* subtasks */
+        .sp-body { flex: 1; overflow-y: auto; padding: 0.5rem 0; }
+        .sp-section-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; padding: 0.75rem 1.5rem 0.25rem; }
+        .sp-subtask { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.6rem 1.5rem; transition: background 0.1s; cursor: pointer; }
+        .sp-subtask:hover { background: #f9fafb; }
+        .sp-subtask.done .sp-subtask-text { text-decoration: line-through; color: var(--text-muted); }
+        .sp-subtask.done .sp-subtask-note { color: #d1d5db; }
+        .sp-subtask-check { width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--border); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .sp-subtask-check.checked { background: var(--primary); border-color: var(--primary); }
+        .sp-subtask-check.checked::after { content: "✓"; color: white; font-size: 11px; font-weight: 800; }
+        .sp-subtask-body { flex: 1; }
+        .sp-subtask-text { font-size: 0.88rem; color: var(--text); line-height: 1.4; }
+        .sp-subtask-note { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+        /* owner-visible badge */
+        .sp-owner-tag { font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 0.4rem; vertical-align: middle; }
+        .sp-owner-tag.visible { background: #e0f2fe; color: #0369a1; }
+        .sp-owner-tag.staff-only { background: #f3f4f6; color: #9ca3af; }
+
+        /* add subtask row */
+        .sp-add-row { padding: 0.75rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; }
+        .sp-add-input { flex: 1; padding: 0.42rem 0.65rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.83rem; font-family: inherit; }
+        .sp-add-input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+        .sp-add-btn { background: var(--primary); color: white; border: none; border-radius: 0.375rem; padding: 0.42rem 0.75rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+
+        /* notes area */
+        .sp-notes-area { padding: 0.75rem 1.5rem 1.25rem; border-top: 1px solid var(--border); }
+        .sp-notes-area textarea { width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.83rem; font-family: inherit; resize: none; min-height: 64px; color: var(--text); background: var(--background); }
+        .sp-notes-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 700; margin-bottom: 0.4rem; }
+        .sp-save-btn { margin-top: 0.5rem; background: var(--primary); color: white; border: none; border-radius: 0.375rem; padding: 0.45rem 1rem; font-size: 0.83rem; font-weight: 600; cursor: pointer; }
+
+        /* subtask pip on todo row */
+        .subtask-pip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; color: var(--text-muted); margin-left: 0.5rem; }
+        .subtask-pip-bar { display: inline-flex; gap: 2px; }
+        .subtask-pip-dot { width: 6px; height: 6px; border-radius: 50%; background: #e5e7eb; transition: background 0.15s; }
+        .subtask-pip-dot.filled { background: var(--primary); }
+
+        /* owner portal training card */
+        .training-checklist-card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; margin-bottom: 1rem; }
+        .training-checklist-card .tc-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+        .tc-header h4 { margin: 0; font-size: 0.95rem; }
+        .tc-header .tc-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+        .tc-progress-pill { font-size: 0.78rem; font-weight: 600; padding: 0.2rem 0.65rem; border-radius: 9999px; white-space: nowrap; }
+        .tc-progress-pill.partial { background: #dbeafe; color: #1e40af; }
+        .tc-progress-pill.complete { background: var(--success); color: var(--success-text); }
+        .tc-progress-pill.not-started { background: #f3f4f6; color: #6b7280; }
+        .tc-subtask-list { padding: 0.5rem 0; }
+        .tc-subtask-row { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.5rem 1.25rem; }
+        .tc-subtask-row .tc-check { width: 16px; height: 16px; border-radius: 3px; border: 2px solid var(--border); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; }
+        .tc-subtask-row .tc-check.checked { background: var(--primary); border-color: var(--primary); }
+        .tc-subtask-row .tc-check.checked::after { content: "✓"; color: white; font-size: 10px; font-weight: 800; }
+        .tc-subtask-row span { font-size: 0.85rem; color: var(--text); }
+        .tc-subtask-row.done span { text-decoration: line-through; color: var(--text-muted); }
+
+
+        /* ══════════════════════════════════════
+           MOBILE RESPONSIVE
+           Breakpoints: 768px (tablet), 480px (phone)
+        ══════════════════════════════════════ */
+
+        /* Hamburger button — hidden on desktop */
+        .hamburger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 4px; margin-left: 0.5rem; }
+        .hamburger span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: all 0.2s; }
+        .navbar.owner-mode .hamburger span { background: #bae6fd; }
+        .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+        .hamburger.open span:nth-child(2) { opacity: 0; }
+        .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+        /* Mobile nav drawer */
+        .mobile-nav-drawer { display: none; flex-direction: column; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.5rem 1rem 0.75rem; gap: 0.25rem; }
+        .mobile-nav-drawer.owner-mode { background: #0c4a6e; border-bottom-color: #075985; }
+        .mobile-nav-drawer .nav-btn { text-align: left; margin: 0; padding: 0.65rem 0.75rem; font-size: 0.95rem; width: 100%; }
+        .mobile-nav-drawer.open { display: flex; }
+
+        @media (max-width: 768px) {
+            /* ── Layout ── */
+            .container { margin: 1rem auto; padding: 0 0.75rem; }
+            .view-panel { gap: 1rem; }
+
+            /* ── Navbar ── */
+            .navbar { padding: 0.75rem 1rem; }
+            #admin-nav, #owner-nav { display: none; } /* hidden — replaced by drawer */
+            .hamburger { display: flex; }
+
+            /* ── Owner banner ── */
+            .owner-banner { padding: 0.5rem 1rem; flex-direction: column; align-items: flex-start; gap: 0.4rem; font-size: 0.8rem; }
+
+            /* ── Stats grid ── */
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; }
+            .stat-card { padding: 1rem; }
+            .stat-card p { font-size: 1.4rem; }
+
+            /* ── Staff feed two-col → single col ── */
+            .staff-feed-grid { grid-template-columns: 1fr !important; }
+            .todo-panel { position: static; }
+
+            /* ── CRM header ── */
+            .crm-header { padding: 1rem; }
+            .controls-row { flex-wrap: nowrap; gap: 0.5rem; }
+            .controls-row .toggle-layout-btn { display: none; }
+            #crm-search { min-width: 0; flex: 1 1 auto; }
+            .rel-btn-text { display: none; }
+            .rel-btn-icon { display: inline; }
+            .rel-link-btn { flex-shrink: 0; padding: 0.5rem 0.65rem; font-size: 1rem; }
+
+            /* ── Card layouts → single col ── */
+            .card-layout { grid-template-columns: 1fr; gap: 0.75rem; }
+            .crm-card { padding: 1rem; }
+
+            /* ── Fullscreen profile ── */
+            .fullscreen-header { padding: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+            .fullscreen-header h2 { font-size: 1rem; }
+            .fullscreen-header-actions { gap: 0.5rem; }
+            .view-as-owner-btn, .close-fs-btn { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+            .fs-body-layout { grid-template-columns: 1fr; gap: 1rem; padding: 0 0.75rem; margin: 1rem auto; }
+            .fs-sidebar-actions { order: 2; } /* sidebar goes below main content on mobile */
+            .fs-main-details { order: 1; }
+
+            /* ── Session slide panel ── full-width on mobile ── */
+            .session-panel { width: 100vw; }
+
+            /* ── Owner portal header ── */
+            .owner-portal-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; padding: 1.25rem; }
+            .owner-header-badge { text-align: left; }
+
+            /* ── Owner section tabs → hidden on mobile, replaced by bottom bar ── */
+            .owner-section-nav { display: none; }
+            /* Bottom bar + padding only when actually in owner view */
+            body.in-owner-view .owner-bottom-bar { display: flex; }
+            body.in-owner-view #owner-view { padding-bottom: 72px; }
+
+            /* ── Owner info grids → 2-col then stack ── */
+            .owner-info-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; }
+            .payment-summary { flex-direction: column; gap: 0; padding: 0; background: none; border: none; }
+            .payment-summary-item { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.85rem 1rem; }
+            .payment-summary-item p { font-size: 1.1rem; }
+
+            /* ── Pet profile card ── */
+            .pet-profile-card { flex-direction: column; }
+
+            /* ── Data tables → hidden, mobile cards shown ── */
+            .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .data-table { min-width: 480px; }
+            .mobile-visit-cards { display: flex !important; }
+            .mobile-payment-cards { display: flex !important; }
+            .desktop-table { display: none !important; }
+
+            /* ── Booking card ── */
+            .booking-card { flex-direction: column; gap: 0.5rem; }
+            .booking-card-right { text-align: left; display: flex; align-items: center; gap: 0.75rem; }
+
+            /* ── Message bubbles wider on mobile ── */
+            .message-bubble { max-width: 90%; }
+
+            /* ── Message compose ── */
+            .compose-area { flex-direction: column; }
+
+            /* ── Doc row ── */
+            .doc-row { flex-wrap: wrap; gap: 0.5rem; }
+            .doc-info { min-width: 0; flex: 1 1 auto; }
+
+            /* ── Section header row ── */
+            .section-header-row { flex-wrap: wrap; gap: 0.5rem; }
+
+            /* ── Owner card value text ── */
+            .owner-card .card-value { font-size: 0.9rem; }
+
+            /* ── Vet card ── */
+            .vet-card { flex-wrap: wrap; }
+
+            /* ── Calendar table → scroll ── */
+            /* calendar handled by cal-table-wrap hide + cal-cards show */
+
+            /* ── Bar chart ── */
+            .bar-chart-mock { height: 160px; }
+
+            /* ── To-do add row ── */
+            .todo-add-row { padding: 0.6rem 1rem; }
+
+            /* ── QA buttons in CRM cards — tighter ── */
+            .qa-container { gap: 0.3rem; }
+            .qa-icon-btn { width: 32px; height: 32px; font-size: 0.9rem; }
+
+            /* ── h2 headings ── */
+            h2 { font-size: 1.1rem; }
+        }
+
+        @media (max-width: 480px) {
+            /* ── Stats: 2-col stays but even smaller ── */
+            .stat-card { padding: 0.75rem; }
+            .stat-card h3 { font-size: 0.67rem; }
+            .stat-card p { font-size: 1.2rem; }
+
+            /* ── Booking wizard ── */
+            .date-row { flex-direction: column; gap: 0.5rem; }
+
+            /* ── Owner portal header ── */
+            .owner-portal-header { padding: 1rem; }
+            .owner-portal-header h2 { font-size: 1.1rem; }
+
+            /* ── Training checklist card ── */
+            .tc-header { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+
+            /* ── Session panel progress strip ── */
+            .sp-progress-strip { padding: 0.65rem 1rem; }
+            .sp-subtask, .sp-add-row, .sp-notes-area { padding-left: 1rem; padding-right: 1rem; }
+        }
+
+
+        /* ── Owner portal mobile visit + payment cards ── */
+        .mobile-visit-cards, .mobile-payment-cards { display: none; flex-direction: column; gap: 0.65rem; }
+        .visit-card-m { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem 1.1rem; }
+        .visit-card-m-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; gap: 0.5rem; }
+        .visit-card-m-header strong { font-size: 0.9rem; }
+        .visit-card-m-price { font-size: 1rem; font-weight: 700; color: var(--owner-primary); white-space: nowrap; }
+        .visit-card-m-meta { font-size: 0.78rem; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; margin-bottom: 0.5rem; }
+        .visit-card-m-footer { display: flex; justify-content: space-between; align-items: center; }
+        .payment-card-m { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.85rem 1.1rem; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
+        .payment-card-m-left { flex: 1; min-width: 0; }
+        .payment-card-m-left strong { font-size: 0.85rem; display: block; }
+        .payment-card-m-left span { font-size: 0.75rem; color: var(--text-muted); }
+        .payment-card-m-right { text-align: right; flex-shrink: 0; }
+        .payment-card-m-right strong { font-size: 0.95rem; font-weight: 700; color: var(--owner-primary); display: block; }
+
+        /* Household members mobile list */
+        .member-list-m { display: none; flex-direction: column; gap: 0.5rem; }
+        .member-item-m { display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.375rem; gap: 0.5rem; }
+        .member-item-m-name { font-size: 0.88rem; font-weight: 600; }
+        .member-item-m-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+        @media (max-width: 768px) {
+            .mobile-visit-cards { display: flex !important; }
+            .mobile-payment-cards { display: flex !important; }
+            .member-list-m { display: flex !important; }
+            .desktop-table { display: none !important; }
+            .owner-info-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 480px) {
+            .owner-info-grid { grid-template-columns: 1fr; }
+        }
+
+
+        /* Mobile owner shortcut — 👁 always visible next to household badge */
+        .mobile-owner-shortcut {
+            background: #e0f2fe; border: 1px solid #7dd3fc; color: #0369a1;
+            border-radius: 0.375rem; padding: 0.2rem 0.45rem; font-size: 0.85rem;
+            cursor: pointer; line-height: 1; flex-shrink: 0;
+        }
+        .mobile-owner-shortcut:hover { background: #bae6fd; }
+
+
+        /* ══════════════════════════════════════
+           OWNER BOTTOM TAB BAR (mobile only)
+        ══════════════════════════════════════ */
+        .owner-bottom-bar {
+            display: none; /* shown via media query */
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            z-index: 200;
+            padding: 0;
+        }
+        .owner-bottom-bar-inner {
+            display: flex; align-items: stretch; height: 72px;
+            width: 100%; padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+        .obb-btn {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 5px; background: none; border: none;
+            cursor: pointer; padding: 10px 2px 8px; color: var(--text-muted);
+            font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.02em; line-height: 1; transition: color 0.15s;
+            border-top: 2px solid transparent; margin-top: -1px;
+            min-width: 0; overflow: hidden;
+        }
+        .obb-btn .obb-icon { font-size: 1.5rem; line-height: 1; display: block; flex-shrink: 0; }
+        .obb-btn .obb-label { display: block; width: 100%; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .obb-btn.active { color: var(--owner-primary); border-top-color: var(--owner-primary); }
+        .obb-btn.more-btn { color: var(--text-muted); }
+        .obb-btn.more-btn.drawer-open { color: var(--owner-primary); }
+
+        /* More drawer — slides up from bottom bar */
+        .owner-more-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.3); z-index: 201;
+        }
+        .owner-more-overlay.open { display: block; }
+        .owner-more-drawer {
+            position: fixed; bottom: 58px; left: 0; right: 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            border-radius: 1rem 1rem 0 0;
+            z-index: 202; padding: 0.5rem 0 0.75rem;
+            display: none;
+        }
+        .owner-more-drawer.open { display: block; }
+        .owner-more-drawer-handle {
+            width: 36px; height: 4px; background: var(--border);
+            border-radius: 2px; margin: 0.5rem auto 0.75rem;
+        }
+        .owner-more-drawer-title {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em;
+            color: var(--text-muted); font-weight: 700;
+            padding: 0 1.25rem 0.5rem;
+        }
+        .owner-more-item {
+            display: flex; align-items: center; gap: 0.85rem;
+            padding: 0.75rem 1.25rem; cursor: pointer;
+            transition: background 0.1s; border: none; background: none;
+            width: 100%; text-align: left;
+        }
+        .owner-more-item:hover, .owner-more-item:active { background: #f9fafb; }
+        .owner-more-item.active { color: var(--owner-primary); }
+        .owner-more-item .omi-icon { font-size: 1.2rem; width: 28px; text-align: center; }
+        .owner-more-item .omi-label { font-size: 0.92rem; font-weight: 500; color: inherit; }
+        .owner-more-item.active .omi-label { color: var(--owner-primary); font-weight: 600; }
+
     </style>
 </head>
 <body>
@@ -293,7 +732,26 @@
             <button onclick="switchOwnerTab('bookings')" class="nav-btn" id="ownav-bookings">Bookings</button>
             <button onclick="switchOwnerTab('visits')" class="nav-btn" id="ownav-visits">Visit History</button>
         </nav>
+        <button class="hamburger" id="hamburger-btn" aria-label="Open menu" onclick="toggleMobileNav()">
+            <span></span><span></span><span></span>
+        </button>
     </header>
+    <div class="mobile-nav-drawer" id="mobile-nav-drawer">
+        <div id="mobile-admin-links">
+            <button onclick="mobileNav('staff-view')" class="nav-btn">📋 Staff Feed</button>
+            <button onclick="mobileNav('crm-view')" class="nav-btn">👥 People & Pets</button>
+            <button onclick="mobileNav('calendar-view')" class="nav-btn">📅 Resource Grid</button>
+            <button onclick="mobileNav('biz-view')" class="nav-btn">📊 Business Management</button>
+        </div>
+        <div id="mobile-owner-links" class="hidden">
+            <button onclick="mobileOwnerNav('household')" class="nav-btn">🏠 My Household</button>
+            <button onclick="mobileOwnerNav('pets')" class="nav-btn">🐾 Pets</button>
+            <button onclick="mobileOwnerNav('bookings')" class="nav-btn">📅 Bookings</button>
+            <button onclick="mobileOwnerNav('visits')" class="nav-btn">📋 Visits</button>
+            <button onclick="mobileOwnerNav('payment')" class="nav-btn">💳 Payment</button>
+            <button onclick="mobileOwnerNav('communications')" class="nav-btn">✉️ Messages</button>
+        </div>
+    </div>
 
     <main class="container">
 
@@ -307,15 +765,44 @@
                 </div>
                 <div class="stat-card">
                     <h3>Training Sessions</h3>
-                    <p>5 Today</p>
+                    <p id="stat-training">—</p>
                 </div>
                 <div class="stat-card alert">
                     <h3>Pending Invoices</h3>
-                    <p>$1,240</p>
+                    <p id="stat-invoices">—</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Tasks Remaining</h3>
+                    <p id="stat-tasks">—</p>
                 </div>
             </div>
-            <h2>Current Active Guests</h2>
-            <div id="staff-guests-container" class="card-layout"></div>
+
+            <div class="staff-feed-grid">
+                <!-- Left: active guests -->
+                <div>
+                    <h2 style="margin:0 0 1rem;">Current Active Guests</h2>
+                    <div id="staff-guests-container" style="display:flex;flex-direction:column;gap:1rem;"></div>
+                </div>
+
+                <!-- Right: to-do panel -->
+                <div>
+                    <h2 style="margin:0 0 1rem;">Today's To-Do</h2>
+                    <div class="todo-panel" id="todo-panel">
+                        <div class="todo-panel-header">
+                            <h3 style="font-size:0.92rem;">📋 <span id="todo-date-label"></span></h3>
+                            <span class="todo-progress" id="todo-progress-label"></span>
+                        </div>
+                        <div id="todo-list-body"></div>
+                        <div class="todo-add-row">
+                            <input class="todo-add-input" id="todo-new-input" placeholder="Add a custom task…" onkeydown="if(event.key==='Enter')addCustomTask()">
+                            <button class="todo-add-btn" onclick="addCustomTask()">+ Add</button>
+                        </div>
+                        <div class="todo-progress-bar-wrap">
+                            <div class="todo-progress-bar" id="todo-progress-bar" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- ═══ CRM ═══ -->
@@ -325,7 +812,7 @@
                 <div class="controls-row">
                     <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()">
                     <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
-                    <button class="btn btn-primary" onclick="openRelationshipModal()">🔗 Link Relationship</button>
+                    <button class="btn btn-primary rel-link-btn" onclick="openRelationshipModal()"><span class="rel-btn-text">🔗 Link Relationship</span><span class="rel-btn-icon" aria-hidden="true">🔗</span></button>
                 </div>
                 <div class="filter-menu">
                     <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
@@ -361,20 +848,31 @@
         <!-- ═══ CALENDAR ═══ -->
         <section id="calendar-view" class="view-panel hidden">
             <h2>Boarding & Kennel Availability Grid</h2>
-            <div class="table-wrap">
+
+            <div class="cal-toolbar">
+                <div class="cal-nav">
+                    <button class="cal-nav-btn" onclick="shiftCalWeek(-1)">← Prev</button>
+                    <button class="cal-nav-btn today" onclick="resetCalWeek()">Today</button>
+                    <button class="cal-nav-btn" onclick="shiftCalWeek(1)">Next →</button>
+                </div>
+                <span class="cal-week-label" id="cal-week-label"></span>
+                <div class="cal-legend">
+                    <div class="cal-legend-item"><div class="cal-legend-dot booked"></div>Booked</div>
+                    <div class="cal-legend-item"><div class="cal-legend-dot available"></div>Available</div>
+                    <div class="cal-legend-item"><div class="cal-legend-dot partial"></div>Partial</div>
+                </div>
+            </div>
+
+            <!-- Desktop: table -->
+            <div class="table-wrap cal-table-wrap">
                 <table class="calendar-table">
-                    <thead>
-                        <tr>
-                            <th>Resource Space</th>
-                            <th>Sun 14</th>
-                            <th>Mon 15</th>
-                            <th>Tue 16</th>
-                            <th>Wed 17</th>
-                        </tr>
-                    </thead>
+                    <thead id="cal-thead"></thead>
                     <tbody id="calendar-body-target"></tbody>
                 </table>
             </div>
+
+            <!-- Mobile: cards -->
+            <div class="cal-cards" id="cal-cards"></div>
         </section>
 
         <!-- ═══════════════════════════════════
@@ -483,6 +981,62 @@
                         <button type="submit" class="btn-primary">Establish Link</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+
+        <!-- ── TRAINING SESSION SLIDE PANEL ── -->
+        <div class="session-panel-overlay" id="session-panel-overlay" onclick="closeSessionPanel()"></div>
+        <div class="session-panel" id="session-panel">
+            <div class="sp-header">
+                <div class="sp-header-top">
+                    <h3 class="sp-title" id="sp-title">Session</h3>
+                    <button class="sp-close" onclick="closeSessionPanel()">✕</button>
+                </div>
+                <div class="sp-meta-row" id="sp-meta-row"></div>
+            </div>
+            <div class="sp-progress-strip" id="sp-progress-strip">
+                <div class="sp-ring-wrap">
+                    <svg width="44" height="44" viewBox="0 0 44 44">
+                        <circle class="sp-ring-bg" cx="22" cy="22" r="18"/>
+                        <circle class="sp-ring-fill" id="sp-ring-fill" cx="22" cy="22" r="18" stroke-dasharray="113" stroke-dashoffset="113"/>
+                    </svg>
+                    <div class="sp-ring-label" id="sp-ring-pct">0%</div>
+                </div>
+                <div class="sp-progress-text">
+                    <strong id="sp-progress-strong">0 of 0 steps done</strong>
+                    <span id="sp-progress-sub">Session in progress</span>
+                </div>
+            </div>
+            <div class="sp-body" id="sp-body"></div>
+            <div class="sp-add-row">
+                <input class="sp-add-input" id="sp-add-input" placeholder="Add a step…" onkeydown="if(event.key==='Enter')addSubtask()">
+                <button class="sp-add-btn" onclick="addSubtask()">+ Add step</button>
+            </div>
+            <div class="sp-notes-area">
+                <div class="sp-notes-label">Session notes (visible to owner)</div>
+                <textarea id="sp-notes-textarea" placeholder="Add notes about this session…" oninput="saveSessionNotes()"></textarea>
+            </div>
+        </div>
+
+
+        <!-- ── OWNER BOTTOM TAB BAR (mobile) ── -->
+        <div class="owner-more-overlay" id="owner-more-overlay" onclick="closeOwnerDrawer()"></div>
+        <div class="owner-more-drawer" id="owner-more-drawer">
+            <div class="owner-more-drawer-handle"></div>
+            <div class="owner-more-drawer-title">More sections</div>
+            <button class="owner-more-item" id="odrawer-payment"    onclick="ownerBottomNav('payment')">    <span class="omi-icon">💳</span><span class="omi-label">Payment</span></button>
+            <button class="owner-more-item" id="odrawer-communications" onclick="ownerBottomNav('communications')"><span class="omi-icon">✉️</span><span class="omi-label">Communications</span></button>
+            <button class="owner-more-item" id="odrawer-notes"      onclick="ownerBottomNav('notes')">     <span class="omi-icon">📝</span><span class="omi-label">Notes</span></button>
+            <button class="owner-more-item" id="odrawer-documents"  onclick="ownerBottomNav('documents')"> <span class="omi-icon">📁</span><span class="omi-label">Documents</span></button>
+        </div>
+        <div class="owner-bottom-bar" id="owner-bottom-bar">
+            <div class="owner-bottom-bar-inner">
+                <button class="obb-btn active" id="obb-household" onclick="ownerBottomNav('household')"><span class="obb-icon">🏠</span><span class="obb-label">Home</span></button>
+                <button class="obb-btn" id="obb-pets"      onclick="ownerBottomNav('pets')">     <span class="obb-icon">🐾</span><span class="obb-label">Pets</span></button>
+                <button class="obb-btn" id="obb-visits"    onclick="ownerBottomNav('visits')">   <span class="obb-icon">📋</span><span class="obb-label">Visits</span></button>
+                <button class="obb-btn" id="obb-bookings"  onclick="ownerBottomNav('bookings')"> <span class="obb-icon">📅</span><span class="obb-label">Book</span></button>
+                <button class="obb-btn more-btn" id="obb-more" onclick="toggleOwnerDrawer()">    <span class="obb-icon">•••</span><span class="obb-label">More</span></button>
             </div>
         </div>
 
@@ -616,6 +1170,7 @@
     ═══════════════════════════════════════════════ */
     document.addEventListener('DOMContentLoaded', () => {
         renderAllDashboards();
+        initTodoPanel();
     });
 
     /* ═══════════════════════════════════════════════
@@ -646,6 +1201,10 @@
         if (sec) sec.classList.add('active');
         const tab = document.getElementById('otab-' + section);
         if (tab) tab.classList.add('active');
+        // Re-render pets section live so training checklist stays synced
+        if (section === 'pets' && currentOwnerHouseholdId) {
+            renderOwnerPetsSection(currentOwnerHouseholdId);
+        }
     }
 
     function setEntityFilter(filterType) {
@@ -655,12 +1214,21 @@
         renderAllDashboards();
     }
 
+    function isMobile() { return window.innerWidth <= 768; }
+
     function toggleLayout() {
         isCardLayoutMode = !isCardLayoutMode;
-        const container = document.getElementById('crm-list-container');
-        container.className = isCardLayoutMode ? 'card-layout' : 'list-layout';
-        document.querySelector('.toggle-layout-btn').innerText = isCardLayoutMode ? '📋 Switch to List View' : '🗂️ Switch to Card View';
+        applyLayout();
         renderAllDashboards();
+    }
+
+    function applyLayout() {
+        const container = document.getElementById('crm-list-container');
+        if (!container) return;
+        const useList = !isCardLayoutMode || isMobile();
+        container.className = useList ? 'list-layout' : 'card-layout';
+        const btn = document.querySelector('.toggle-layout-btn');
+        if (btn) btn.innerText = isCardLayoutMode ? '📋 Switch to List View' : '🗂️ Switch to Card View';
     }
 
     /* ═══════════════════════════════════════════════
@@ -670,11 +1238,18 @@
         currentOwnerHouseholdId = householdId;
         const h = households.find(x => x.id === householdId);
 
+        // Close fullscreen profile if open (handles direct quick-action tap on mobile)
+        document.getElementById('fullscreen-modal').classList.add('hidden');
+        currentFsHouseholdId = null;
+
+        // Close mobile nav drawer if open
+        closeMobileNav();
+
         // Banner
         document.getElementById('owner-banner').classList.remove('hidden');
         document.getElementById('owner-banner-name').innerText = h.name;
 
-        // Nav swap
+        // Nav swap — hide admin nav, show owner nav (desktop + mobile)
         document.getElementById('admin-nav').classList.add('hidden');
         document.getElementById('owner-nav').classList.remove('hidden');
         document.getElementById('main-navbar').classList.add('owner-mode');
@@ -688,6 +1263,12 @@
 
         // Reset to household tab
         switchOwnerSection('household');
+
+        // Add owner-view class — CSS media query decides whether bottom bar shows
+        showOwnerBottomBar(true);
+
+        // Scroll to top so owner sees the portal header, not wherever they were
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function activateOwnerViewFromProfile() {
@@ -699,6 +1280,11 @@
 
     function exitOwnerView() {
         currentOwnerHouseholdId = null;
+
+        closeMobileNav();
+        closeOwnerDrawer();
+        showOwnerBottomBar(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
 
         document.getElementById('owner-banner').classList.add('hidden');
         document.getElementById('admin-nav').classList.remove('hidden');
@@ -751,7 +1337,7 @@
                 </div>
             </div>
             <div class="section-label">Household members</div>
-            <div class="table-wrap">
+            <div class="table-wrap desktop-table">
                 <table class="data-table">
                     <thead><tr><th>Name</th><th>Role</th><th>Contact</th></tr></thead>
                     <tbody>
@@ -765,34 +1351,22 @@
                     </tbody>
                 </table>
             </div>
-        `;
-
-        // ── Pets section ──
-        document.getElementById('owner-pets-content').innerHTML = `
-            <div class="section-header-row">
-                <h3>Your pets</h3>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:1rem;">
-                ${hPets.map(pet => `
-                    <div class="pet-profile-card">
-                        <div class="pet-avatar ${pet.species}">${pet.species === 'dog' ? '🐕' : '🐈'}</div>
-                        <div class="pet-info">
-                            <h3>${pet.name}</h3>
-                            <p>${pet.details}</p>
-                            <div class="pet-health-row">
-                                <span class="health-tag ${pet.status === 'current' ? 'ok' : 'warn'}">
-                                    ${pet.status === 'current' ? '✓ Vaccines current' : '⚠ Vaccines expired'}
-                                </span>
-                                <span class="health-tag neutral">Expiry: ${pet.vaccineExpiry}</span>
-                                ${pet.allergies !== 'None' ? `<span class="health-tag warn">⚠ Allergy: ${pet.allergies}</span>` : '<span class="health-tag neutral">No known allergies</span>'}
-                            </div>
-                            <div class="section-label" style="margin-top:0.85rem;margin-bottom:0.35rem;">Feeding instructions</div>
-                            <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">${pet.food}</p>
+            <div class="member-list-m">
+                ${hPeople.map(p => `
+                    <div class="member-item-m">
+                        <div>
+                            <div class="member-item-m-name">${p.name}</div>
+                            <div class="member-item-m-meta">${p.contact}</div>
                         </div>
+                        <span class="status-pill ${p.role === 'Primary' ? 'upcoming' : 'completed'}">${p.role}</span>
                     </div>
                 `).join('')}
             </div>
         `;
+
+        // ── Pets section ──
+        // Pets section is rendered via its own function so it can be re-synced live
+        renderOwnerPetsSection(householdId);
 
         // ── Vets section ──
         const hVetData = hVetRels.map(rel => ({ vet: vets.find(v => v.id === rel.targetId), note: rel.note })).filter(x => x.vet);
@@ -819,7 +1393,7 @@
             <div class="section-header-row">
                 <h3>${hVisits.length} completed visits</h3>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap desktop-table">
                 <table class="data-table">
                     <thead><tr><th>Date</th><th>Pet</th><th>Service</th><th>Duration</th><th>Amount</th><th>Staff</th><th>Rating</th></tr></thead>
                     <tbody>
@@ -836,6 +1410,25 @@
                         `).join('')}
                     </tbody>
                 </table>
+            </div>
+            <div class="mobile-visit-cards">
+                ${hVisits.map(v => `
+                    <div class="visit-card-m">
+                        <div class="visit-card-m-header">
+                            <strong>${v.service}</strong>
+                            <span class="visit-card-m-price">$${v.amount}</span>
+                        </div>
+                        <div class="visit-card-m-meta">
+                            <span>🐾 ${v.petName}</span>
+                            <span>📅 ${v.checkIn}${v.nights ? ' · ' + v.nights + ' nights' : ''}</span>
+                            <span>👤 ${v.staff}</span>
+                        </div>
+                        <div class="visit-card-m-footer">
+                            <span style="font-size:0.85rem;">${v.rating}</span>
+                            <span class="status-pill completed">completed</span>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
         `;
 
@@ -866,26 +1459,14 @@
 
         // ── Payment section ──
         document.getElementById('owner-payment-content').innerHTML = `
-            <div class="payment-summary">
-                <div class="payment-summary-item">
-                    <h4>Total spent</h4>
-                    <p>$${hPayments.totalSpend}</p>
-                </div>
-                <div class="payment-summary-item">
-                    <h4>Balance due</h4>
-                    <p>$${hPayments.balance}</p>
-                </div>
-                <div class="payment-summary-item">
-                    <h4>Account credit</h4>
-                    <p>$${hPayments.credit}</p>
-                </div>
-                <div class="payment-summary-item">
-                    <h4>Card on file</h4>
-                    <p style="font-size:1rem;">${hPayments.cardOnFile}</p>
-                </div>
+            <div class="payment-summary" style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem;margin-bottom:1.25rem;">
+                <div class="payment-summary-item"><h4>Total spent</h4><p>$${hPayments.totalSpend}</p></div>
+                <div class="payment-summary-item"><h4>Balance due</h4><p>$${hPayments.balance}</p></div>
+                <div class="payment-summary-item"><h4>Account credit</h4><p>$${hPayments.credit}</p></div>
+                <div class="payment-summary-item"><h4>Card on file</h4><p style="font-size:1rem;">${hPayments.cardOnFile}</p></div>
             </div>
             <div class="section-label">Payment history</div>
-            <div class="table-wrap">
+            <div class="table-wrap desktop-table">
                 <table class="data-table">
                     <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th></tr></thead>
                     <tbody>
@@ -899,6 +1480,20 @@
                         `).join('')}
                     </tbody>
                 </table>
+            </div>
+            <div class="mobile-payment-cards">
+                ${hPayments.history.map(p => `
+                    <div class="payment-card-m">
+                        <div class="payment-card-m-left">
+                            <strong>${p.description}</strong>
+                            <span>${p.date}</span>
+                        </div>
+                        <div class="payment-card-m-right">
+                            <strong>$${p.amount}</strong>
+                            <span class="status-pill completed" style="margin-top:0.3rem;display:inline-block;">${p.status}</span>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
         `;
 
@@ -985,6 +1580,7 @@
        MASTER RENDER
     ═══════════════════════════════════════════════ */
     function renderAllDashboards() {
+        applyLayout();
         const searchVal = document.getElementById('crm-search') ? document.getElementById('crm-search').value.toLowerCase() : '';
 
         // Staff feed
@@ -1025,7 +1621,10 @@
                         <div class="crm-card" onclick="openFullscreenProfile('household','${h.id}')">
                             <div class="item-header">
                                 <div class="clickable-profile-zone"><h3>${h.name}</h3></div>
-                                <span class="entity-badge household">Household</span>
+                                <div style="display:flex;align-items:center;gap:0.5rem;">
+                                    <span class="entity-badge household">Household</span>
+                                    <button class="mobile-owner-shortcut" onclick="event.stopPropagation();activateOwnerView('${h.id}')" title="View as Owner">👁</button>
+                                </div>
                             </div>
                             ${isCardLayoutMode ? `<p class="pin-note">📌 ${h.note}</p>` : ''}
                             <div class="crm-section-block">
@@ -1045,14 +1644,16 @@
                     window[category].forEach(item => {
                         if (!item.name.toLowerCase().includes(searchVal)) return;
                         const parentHId = item.householdId || '';
+                        // Quick actions only on people cards (linked to their household), not pets or vets
+                        const showActions = category === 'people' && parentHId;
                         crmContainer.innerHTML += `
                             <div class="crm-card" onclick="openFullscreenProfile('${category}','${item.id}')">
                                 <div class="item-header">
                                     <div class="clickable-profile-zone"><h3>${item.name}</h3></div>
-                                    <span class="entity-badge ${category}">${category.slice(0,-1)}</span>
+                                    <span class="entity-badge ${category}">${category === 'people' ? 'Person' : category === 'pets' ? 'Pet' : category === 'vets' ? 'Vet' : category}</span>
                                 </div>
                                 <p style="margin:0;font-size:0.88rem;color:var(--text-muted);">${item.contact || item.details || 'Registered COI'}</p>
-                                ${parentHId ? generateQuickActionsHTML(parentHId) : ''}
+                                ${showActions ? generateQuickActionsHTML(parentHId) : ''}
                             </div>
                         `;
                     });
@@ -1060,15 +1661,8 @@
             });
         }
 
-        // Calendar
-        const calendarBody = document.getElementById('calendar-body-target');
-        if (calendarBody) {
-            calendarBody.innerHTML = `
-                <tr><td><strong>Luxury Suite #5</strong></td><td class="booked" colspan="2">Max (The Millers)</td><td class="available">Available</td><td class="available">Available</td></tr>
-                <tr><td><strong>Standard Run B</strong></td><td class="booked" colspan="4">Luna (The Davis Family)</td></tr>
-                <tr><td><strong>Cat Condo A</strong></td><td class="available">Available</td><td class="booked">Bella (The Millers)</td><td class="available">Available</td><td class="available">Available</td></tr>
-            `;
-        }
+        // Calendar rendered via its own function
+        renderCalendar();
     }
 
     /* ═══════════════════════════════════════════════
@@ -1122,22 +1716,234 @@
                     <ul>${hVetData.map(v => `<li>🏥 <strong>${v.name}</strong> — ${v.details}</li>`).join('')}</ul>
                 </div>` : ''}
             `;
-        } else {
-            const targetItem = [...people, ...pets, ...vets].find(x => x.id === id);
-            title.innerText = targetItem.name + ' — Profile';
-            if (targetItem.householdId) {
-                currentFsHouseholdId = targetItem.householdId;
-                viewAsOwnerBtn.classList.remove('hidden');
-                actionsAnchor.innerHTML = `<h4>Quick Operations</h4>` + generateQuickActionsHTML(targetItem.householdId);
-            }
-            payloadAnchor.innerHTML = `
-                <div class="crm-section-block"><h4>Details</h4><p style="margin:0;">${targetItem.contact || targetItem.details || 'No data.'}</p></div>
-                ${targetItem.status ? `<div class="crm-section-block"><h4>Health Status</h4><p style="margin:0;">${targetItem.status === 'current' ? '✅ Vaccines current' : '❌ Vaccines expired'} · Expiry: ${targetItem.vaccineExpiry || '—'}</p></div>` : ''}
-                ${targetItem.allergies ? `<div class="crm-section-block"><h4>Allergies</h4><p style="margin:0;">${targetItem.allergies}</p></div>` : ''}
-                ${targetItem.food ? `<div class="crm-section-block"><h4>Feeding Instructions</h4><p style="margin:0;">${targetItem.food}</p></div>` : ''}
+        } else if (type === 'pets') {
+            const pet = pets.find(x => x.id === id);
+            const household = households.find(h => h.id === pet.householdId);
+            title.innerText = pet.name + ' — Pet Profile';
+            // No quick actions, no View as Owner for pet profiles
+            actionsAnchor.innerHTML = `
+                <div style="padding:0.5rem 0;">
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:700;margin-bottom:0.75rem;">Pet details</div>
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.88rem;">
+                        <div><span style="color:var(--text-muted);">Species</span><br><strong>${pet.species === 'dog' ? '🐕 Dog' : '🐈 Cat'}</strong></div>
+                        <div><span style="color:var(--text-muted);">Household</span><br><strong>${household ? household.name : '—'}</strong></div>
+                        <div><span style="color:var(--text-muted);">Current room</span><br><strong>${pet.room}</strong></div>
+                    </div>
+                </div>
             `;
+
+            // Pet visit history
+            const petVisits = Object.values(visits).flat().filter(v => v.petName === pet.name);
+            const petNotes = Object.values(notes).flat().filter(n => n.text.toLowerCase().includes(pet.name.toLowerCase()));
+
+            payloadAnchor.innerHTML = `
+                <div class="owner-info-grid" style="margin-bottom:0;">
+                    <div class="owner-card">
+                        <h4>Health status</h4>
+                        <div class="card-value" style="font-size:0.9rem;">
+                            ${pet.status === 'current'
+                                ? '<span style="color:#065f46;">✅ Vaccines current</span>'
+                                : '<span style="color:#991b1b;">❌ Vaccines expired</span>'}
+                        </div>
+                        <div class="card-sub">Expiry: ${pet.vaccineExpiry}</div>
+                    </div>
+                    <div class="owner-card">
+                        <h4>Allergies</h4>
+                        <div class="card-value" style="font-size:0.9rem;">${pet.allergies !== 'None' ? '⚠ ' + pet.allergies : 'None known'}</div>
+                    </div>
+                </div>
+                <div class="crm-section-block">
+                    <h4>Details</h4>
+                    <p style="margin:0;">${pet.details}</p>
+                </div>
+                <div class="crm-section-block">
+                    <h4>Feeding instructions</h4>
+                    <p style="margin:0;">${pet.food}</p>
+                </div>
+                <div class="crm-section-block">
+                    <h4>Visit history (${petVisits.length} stays)</h4>
+                    ${petVisits.length ? `
+                    <table style="width:100%;font-size:0.83rem;border-collapse:collapse;">
+                        <thead><tr>
+                            <th style="text-align:left;padding:0.35rem 0.5rem 0.35rem 0;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border);">Service</th>
+                            <th style="text-align:left;padding:0.35rem 0.5rem;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border);">Dates</th>
+                            <th style="text-align:right;padding:0.35rem 0 0.35rem 0.5rem;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border);">Amount</th>
+                        </tr></thead>
+                        <tbody>
+                            ${petVisits.map(v => `<tr>
+                                <td style="padding:0.4rem 0.5rem 0.4rem 0;border-bottom:1px solid #f3f4f6;">${v.service}</td>
+                                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid #f3f4f6;color:var(--text-muted);">${v.checkIn}${v.nights ? ' · ' + v.nights + ' nights' : ''}</td>
+                                <td style="padding:0.4rem 0 0.4rem 0.5rem;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:600;">$${v.amount}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>` : '<p style="margin:0;color:var(--text-muted);">No visits on record yet.</p>'}
+                </div>
+                ${petNotes.length ? `
+                <div class="crm-section-block">
+                    <h4>Staff notes</h4>
+                    <div style="display:flex;flex-direction:column;gap:0.65rem;">
+                        ${petNotes.map(n => `
+                            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:0.375rem;padding:0.65rem 0.85rem;">
+                                <div style="display:flex;justify-content:space-between;margin-bottom:0.3rem;">
+                                    <span style="font-size:0.75rem;font-weight:700;color:#92400e;">${n.author}</span>
+                                    <span style="font-size:0.73rem;color:var(--text-muted);">${n.date}</span>
+                                </div>
+                                <p style="margin:0;font-size:0.85rem;color:#78350f;">${n.text}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>` : ''}
+            `;
+        } else if (type === 'people') {
+            const person = people.find(x => x.id === id);
+            const household = households.find(h => h.id === person.householdId);
+            const hPets = pets.filter(p => p.householdId === person.householdId);
+            const hVetRels = crossRelationships.filter(r => r.entityId === person.householdId && r.type === 'vet');
+            const hVets = hVetRels.map(r => vets.find(v => v.id === r.targetId)).filter(Boolean);
+            const relatedContacts = crossRelationships
+                .filter(r => r.entityId === person.householdId && (r.type === 'emergency' || r.type === 'family'))
+                .map(r => ({ rel: r, target: households.find(h => h.id === r.targetId) }))
+                .filter(x => x.target);
+
+            title.innerText = person.name;
+            currentFsHouseholdId = person.householdId;
+            viewAsOwnerBtn.classList.remove('hidden');
+
+            actionsAnchor.innerHTML = `<h4>Quick Operations</h4>` + generateQuickActionsHTML(person.householdId) + `
+                <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:700;margin-bottom:0.65rem;">Person details</div>
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.85rem;">
+                        <div><span style="color:var(--text-muted);font-size:0.78rem;">Role</span><br><strong>${person.role}</strong></div>
+                        <div><span style="color:var(--text-muted);font-size:0.78rem;">Contact</span><br><span>${person.contact}</span></div>
+                    </div>
+                </div>
+            `;
+
+            payloadAnchor.innerHTML = `
+                <div class="crm-section-block">
+                    <h4>Household</h4>
+                    ${household ? `
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+                        <div>
+                            <div style="font-weight:600;font-size:0.92rem;">${household.name}</div>
+                            <div style="font-size:0.82rem;color:var(--text-muted);margin-top:0.1rem;">${household.address}</div>
+                        </div>
+                        <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;white-space:nowrap;flex-shrink:0;" onclick="closeFullscreenProfile();openFullscreenProfile('household','${household.id}')">View →</button>
+                    </div>` : '<p style="margin:0;color:var(--text-muted);">No household linked.</p>'}
+                </div>
+
+                <div class="crm-section-block">
+                    <h4>Pets in household (${hPets.length})</h4>
+                    ${hPets.length ? `<div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.25rem;">
+                        ${hPets.map(p => `
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.45rem 0;border-bottom:1px solid #f3f4f6;">
+                                <div style="display:flex;align-items:center;gap:0.6rem;">
+                                    <span style="font-size:1.1rem;">${p.species === 'dog' ? '🐕' : '🐈'}</span>
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.88rem;">${p.name}</div>
+                                        <div style="font-size:0.78rem;color:var(--text-muted);">${p.details}</div>
+                                    </div>
+                                </div>
+                                <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;white-space:nowrap;flex-shrink:0;" onclick="closeFullscreenProfile();openFullscreenProfile('pets','${p.id}')">View →</button>
+                            </div>
+                        `).join('')}
+                    </div>` : '<p style="margin:0;color:var(--text-muted);">No pets linked.</p>'}
+                </div>
+
+                <div class="crm-section-block">
+                    <h4>Veterinary contacts (${hVets.length})</h4>
+                    ${hVets.length ? `<div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.25rem;">
+                        ${hVets.map(v => `
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.45rem 0;border-bottom:1px solid #f3f4f6;">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.88rem;">🏥 ${v.name}</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);">${v.details}</div>
+                                </div>
+                                <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;white-space:nowrap;flex-shrink:0;" onclick="closeFullscreenProfile();openFullscreenProfile('vets','${v.id}')">View →</button>
+                            </div>
+                        `).join('')}
+                    </div>` : '<p style="margin:0;color:var(--text-muted);">No vet contacts linked.</p>'}
+                </div>
+
+                ${relatedContacts.length ? `
+                <div class="crm-section-block">
+                    <h4>Related contacts (${relatedContacts.length})</h4>
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.25rem;">
+                        ${relatedContacts.map(({ rel, target }) => `
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.45rem 0;border-bottom:1px solid #f3f4f6;">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.88rem;">👥 ${target.name}</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);">
+                                        <span style="background:#f3e8ff;color:#6b21a8;padding:0.1rem 0.4rem;border-radius:9999px;font-size:0.68rem;font-weight:700;text-transform:uppercase;">${rel.type}</span>
+                                        ${rel.note ? ' · ' + rel.note : ''}
+                                    </div>
+                                </div>
+                                <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;white-space:nowrap;flex-shrink:0;" onclick="closeFullscreenProfile();openFullscreenProfile('household','${target.id}')">View →</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>` : ''}
+            `;
+
+        } else if (type === 'vets') {
+            const vet = vets.find(x => x.id === id);
+            // Find all households that use this vet
+            const linkedRels = crossRelationships.filter(r => r.targetId === vet.id && r.type === 'vet');
+            const linkedHouseholds = linkedRels.map(r => ({
+                rel: r,
+                household: households.find(h => h.id === r.entityId)
+            })).filter(x => x.household);
+
+            title.innerText = vet.name;
+            actionsAnchor.innerHTML = `
+                <div style="padding:0.25rem 0;">
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:700;margin-bottom:0.75rem;">Clinic details</div>
+                    <div style="display:flex;flex-direction:column;gap:0.6rem;font-size:0.85rem;">
+                        <div><span style="color:var(--text-muted);font-size:0.78rem;">Contact</span><br><span>${vet.details}</span></div>
+                        <div><span style="color:var(--text-muted);font-size:0.78rem;">Specialty</span><br><strong>${vet.specialty}</strong></div>
+                        <div><span style="color:var(--text-muted);font-size:0.78rem;">Linked households</span><br><strong>${linkedHouseholds.length}</strong></div>
+                    </div>
+                </div>
+            `;
+
+            const householdBlocks = linkedHouseholds.map(({ rel, household }) => {
+                const hPeople = people.filter(p => p.householdId === household.id);
+                const hPets = pets.filter(p => p.householdId === household.id);
+                return `
+                    <div class="crm-section-block" style="padding:0;">
+                        <div style="padding:0.75rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;border-bottom:1px solid var(--border);">
+                            <div>
+                                <div style="font-weight:700;font-size:0.92rem;">🏠 ${household.name}</div>
+                                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.1rem;">
+                                    <span style="background:#fef3c7;color:#92400e;padding:0.1rem 0.4rem;border-radius:9999px;font-size:0.67rem;font-weight:700;text-transform:uppercase;">${rel.note || 'Linked'}</span>
+                                    · ${household.address}
+                                </div>
+                            </div>
+                            <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;white-space:nowrap;flex-shrink:0;" onclick="closeFullscreenProfile();openFullscreenProfile('household','${household.id}')">View →</button>
+                        </div>
+                        ${hPeople.map(p => `
+                            <div style="padding:0.45rem 1rem 0.45rem 2rem;border-bottom:1px solid #f9fafb;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                                <div style="font-size:0.85rem;">👤 <strong>${p.name}</strong> <span style="color:var(--text-muted);font-size:0.78rem;">· ${p.role}</span></div>
+                                <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem;white-space:nowrap;" onclick="closeFullscreenProfile();openFullscreenProfile('people','${p.id}')">View →</button>
+                            </div>
+                        `).join('')}
+                        ${hPets.map(p => `
+                            <div style="padding:0.45rem 1rem 0.45rem 2rem;border-bottom:1px solid #f9fafb;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                                <div style="font-size:0.85rem;">${p.species === 'dog' ? '🐕' : '🐈'} <strong>${p.name}</strong> <span style="color:var(--text-muted);font-size:0.78rem;">· ${p.details}</span></div>
+                                <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem;white-space:nowrap;" onclick="closeFullscreenProfile();openFullscreenProfile('pets','${p.id}')">View →</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }).join('');
+
+            payloadAnchor.innerHTML = linkedHouseholds.length
+                ? `<div style="display:flex;flex-direction:column;gap:1rem;">${householdBlocks}</div>`
+                : `<div class="crm-section-block"><p style="margin:0;color:var(--text-muted);">No households linked to this clinic yet.</p></div>`;
         }
         overlay.classList.remove('hidden');
+        // On mobile, scroll to top so the fixed modal is within the visible viewport
+        window.scrollTo({ top: 0, behavior: 'instant' });
     }
 
     function closeFullscreenProfile() {
@@ -1175,6 +1981,656 @@
         closeRelationshipModal();
         renderAllDashboards();
     }
+    /* ═══════════════════════════════════════════════
+       TO-DO LIST DATA & LOGIC
+    ═══════════════════════════════════════════════ */
+
+    /* ── Subtask ID counter ── */
+    var nextSubtaskId = 200;
+    var nextTaskId = 100;
+    var activeSessionId = null; // which training session panel is open
+
+    /* ── Training session data with subtasks ── */
+    var trainingSessions = [
+        {
+            id: 't1', petId: 'pet-max', petName: 'Max', household: 'Miller',
+            title: 'Agility Level 2 drill', time: '8:00 AM', staff: 'Maria C.', location: 'Agility Ring',
+            done: true, notes: 'Max crushed the weave poles today — best run yet. Moving to Level 3 next session.',
+            subtasks: [
+                { id: 'st1', text: 'Warm-up lap & stretch', note: 'Owner visible', ownerVisible: true, done: true },
+                { id: 'st2', text: 'Jump sequence (6 hurdles)', note: 'Owner visible', ownerVisible: true, done: true },
+                { id: 'st3', text: 'Weave pole drill × 3 runs', note: 'Owner visible', ownerVisible: true, done: true },
+                { id: 'st4', text: 'Tunnel confidence pass', note: 'Owner visible', ownerVisible: true, done: true },
+                { id: 'st5', text: 'Cool-down & treat reward', note: 'Staff only', ownerVisible: false, done: true }
+            ]
+        },
+        {
+            id: 't2', petId: 'pet-luna', petName: 'Luna', household: 'Davis',
+            title: 'Basic obedience session', time: '9:30 AM', staff: 'Kayla R.', location: 'Training Room A',
+            done: false, notes: '',
+            subtasks: [
+                { id: 'st6', text: 'Sit & stay (30 sec hold)', note: 'Owner visible', ownerVisible: true, done: true },
+                { id: 'st7', text: 'Down command with hand signal', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st8', text: 'Name recognition recall', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st9', text: 'Leave it drill (treat on floor)', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st10', text: 'Behavioral notes logged', note: 'Staff only', ownerVisible: false, done: false }
+            ]
+        },
+        {
+            id: 't3', petId: 'pet-bella', petName: 'Bella', household: 'Miller',
+            title: 'Socialization intro', time: '11:00 AM', staff: 'Tom H.', location: 'Cat Suite',
+            done: false, notes: '',
+            subtasks: [
+                { id: 'st11', text: 'Carrier acclimation check', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st12', text: 'Controlled exposure to room sounds', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st13', text: 'Gentle handling & brush session', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st14', text: 'Play interaction with wand toy', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st15', text: 'Stress level assessment logged', note: 'Staff only', ownerVisible: false, done: false }
+            ]
+        },
+        {
+            id: 't4', petId: 'pet-max', petName: 'Max', household: 'Miller',
+            title: 'Recall & leash walk', time: '2:00 PM', staff: 'Maria C.', location: 'Outdoor Field',
+            done: false, notes: '',
+            subtasks: [
+                { id: 'st16', text: 'Leash-on greeting & check', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st17', text: 'Heel walk lap (on-leash)', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st18', text: 'Long-line recall × 5 reps', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st19', text: 'Off-leash recall in fenced area', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st20', text: 'Post-session temperament note', note: 'Staff only', ownerVisible: false, done: false }
+            ]
+        },
+        {
+            id: 't5', petId: 'pet-luna', petName: 'Luna', household: 'Davis',
+            title: 'Crate comfort follow-up', time: '4:00 PM', staff: 'Kayla R.', location: 'Training Room B',
+            done: false, notes: '',
+            subtasks: [
+                { id: 'st21', text: 'Voluntary crate entry check', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st22', text: 'Door-closed comfort (5 min)', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st23', text: 'Extended crate stay (15 min)', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st24', text: 'Exit calmly on cue', note: 'Owner visible', ownerVisible: true, done: false },
+                { id: 'st25', text: 'Owner progress report drafted', note: 'Staff only', ownerVisible: false, done: false }
+            ]
+        }
+    ];
+
+    /* ── Regular tasks (invoices + custom) ── */
+    var otherTasks = [
+        { id: 'i1', type: 'invoice', text: 'Send invoice to The Miller Household', meta: '$220 · Luxury Suite Jun 10–14', done: false },
+        { id: 'i2', type: 'invoice', text: 'Follow up: The Davis Household balance', meta: '$455 · Standard Boarding Jun 1–14', done: false },
+        { id: 'i3', type: 'invoice', text: 'Process Bella vaccine expiry notice', meta: 'Alert owner before Aug booking', done: false }
+    ];
+
+    /* helper: session done = all subtasks done */
+    function sessionDone(s) { return s.subtasks.length > 0 && s.subtasks.every(st => st.done); }
+    function sessionProgress(s) {
+        const done = s.subtasks.filter(st => st.done).length;
+        return { done, total: s.subtasks.length, pct: s.subtasks.length ? Math.round(done / s.subtasks.length * 100) : 0 };
+    }
+
+    function initTodoPanel() {
+        const now = new Date();
+        const label = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        const el = document.getElementById('todo-date-label');
+        if (el) el.textContent = label;
+        renderTodoList();
+        updateStatsFromTasks();
+    }
+
+    function renderTodoList() {
+        const body = document.getElementById('todo-list-body');
+        if (!body) return;
+        const invoices = otherTasks.filter(t => t.type === 'invoice');
+        const custom = otherTasks.filter(t => t.type === 'custom');
+        let html = '';
+
+        // Training sessions
+        html += `<div class="todo-section-label">🎾 Training sessions (${trainingSessions.length})</div>`;
+        trainingSessions.forEach(s => {
+            const prog = sessionProgress(s);
+            const isDone = sessionDone(s);
+            // pip dots (up to 5 shown)
+            const pipCount = Math.min(s.subtasks.length, 6);
+            const filledCount = Math.min(s.subtasks.filter(st=>st.done).length, 6);
+            let pipHtml = '<span class="subtask-pip-bar">';
+            for (let i = 0; i < pipCount; i++) pipHtml += `<span class="subtask-pip-dot ${i < filledCount ? 'filled' : ''}"></span>`;
+            pipHtml += '</span>';
+
+            html += `
+                <div class="todo-item type-training ${isDone ? 'done' : ''}" id="task-row-${s.id}">
+                    <div class="todo-check ${isDone ? 'checked' : ''}" onclick="event.stopPropagation();toggleSessionDone('${s.id}')"></div>
+                    <div class="todo-body" onclick="openSessionPanel('${s.id}')" style="cursor:pointer;">
+                        <div class="todo-text">${s.petName} (${s.household}) — ${s.title}</div>
+                        <div class="todo-meta">
+                            <span class="todo-tag training">Training</span>
+                            ${s.time} · ${s.staff} · ${s.location}
+                            <span class="subtask-pip">${pipHtml} ${prog.done}/${prog.total}</span>
+                        </div>
+                    </div>
+                    <button class="btn" style="font-size:0.75rem;padding:0.3rem 0.55rem;white-space:nowrap;flex-shrink:0;" onclick="event.stopPropagation();openSessionPanel('${s.id}')">Open →</button>
+                </div>
+            `;
+        });
+
+        if (invoices.length) {
+            html += `<div class="todo-section-label">💳 Invoice reminders</div>`;
+            invoices.forEach(t => { html += renderOtherTask(t); });
+        }
+        if (custom.length) {
+            html += `<div class="todo-section-label">✏️ Custom tasks</div>`;
+            custom.forEach(t => { html += renderOtherTask(t); });
+        }
+
+        body.innerHTML = html;
+        updateTodoProgress();
+    }
+
+    function renderOtherTask(t) {
+        return `
+            <div class="todo-item type-${t.type} ${t.done ? 'done' : ''}" id="task-row-${t.id}" onclick="toggleOtherTask('${t.id}')">
+                <div class="todo-check ${t.done ? 'checked' : ''}"></div>
+                <div class="todo-body">
+                    <div class="todo-text">${t.text}</div>
+                    <div class="todo-meta">
+                        <span class="todo-tag ${t.type}">${t.type === 'invoice' ? 'Invoice' : 'Task'}</span>
+                        ${t.meta}
+                    </div>
+                </div>
+                ${t.type === 'custom' ? `<button class="todo-delete" onclick="event.stopPropagation();deleteOtherTask('${t.id}')" title="Remove">×</button>` : ''}
+            </div>
+        `;
+    }
+
+    function toggleSessionDone(id) {
+        const s = trainingSessions.find(x => x.id === id);
+        if (!s) return;
+        const allDone = sessionDone(s);
+        s.subtasks.forEach(st => st.done = !allDone);
+        renderTodoList();
+        updateStatsFromTasks();
+        if (activeSessionId === id) renderSessionPanel(id);
+    }
+
+    function toggleOtherTask(id) {
+        const t = otherTasks.find(x => x.id === id);
+        if (!t) return;
+        t.done = !t.done;
+        renderTodoList();
+        updateStatsFromTasks();
+    }
+
+    function deleteOtherTask(id) {
+        otherTasks = otherTasks.filter(t => t.id !== id);
+        renderTodoList();
+        updateStatsFromTasks();
+    }
+
+    function addCustomTask() {
+        const input = document.getElementById('todo-new-input');
+        const text = (input ? input.value : '').trim();
+        if (!text) return;
+        otherTasks.push({ id: 'c' + (nextTaskId++), type: 'custom', text: text, meta: 'Added just now', done: false });
+        if (input) input.value = '';
+        renderTodoList();
+        updateStatsFromTasks();
+    }
+
+    function updateTodoProgress() {
+        const sessionTasks = trainingSessions.length;
+        const sessionDoneCount = trainingSessions.filter(sessionDone).length;
+        const otherTotal = otherTasks.length;
+        const otherDone = otherTasks.filter(t => t.done).length;
+        const total = sessionTasks + otherTotal;
+        const done = sessionDoneCount + otherDone;
+        const pct = total === 0 ? 0 : Math.round(done / total * 100);
+        const bar = document.getElementById('todo-progress-bar');
+        const label = document.getElementById('todo-progress-label');
+        if (bar) bar.style.width = pct + '%';
+        if (label) label.innerHTML = `<strong>${done}</strong> / ${total} done`;
+    }
+
+    function updateStatsFromTasks() {
+        const invoices = otherTasks.filter(t => t.type === 'invoice' && !t.done);
+        const remaining = [
+            ...trainingSessions.filter(s => !sessionDone(s)),
+            ...otherTasks.filter(t => !t.done)
+        ];
+        const statTraining = document.getElementById('stat-training');
+        const statInvoices = document.getElementById('stat-invoices');
+        const statTasks = document.getElementById('stat-tasks');
+        if (statTraining) statTraining.textContent = trainingSessions.length + ' today';
+        if (statInvoices) statInvoices.textContent = invoices.length + ' pending';
+        if (statTasks) statTasks.textContent = remaining.length + ' left';
+        const invoiceCard = statInvoices ? statInvoices.closest('.stat-card') : null;
+        if (invoiceCard) invoiceCard.classList.toggle('alert', invoices.length > 0);
+    }
+
+    /* ═══ SESSION SLIDE PANEL ═══ */
+    function openSessionPanel(id) {
+        activeSessionId = id;
+        renderSessionPanel(id);
+        document.getElementById('session-panel').classList.add('open');
+        document.getElementById('session-panel-overlay').classList.add('open');
+    }
+
+    function closeSessionPanel() {
+        document.getElementById('session-panel').classList.remove('open');
+        document.getElementById('session-panel-overlay').classList.remove('open');
+        activeSessionId = null;
+    }
+
+    function renderSessionPanel(id) {
+        const s = trainingSessions.find(x => x.id === id);
+        if (!s) return;
+        const prog = sessionProgress(s);
+
+        // Header
+        document.getElementById('sp-title').textContent = s.petName + ' — ' + s.title;
+        document.getElementById('sp-meta-row').innerHTML = `
+            <span class="sp-badge time">🕐 ${s.time}</span>
+            <span class="sp-badge staff">👤 ${s.staff}</span>
+            <span class="sp-badge location">📍 ${s.location}</span>
+            <span class="sp-badge pet">🐾 ${s.petName}</span>
+        `;
+
+        // Ring progress
+        const circumference = 113;
+        const offset = circumference - (prog.pct / 100 * circumference);
+        document.getElementById('sp-ring-fill').style.strokeDashoffset = offset;
+        document.getElementById('sp-ring-pct').textContent = prog.pct + '%';
+        document.getElementById('sp-progress-strong').textContent = prog.done + ' of ' + prog.total + ' steps done';
+        const sub = prog.pct === 100 ? 'Session complete ✓' : prog.done === 0 ? 'Not started yet' : 'In progress…';
+        document.getElementById('sp-progress-sub').textContent = sub;
+
+        // Subtask body
+        const ownerVisible = s.subtasks.filter(st => st.ownerVisible);
+        const staffOnly = s.subtasks.filter(st => !st.ownerVisible);
+        let html = '';
+        if (ownerVisible.length) {
+            html += `<div class="sp-section-label">👁 Visible to owner</div>`;
+            ownerVisible.forEach(st => { html += renderSubtaskRow(s.id, st); });
+        }
+        if (staffOnly.length) {
+            html += `<div class="sp-section-label">🔒 Staff only</div>`;
+            staffOnly.forEach(st => { html += renderSubtaskRow(s.id, st); });
+        }
+        document.getElementById('sp-body').innerHTML = html;
+
+        // Notes
+        document.getElementById('sp-notes-textarea').value = s.notes || '';
+    }
+
+    function renderSubtaskRow(sessionId, st) {
+        const visTag = st.ownerVisible
+            ? `<span class="sp-owner-tag visible">Owner sees</span>`
+            : `<span class="sp-owner-tag staff-only">Staff only</span>`;
+        return `
+            <div class="sp-subtask ${st.done ? 'done' : ''}" onclick="toggleSubtask('${sessionId}','${st.id}')">
+                <div class="sp-subtask-check ${st.done ? 'checked' : ''}"></div>
+                <div class="sp-subtask-body">
+                    <div class="sp-subtask-text">${st.text}${visTag}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function toggleSubtask(sessionId, subtaskId) {
+        const s = trainingSessions.find(x => x.id === sessionId);
+        if (!s) return;
+        const st = s.subtasks.find(x => x.id === subtaskId);
+        if (!st) return;
+        st.done = !st.done;
+        renderSessionPanel(sessionId);
+        renderTodoList();
+        updateStatsFromTasks();
+        // Sync owner portal if open
+        if (currentOwnerHouseholdId) syncOwnerTrainingSection();
+    }
+
+    function addSubtask() {
+        if (!activeSessionId) return;
+        const input = document.getElementById('sp-add-input');
+        const text = (input ? input.value : '').trim();
+        if (!text) return;
+        const s = trainingSessions.find(x => x.id === activeSessionId);
+        if (!s) return;
+        s.subtasks.push({ id: 'st' + (nextSubtaskId++), text: text, ownerVisible: true, done: false });
+        input.value = '';
+        renderSessionPanel(activeSessionId);
+        renderTodoList();
+        updateStatsFromTasks();
+        if (currentOwnerHouseholdId) syncOwnerTrainingSection();
+    }
+
+    function saveSessionNotes() {
+        if (!activeSessionId) return;
+        const s = trainingSessions.find(x => x.id === activeSessionId);
+        if (s) s.notes = document.getElementById('sp-notes-textarea').value;
+        if (currentOwnerHouseholdId) syncOwnerTrainingSection();
+    }
+
+    /* sync live if owner portal pets tab is visible */
+    function syncOwnerTrainingSection() {
+        const sec = document.getElementById('owner-sec-pets');
+        if (sec && sec.classList.contains('active') && currentOwnerHouseholdId) {
+            renderOwnerPetsSection(currentOwnerHouseholdId);
+        }
+    }
+
+    /* ═══ OWNER PETS SECTION (separate fn so it can be live-synced) ═══ */
+    function renderOwnerPetsSection(householdId) {
+        const container = document.getElementById('owner-pets-content');
+        if (!container) return;
+        const hPets = pets.filter(p => p.householdId === householdId);
+
+        // Training sessions for this household
+        const hSessions = trainingSessions.filter(s => {
+            const pet = pets.find(p => p.id === s.petId);
+            return pet && pet.householdId === householdId;
+        });
+
+        let html = `<div class="section-header-row"><h3>Your pets</h3></div>
+            <div style="display:flex;flex-direction:column;gap:1.25rem;">`;
+
+        hPets.forEach(pet => {
+            const petSessions = hSessions.filter(s => s.petId === pet.id);
+            html += `
+                <div class="pet-profile-card" style="flex-direction:column;gap:0;">
+                    <div style="display:flex;gap:1.25rem;align-items:flex-start;padding-bottom:${petSessions.length ? '1rem' : '0'};${petSessions.length ? 'border-bottom:1px solid var(--border);' : ''}">
+                        <div class="pet-avatar ${pet.species}">${pet.species === 'dog' ? '🐕' : '🐈'}</div>
+                        <div class="pet-info" style="flex:1;">
+                            <h3>${pet.name}</h3>
+                            <p>${pet.details}</p>
+                            <div class="pet-health-row">
+                                <span class="health-tag ${pet.status === 'current' ? 'ok' : 'warn'}">
+                                    ${pet.status === 'current' ? '✓ Vaccines current' : '⚠ Vaccines expired'}
+                                </span>
+                                <span class="health-tag neutral">Expiry: ${pet.vaccineExpiry}</span>
+                                ${pet.allergies !== 'None' ? `<span class="health-tag warn">⚠ Allergy: ${pet.allergies}</span>` : '<span class="health-tag neutral">No known allergies</span>'}
+                            </div>
+                            <div class="section-label" style="margin-top:0.85rem;margin-bottom:0.35rem;">Feeding instructions</div>
+                            <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">${pet.food}</p>
+                        </div>
+                    </div>`;
+
+            if (petSessions.length) {
+                html += `<div style="padding-top:0.85rem;">
+                    <div class="section-label" style="margin-top:0;margin-bottom:0.65rem;">📋 Today's training checklist</div>`;
+
+                petSessions.forEach(s => {
+                    const prog = sessionProgress(s);
+                    const pillClass = prog.pct === 100 ? 'complete' : prog.done > 0 ? 'partial' : 'not-started';
+                    const pillText = prog.pct === 100 ? '✓ Complete' : prog.done + '/' + prog.total + ' steps';
+                    const ownerSubtasks = s.subtasks.filter(st => st.ownerVisible);
+
+                    html += `<div class="training-checklist-card">
+                        <div class="tc-header">
+                            <div>
+                                <h4>${s.title}</h4>
+                                <div class="tc-meta">🕐 ${s.time} · 👤 ${s.staff} · 📍 ${s.location}</div>
+                            </div>
+                            <span class="tc-progress-pill ${pillClass}">${pillText}</span>
+                        </div>
+                        <div class="tc-subtask-list">`;
+
+                    ownerSubtasks.forEach(st => {
+                        html += `<div class="tc-subtask-row ${st.done ? 'done' : ''}">
+                            <div class="tc-check ${st.done ? 'checked' : ''}"></div>
+                            <span>${st.text}</span>
+                        </div>`;
+                    });
+
+                    if (s.notes) {
+                        html += `<div style="padding:0.6rem 1.25rem 0.85rem;border-top:1px solid #f3f4f6;margin-top:0.25rem;">
+                            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:700;margin-bottom:0.3rem;">Staff notes</div>
+                            <p style="margin:0;font-size:0.85rem;color:var(--text);font-style:italic;">"${s.notes}"</p>
+                        </div>`;
+                    }
+
+                    html += `</div></div>`;
+                });
+
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+        });
+
+        html += `</div>`;
+        container.innerHTML = html;
+    }
+
+
+    /* ── Mobile nav ── */
+    function toggleMobileNav() {
+        const btn = document.getElementById('hamburger-btn');
+        const drawer = document.getElementById('mobile-nav-drawer');
+        const isOpen = drawer.classList.contains('open');
+        btn.classList.toggle('open', !isOpen);
+        drawer.classList.toggle('open', !isOpen);
+        // Mirror owner-mode styling on drawer
+        const isOwner = document.getElementById('main-navbar').classList.contains('owner-mode');
+        drawer.classList.toggle('owner-mode', isOwner);
+        // Show correct link set
+        document.getElementById('mobile-admin-links').classList.toggle('hidden', isOwner);
+        document.getElementById('mobile-owner-links').classList.toggle('hidden', !isOwner);
+    }
+
+    function closeMobileNav() {
+        document.getElementById('hamburger-btn').classList.remove('open');
+        document.getElementById('mobile-nav-drawer').classList.remove('open');
+    }
+
+    /* Re-apply layout on resize so rotating device or resizing window snaps correctly */
+    var resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            applyLayout();
+            // CSS media query handles show/hide — just ensure class is set correctly
+            if (currentOwnerHouseholdId) showOwnerBottomBar(true);
+            else showOwnerBottomBar(false);
+        }, 80);
+    });
+
+    function mobileNav(viewId) {
+        switchView(viewId);
+        closeMobileNav();
+    }
+
+    function mobileOwnerNav(section) {
+        switchOwnerSection(section);
+        if (document.getElementById('owner-view').classList.contains('hidden')) {
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById('owner-view').classList.remove('hidden');
+        }
+        closeMobileNav();
+    }
+
+
+    /* ═══════════════════════════════════════════════
+       RESOURCE GRID DATA & RENDER
+    ═══════════════════════════════════════════════ */
+
+    // calWeekOffset: 0 = current week, -1 = last week, +1 = next week
+    var calWeekOffset = 0;
+
+    // Resource definitions
+    var resources = [
+        { id: 'r1', name: 'Luxury Suite #1', type: 'Dog Suite' },
+        { id: 'r2', name: 'Luxury Suite #2', type: 'Dog Suite' },
+        { id: 'r3', name: 'Luxury Suite #3', type: 'Dog Suite' },
+        { id: 'r4', name: 'Luxury Suite #4', type: 'Dog Suite' },
+        { id: 'r5', name: 'Luxury Suite #5', type: 'Dog Suite' },
+        { id: 'r6', name: 'Standard Run A',  type: 'Dog Run' },
+        { id: 'r7', name: 'Standard Run B',  type: 'Dog Run' },
+        { id: 'r8', name: 'Standard Run C',  type: 'Dog Run' },
+        { id: 'r9', name: 'Cat Condo A',     type: 'Cat Suite' },
+        { id: 'r10', name: 'Cat Condo B',    type: 'Cat Suite' },
+    ];
+
+    // Bookings: resourceId, guest, start (days from today, 0-indexed Sun), end (inclusive)
+    // Using offsets from today (Jun 14, 2026 = index 0)
+    var calBookings = [
+        { resourceId: 'r5', guest: 'Max · Miller',   start: -4, end: 0  },
+        { resourceId: 'r7', guest: 'Luna · Davis',   start: -13, end: 0 },
+        { resourceId: 'r9', guest: 'Bella · Miller', start: -1, end: 1  },
+        { resourceId: 'r1', guest: 'Buddy · Harris', start: 1,  end: 4  },
+        { resourceId: 'r6', guest: 'Nala · Patel',   start: 2,  end: 5  },
+        { resourceId: 'r2', guest: 'Cooper · Lee',   start: 3,  end: 6  },
+        { resourceId: 'r10', guest: 'Mochi · Kim',   start: 0,  end: 3  },
+    ];
+
+    function getWeekDays(weekOffset) {
+        // Returns array of 7 Date objects starting Sunday of the target week
+        const today = new Date(2026, 5, 14); // Jun 14 2026 (Sun)
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() + weekOffset * 7);
+        return Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(sunday);
+            d.setDate(sunday.getDate() + i);
+            return d;
+        });
+    }
+
+    function dayIndex(date) {
+        // Days from today (Jun 14 2026)
+        const today = new Date(2026, 5, 14);
+        return Math.round((date - today) / 86400000);
+    }
+
+    function cellStateForDay(resourceId, dayIdx) {
+        const booking = calBookings.find(b => b.resourceId === resourceId && dayIdx >= b.start && dayIdx <= b.end);
+        if (!booking) return { state: 'available', label: 'Available' };
+        const isFirst = dayIdx === booking.start;
+        const isLast  = dayIdx === booking.end;
+        if (isFirst || isLast || true) return { state: 'booked', label: booking.guest };
+        return { state: 'booked', label: '' };
+    }
+
+    function shiftCalWeek(dir) { calWeekOffset += dir; renderCalendar(); }
+    function resetCalWeek() { calWeekOffset = 0; renderCalendar(); }
+
+    function renderCalendar() {
+        const days = getWeekDays(calWeekOffset);
+        const todayIdx = 0; // Jun 14 is our today
+
+        // Week label
+        const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const weekLabel = document.getElementById('cal-week-label');
+        if (weekLabel) weekLabel.textContent = fmt(days[0]) + ' – ' + fmt(days[6]) + ', 2026';
+
+        const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const DAY_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+        // ── Desktop thead ──
+        const thead = document.getElementById('cal-thead');
+        if (thead) {
+            thead.innerHTML = '<tr><th>Resource</th>' +
+                days.map((d, i) => {
+                    const dIdx = dayIndex(d);
+                    const isToday = dIdx === todayIdx;
+                    const label = DAY_SHORT[d.getDay()] + ' ' + d.getDate();
+                    return `<th class="${isToday ? 'today-col' : ''}">${label}${isToday ? ' ·&nbsp;Today' : ''}</th>`;
+                }).join('') + '</tr>';
+        }
+
+        // ── Desktop tbody ──
+        const tbody = document.getElementById('calendar-body-target');
+        if (tbody) {
+            tbody.innerHTML = resources.map(r => {
+                const cells = days.map(d => {
+                    const dIdx = dayIndex(d);
+                    const { state, label } = cellStateForDay(r.id, dIdx);
+                    const isToday = dIdx === todayIdx;
+                    return `<td class="${state}${isToday ? ' today-col' : ''}">${label}</td>`;
+                }).join('');
+                return `<tr>
+                    <td class="resource-label">${r.name}<span class="room-type">${r.type}</span></td>
+                    ${cells}
+                </tr>`;
+            }).join('');
+        }
+
+        // ── Mobile cards ──
+        const cardsEl = document.getElementById('cal-cards');
+        if (cardsEl) {
+            cardsEl.innerHTML = resources.map(r => {
+                const rows = days.map(d => {
+                    const dIdx = dayIndex(d);
+                    const { state, label } = cellStateForDay(r.id, dIdx);
+                    const isToday = dIdx === todayIdx;
+                    return `<div class="cal-day-row">
+                        <div class="cal-day-label${isToday ? ' today' : ''}">${DAY_SHORT[d.getDay()]} ${d.getDate()}</div>
+                        <div class="cal-day-cell ${state}">${label}</div>
+                    </div>`;
+                }).join('');
+
+                const bookedCount = days.filter(d => cellStateForDay(r.id, dayIndex(d)).state === 'booked').length;
+                const statusText = bookedCount === 0 ? 'All available' :
+                                   bookedCount === 7 ? 'Fully booked' :
+                                   `${7 - bookedCount} days free`;
+
+                return `<div class="cal-resource-card">
+                    <div class="cal-resource-card-header">
+                        <h4>${r.name}</h4>
+                        <span>${r.type} · ${statusText}</span>
+                    </div>
+                    <div class="cal-day-strip">${rows}</div>
+                </div>`;
+            }).join('');
+        }
+    }
+
+
+    /* ── Owner bottom tab bar ── */
+    var BOTTOM_BAR_SECTIONS = ['household','pets','visits','bookings'];
+    var DRAWER_SECTIONS     = ['payment','communications','notes','documents'];
+
+    function showOwnerBottomBar(show) {
+        document.body.classList.toggle('in-owner-view', show);
+    }
+
+    function ownerBottomNav(section) {
+        closeOwnerDrawer();
+        switchOwnerSection(section);
+        // Update bottom bar active state
+        BOTTOM_BAR_SECTIONS.forEach(s => {
+            const btn = document.getElementById('obb-' + s);
+            if (btn) btn.classList.toggle('active', s === section);
+        });
+        // If it's a drawer section, mark the More button active
+        const moreBtn = document.getElementById('obb-more');
+        if (moreBtn) moreBtn.classList.toggle('drawer-open', DRAWER_SECTIONS.includes(section));
+        // Deactivate bottom bar buttons when drawer section is active
+        if (DRAWER_SECTIONS.includes(section)) {
+            BOTTOM_BAR_SECTIONS.forEach(s => {
+                const btn = document.getElementById('obb-' + s);
+                if (btn) btn.classList.remove('active');
+            });
+        }
+        // Update drawer item active states
+        DRAWER_SECTIONS.forEach(s => {
+            const item = document.getElementById('odrawer-' + s);
+            if (item) item.classList.toggle('active', s === section);
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function toggleOwnerDrawer() {
+        const drawer = document.getElementById('owner-more-drawer');
+        const overlay = document.getElementById('owner-more-overlay');
+        const isOpen = drawer.classList.contains('open');
+        drawer.classList.toggle('open', !isOpen);
+        overlay.classList.toggle('open', !isOpen);
+        document.getElementById('obb-more').classList.toggle('drawer-open', !isOpen);
+    }
+
+    function closeOwnerDrawer() {
+        document.getElementById('owner-more-drawer').classList.remove('open');
+        document.getElementById('owner-more-overlay').classList.remove('open');
+    }
+
     </script>
 </body>
 </html>
