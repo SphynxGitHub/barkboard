@@ -7,6 +7,7 @@
     <link rel="icon" href="https://fav.farm/🐾" />
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
@@ -35,19 +36,42 @@
     </header>
     <div class="mobile-nav-drawer" id="mobile-nav-drawer">
         <div id="mobile-admin-links">
-            <button onclick="mobileNav('staff-view')" class="nav-btn">📋 Staff Feed</button>
-            <button onclick="mobileNav('staff-mgmt-view')" class="nav-btn">👤 Staff</button>
-            <button onclick="mobileNav('crm-view')" class="nav-btn">👥 People & Pets</button>
-            <button onclick="mobileNav('calendar-view')" class="nav-btn">📅 Resource Grid</button>
-            <button onclick="mobileNav('biz-view')" class="nav-btn">📊 Business</button>
+            <button onclick="mobileNav('staff-view')" class="nav-btn">
+                <i data-lucide="layout-list"></i> Staff Feed
+            </button>
+            <button onclick="mobileNav('staff-mgmt-view')" class="nav-btn">
+                <i data-lucide="users"></i> Staff
+            </button>
+            <button onclick="mobileNav('crm-view')" class="nav-btn">
+                <i data-lucide="contact-2"></i> People & Pets
+            </button>
+            <button onclick="mobileNav('calendar-view')" class="nav-btn">
+                <i data-lucide="calendar"></i> Resource Grid
+            </button>
+            <button onclick="mobileNav('biz-view')" class="nav-btn">
+                <i data-lucide="bar-chart-3"></i> Business
+            </button>
         </div>
+    
         <div id="mobile-owner-links" class="hidden">
-            <button onclick="mobileOwnerNav('household')" class="nav-btn">🏠 My Household</button>
-            <button onclick="mobileOwnerNav('pets')" class="nav-btn">🐾 Pets</button>
-            <button onclick="mobileOwnerNav('bookings')" class="nav-btn">📅 Bookings</button>
-            <button onclick="mobileOwnerNav('visits')" class="nav-btn">📋 Visits</button>
-            <button onclick="mobileOwnerNav('payment')" class="nav-btn">💳 Payment</button>
-            <button onclick="mobileOwnerNav('communications')" class="nav-btn">✉️ Messages</button>
+            <button onclick="mobileOwnerNav('household')" class="nav-btn">
+                <i data-lucide="home"></i> My Household
+            </button>
+            <button onclick="mobileOwnerNav('pets')" class="nav-btn">
+                <i data-lucide="dog"></i> Pets
+            </button>
+            <button onclick="mobileOwnerNav('bookings')" class="nav-btn">
+                <i data-lucide="calendar-days"></i> Bookings
+            </button>
+            <button onclick="mobileOwnerNav('visits')" class="nav-btn">
+                <i data-lucide="clipboard-check"></i> Visits
+            </button>
+            <button onclick="mobileOwnerNav('payment')" class="nav-btn">
+                <i data-lucide="credit-card"></i> Payment
+            </button>
+            <button onclick="mobileOwnerNav('communications')" class="nav-btn">
+                <i data-lucide="mail"></i> Messages
+            </button>
         </div>
     </div>
 
@@ -87,7 +111,7 @@
                     <h2 style="margin:0 0 1rem;">Today's To-Do</h2>
                     <div class="todo-panel" id="todo-panel">
                         <div class="todo-panel-header">
-                            <h3 style="font-size:0.92rem;">📋 <span id="todo-date-label"></span></h3>
+                            <h3 style="font-size:0.92rem;"><i data-lucide="layout-list"></i> <span id="todo-date-label"></span></h3>
                             <span class="todo-progress" id="todo-progress-label"></span>
                         </div>
                         <div id="todo-list-body"></div>
@@ -119,10 +143,10 @@
         
                 <div class="controls-row" style="margin-top: 1rem;">
                     <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()">
-                    <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
+                    <button class="btn toggle-layout-btn" onclick="toggleLayout()"><i data-lucide="layout-list"></i> Switch to List View</button>
                     <button class="btn btn-primary rel-link-btn" onclick="openRelationshipModal()">
-                        <span class="rel-btn-text">🔗 Link Relationship</span>
-                        <span class="rel-btn-icon" aria-hidden="true">🔗</span>
+                        <span class="rel-btn-text"><i data-lucide="link"></i> Link Relationship</span>
+                        <span class="rel-btn-icon" aria-hidden="true"><i data-lucide="layout-list"></i></span>
                     </button>
                 </div>
         
@@ -142,8 +166,8 @@
 
             <!-- Biz sub-nav -->
             <div class="biz-subnav">
-                <button class="biz-tab active" id="biztab-dashboard" onclick="switchBizTab('dashboard')">📊 Dashboard</button>
-                <button class="biz-tab" id="biztab-availability" onclick="switchBizTab('availability')">📅 Business Availability</button>
+                <button class="biz-tab active" id="biztab-dashboard" onclick="switchBizTab('dashboard')"> <i data-lucide="gauge"></i> Dashboard</button>
+                <button class="biz-tab" id="biztab-availability" onclick="switchBizTab('availability')"><i data-lucide="calendar-days"></i> Business Availability</button>
             </div>
 
             <!-- ── DASHBOARD TAB ── -->
@@ -269,10 +293,10 @@
         <section id="staff-mgmt-view" class="view-panel hidden">
 
             <div class="biz-subnav">
-                <button class="biz-tab active" id="stftab-roster" onclick="switchStaffTab('roster')">👤 Roster</button>
-                <button class="biz-tab" id="stftab-availability" onclick="switchStaffTab('availability')">📅 Availability</button>
-                <button class="biz-tab" id="stftab-assignments" onclick="switchStaffTab('assignments')">🐾 Assignments</button>
-                <button class="biz-tab" id="stftab-tasks" onclick="switchStaffTab('tasks')">✅ Task List</button>
+                <button class="biz-tab active" id="stftab-roster" onclick="switchStaffTab('roster')"> <i data-lucide="users"></i> Roster</button>
+                <button class="biz-tab" id="stftab-availability" onclick="switchStaffTab('availability')"> <i data-lucide="calendar-clock"></i> Availability</button>
+                <button class="biz-tab" id="stftab-assignments" onclick="switchStaffTab('assignments')"> <i data-lucide="paw"></i> Assignments</button>
+                <button class="biz-tab" id="stftab-tasks" onclick="switchStaffTab('tasks')"><i data-lucide="layout-list"></i> Task List</button>
             </div>
 
             <!-- ── ROSTER ── -->
@@ -434,8 +458,8 @@
 
             <!-- Cal sub-nav -->
             <div class="biz-subnav">
-                <button class="biz-tab active" id="caltab-grid" onclick="switchCalTab('grid')">📅 Availability Grid</button>
-                <button class="biz-tab" id="caltab-resources" onclick="switchCalTab('resources')">🏠 Manage Resources</button>
+                <button class="biz-tab active" id="caltab-grid" onclick="switchCalTab('grid')"><i data-lucide="calendar-clock"></i> Availability Grid</button>
+                <button class="biz-tab" id="caltab-resources" onclick="switchCalTab('resources')"><i data-lucide="bed-double"></i> Manage Resources</button>
             </div>
 
             <!-- ── GRID TAB ── -->
@@ -483,15 +507,15 @@
 
             <!-- Section tab nav -->
             <nav class="owner-section-nav">
-                <button class="owner-tab-btn active" onclick="switchOwnerSection('household')" id="otab-household">🏠 Household</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('pets')" id="otab-pets">🐾 Pets</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('vets')" id="otab-vets">🏥 Vets</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('visits')" id="otab-visits">📋 Visits</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('bookings')" id="otab-bookings">📅 Bookings</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('payment')" id="otab-payment">💳 Payment</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('communications')" id="otab-communications">✉️ Communications</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('notes')" id="otab-notes">📝 Notes</button>
-                <button class="owner-tab-btn" onclick="switchOwnerSection('documents')" id="otab-documents">📁 Documents</button>
+                <button class="owner-tab-btn active" onclick="switchOwnerSection('household')" id="otab-household"><i data-lucide="house"></i> Household</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('pets')" id="otab-pets"><i data-lucide="paw"></i> Pets</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('vets')" id="otab-vets"><i data-lucide="hospital"></i> Vets</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('visits')" id="otab-visits"><i data-lucide="clipboard-clock"></i> Visits</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('bookings')" id="otab-bookings"><i data-lucide="calendar"></i> Bookings</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('payment')" id="otab-payment"> <i data-lucide="banknote"></i> Payment</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('communications')" id="otab-communications"><i data-lucide="mail"></i> Communications</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('notes')" id="otab-notes"><i data-lucide="notebook-pen"></i> Notes</button>
+                <button class="owner-tab-btn" onclick="switchOwnerSection('documents')" id="otab-documents"><i data-lucide="folder"></i> Documents</button>
             </nav>
 
             <!-- ── Household ── -->
@@ -616,9 +640,9 @@
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Species</label>
                         <select id="pet-species" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                            <option value="dog">Dog 🐕</option>
-                            <option value="cat">Cat 🐈</option>
-                            <option value="other">Other 🐾</option>
+                            <option value="dog">Dog <i data-lucide="dog"></i></option>
+                            <option value="cat">Cat <i data-lucide="cat"></i></option>
+                            <option value="other">Other <i data-lucide="rabbit"></i></option>
                         </select>
                     </div>
                     <div>
@@ -755,18 +779,18 @@
         <div class="owner-more-drawer" id="owner-more-drawer">
             <div class="owner-more-drawer-handle"></div>
             <div class="owner-more-drawer-title">More sections</div>
-            <button class="owner-more-item" id="odrawer-payment"    onclick="ownerBottomNav('payment')">    <span class="omi-icon">💳</span><span class="omi-label">Payment</span></button>
-            <button class="owner-more-item" id="odrawer-communications" onclick="ownerBottomNav('communications')"><span class="omi-icon">✉️</span><span class="omi-label">Communications</span></button>
-            <button class="owner-more-item" id="odrawer-notes"      onclick="ownerBottomNav('notes')">     <span class="omi-icon">📝</span><span class="omi-label">Notes</span></button>
-            <button class="owner-more-item" id="odrawer-documents"  onclick="ownerBottomNav('documents')"> <span class="omi-icon">📁</span><span class="omi-label">Documents</span></button>
+            <button class="owner-more-item" id="odrawer-payment"    onclick="ownerBottomNav('payment')">    <span class="omi-icon"><i data-lucide="banknote"></i></span><span class="omi-label">Payment</span></button>
+            <button class="owner-more-item" id="odrawer-communications" onclick="ownerBottomNav('communications')"><span class="omi-icon"> <i data-lucide="mail"></i></span><span class="omi-label">Communications</span></button>
+            <button class="owner-more-item" id="odrawer-notes"      onclick="ownerBottomNav('notes')">     <span class="omi-icon"><i data-lucide="notebook-pen"></i></span><span class="omi-label">Notes</span></button>
+            <button class="owner-more-item" id="odrawer-documents"  onclick="ownerBottomNav('documents')"> <span class="omi-icon"><i data-lucide="folder"></i></span><span class="omi-label">Documents</span></button>
         </div>
         <div class="owner-bottom-bar" id="owner-bottom-bar">
             <div class="owner-bottom-bar-inner">
-                <button class="obb-btn active" id="obb-household" onclick="ownerBottomNav('household')"><span class="obb-icon">🏠</span><span class="obb-label">Home</span></button>
-                <button class="obb-btn" id="obb-pets"      onclick="ownerBottomNav('pets')">     <span class="obb-icon">🐾</span><span class="obb-label">Pets</span></button>
-                <button class="obb-btn" id="obb-visits"    onclick="ownerBottomNav('visits')">   <span class="obb-icon">📋</span><span class="obb-label">Visits</span></button>
-                <button class="obb-btn" id="obb-bookings"  onclick="ownerBottomNav('bookings')"> <span class="obb-icon">📅</span><span class="obb-label">Book</span></button>
-                <button class="obb-btn more-btn" id="obb-more" onclick="toggleOwnerDrawer()">    <span class="obb-icon">•••</span><span class="obb-label">More</span></button>
+                <button class="obb-btn active" id="obb-household" onclick="ownerBottomNav('household')"><span class="obb-icon"><i data-lucide="house"></i></span><span class="obb-label">Home</span></button>
+                <button class="obb-btn" id="obb-pets"      onclick="ownerBottomNav('pets')">     <span class="obb-icon"><i data-lucide="paw"></i></span><span class="obb-label">Pets</span></button>
+                <button class="obb-btn" id="obb-visits"    onclick="ownerBottomNav('visits')">   <span class="obb-icon"><i data-lucide="clipboard-clock"></i></span><span class="obb-label">Visits</span></button>
+                <button class="obb-btn" id="obb-bookings"  onclick="ownerBottomNav('bookings')"> <span class="obb-icon"><i data-lucide="calendar-plus"></i></span><span class="obb-label">Book</span></button>
+                <button class="obb-btn more-btn" id="obb-more" onclick="toggleOwnerDrawer()">    <span class="obb-icon"><i data-lucide="elipsis"></i></span><span class="obb-label">More</span></button>
             </div>
         </div>
     </main>
