@@ -1477,8 +1477,10 @@ async function saveHousehold() {
             last_name: nameParts.slice(1).join(' ') || null,
             email: isEmail ? contactInfo : null,
             phone: !isEmail ? contactInfo : null,
-            role: role
+            role: role,
+            category: pendingPersonCategory || 'member'
         }]);
+        pendingPersonCategory = null;
 
         if (error) {
             alert('Error adding person: ' + error.message);
@@ -2018,7 +2020,7 @@ async function openFullWidthProfile(type, id) {
         const { data } = await client.from('vets').select('*').eq('id', id).single();
         payload = data;
         if (payload) {
-            const { data: clientPets } = await client.from('pets').select('*, households(name)').or(`vet_id.eq.${id},emergency_vet_id.eq.${id}`);
+            const { data: clientPets } = await client.from('pets').select('*, households(name, people(*))').or(`vet_id.eq.${id},emergency_vet_id.eq.${id}`);
             payload.clientPets = clientPets || [];
         }
     }
@@ -2098,17 +2100,28 @@ function renderEntitySections(type, data, id) {
                         <div id="search-results-person-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
-                    ${(data.people || []).filter(p => (p.category || 'member') !== 'other').length ? (data.people || []).filter(p => (p.category || 'member') !== 'other').map(p => renderPersonRow(p, id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
+                    ${(data.people || []).filter(p => (p.category || 'member') !== 'other').length ? (data.people || []).filter(p => (p.category || 'member') !== 'other').map(p => renderPersonRow(p, 'household', id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
                     <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('person', '${id}', 'household')">+ Add Member</button>
                 </div>
 
                 <!-- Other Contacts -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="user-round"></i> Other Contacts
-                    </h3>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin:-0.5rem 0 0.75rem;">Emergency contacts, relatives, and other relationships. Add via Link Member above, then set Category to "Other Contact" on their profile.</p>
-                    ${(data.people || []).filter(p => p.category === 'other').length ? (data.people || []).filter(p => p.category === 'other').map(p => renderPersonRow(p, id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No other contacts.</p>'}
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="user-round"></i> Other Contacts
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('person-other', '${id}', 'household')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Add Contact
+                        </button>
+                    </div>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.75rem;">Emergency contacts, relatives, and other relationships.</p>
+
+                    <div id="search-panel-person-other-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type contact name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('person-other', '${id}', this.value, 'household')">
+                        <div id="search-results-person-other-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
+                    ${(data.people || []).filter(p => p.category === 'other').length ? (data.people || []).filter(p => p.category === 'other').map(p => renderPersonRow(p, 'household', id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No other contacts.</p>'}
                 </div>
 
                 <!-- Pets -->
@@ -2127,29 +2140,8 @@ function renderEntitySections(type, data, id) {
                         <div id="search-results-pet-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
-                    ${data.pets && data.pets.length ? data.pets.map(p => `
-                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <strong><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}</strong>
-                                <div style="display:flex; align-items:center; gap:0.5rem;">
-                                    <span style="font-size:0.75rem; color:var(--text-muted);">${speciesLabel(p)}</span>
-                                    <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', 'household', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
-                                        <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
+                    ${data.pets && data.pets.length ? data.pets.map(p => renderPetRow(p, { vetsById: data.vetsById || {}, refreshType: 'household', refreshId: id })).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
                     <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('pet', '${id}', 'household')">+ Add Pet</button>
-                </div>
-
-                <!-- Veterinary Care -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="stethoscope"></i> Veterinary Care
-                    </h3>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin:-0.5rem 0 0.75rem;">Vets are linked per pet (a pet can have a regular and an emergency vet) — manage them from each pet's profile.</p>
-                    ${renderHouseholdVetsSummary(data.pets || [], data.vetsById || {})}
                 </div>
 
                 <!-- Scheduled Events -->
@@ -2290,57 +2282,37 @@ function renderEntitySections(type, data, id) {
 
                 <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}', 'person')">
-                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
-                        </button>
-                    </div>
-
-                    <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value, 'person')">
-                        <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
-                    </div>
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
 
                     ${data.households ? `
                         <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
                             <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                                <strong><i data-lucide="house"></i> ${data.households.name}</strong>
+                                <strong>${data.households.name}</strong>
                                 <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${id}', 'person', '${id}')" title="Unlink household" style="background:none; border:none; cursor:pointer;">
                                     <i data-lucide="x" style="width:14px;height:14px;"></i>
                                 </button>
                             </div>
-                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                         <div style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.5rem;">
                             <div>
                                 <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Members</div>
-                                ${data.households.people && data.households.people.length ? data.households.people.map(p => `
-                                    <div style="padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); font-size:0.85rem; margin-bottom:0.35rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
-                                        <span><strong>${personDisplayName(p)}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${p.role || 'Member'})</span></span>
-                                        <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${p.id}', 'person', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
-                                            <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                        </button>
-                                    </div>
-                                `).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No other members.</p>'}
+                                ${data.households.people && data.households.people.length ? data.households.people.map(p => renderPersonRow(p, 'person', id)).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No other members.</p>'}
                             </div>
                             <div>
                                 <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Pets</div>
-                                ${data.households.pets && data.households.pets.length ? data.households.pets.map(p => `
-                                    <div style="padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); font-size:0.85rem; margin-bottom:0.35rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                                        <span><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:14px;height:14px;"></i> <strong>${p.name}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${speciesLabel(p)})</span></span>
-                                        <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', 'person', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
-                                            <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                        </button>
-                                    </div>
-                                `).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No pets on file.</p>'}
-                            </div>
-                            <div>
-                                <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Vets</div>
-                                ${renderHouseholdVetsSummary(data.households.pets || [], data.households.vetsById || {})}
+                                ${data.households.pets && data.households.pets.length ? data.households.pets.map(p => renderPetRow(p, { vetsById: data.households.vetsById || {}, refreshType: 'person', refreshId: id })).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No pets on file.</p>'}
                             </div>
                         </div>
-                    ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
+                    ` : `
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">Unassigned to any household.</p>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}', 'person')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
+                        </button>
+                        <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                            <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value, 'person')">
+                            <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                        </div>
+                    `}
                 </div>
             </div>
         `;
@@ -2390,111 +2362,45 @@ function renderEntitySections(type, data, id) {
                     </div>
                 </div>
 
-                <!-- Veterinary Care -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Veterinary Care</h3>
-
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                        <span style="font-size:0.85rem; font-weight:600;">Regular Vet</span>
-                        <button class="btn btn-primary" style="font-size:0.72rem; padding:0.25rem 0.5rem;" onclick="toggleInlineSearchPanel('vet-regular', '${id}', 'pet')">
-                            <i data-lucide="search" style="width:12px;height:12px;"></i> ${data.vet ? 'Change' : 'Link'}
-                        </button>
-                    </div>
-                    <div id="search-panel-vet-regular-${id}" class="inline-search-panel hidden" style="margin-bottom:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type doctor or clinic..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('vet-regular', '${id}', this.value, 'pet')">
-                        <div id="search-results-vet-regular-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
-                    </div>
-                    ${data.vet ? `
-                        <div style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('vet', '${data.vet.id}')">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <strong>${data.vet.name}</strong>
-                                <button class="btn-icon" onclick="event.stopPropagation(); unlinkPetVet('${id}', 'vet_id')" title="Unlink" style="background:none; border:none; cursor:pointer;">
-                                    <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                </button>
-                            </div>
-                            ${data.vet.clinic ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${data.vet.clinic}</div>` : ''}
-                            ${data.vet.phone ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;">${data.vet.phone}</div>` : ''}
-                        </div>
-                    ` : '<p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1rem;">No regular vet linked.</p>'}
-
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                        <span style="font-size:0.85rem; font-weight:600;">Emergency Vet</span>
-                        <button class="btn btn-primary" style="font-size:0.72rem; padding:0.25rem 0.5rem;" onclick="toggleInlineSearchPanel('vet-emergency', '${id}', 'pet')">
-                            <i data-lucide="search" style="width:12px;height:12px;"></i> ${data.emergencyVet ? 'Change' : 'Link'}
-                        </button>
-                    </div>
-                    <div id="search-panel-vet-emergency-${id}" class="inline-search-panel hidden" style="margin-bottom:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type doctor or clinic..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('vet-emergency', '${id}', this.value, 'pet')">
-                        <div id="search-results-vet-emergency-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
-                    </div>
-                    ${data.emergencyVet ? `
-                        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('vet', '${data.emergencyVet.id}')">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <strong>${data.emergencyVet.name}</strong>
-                                <button class="btn-icon" onclick="event.stopPropagation(); unlinkPetVet('${id}', 'emergency_vet_id')" title="Unlink" style="background:none; border:none; cursor:pointer;">
-                                    <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                </button>
-                            </div>
-                            ${data.emergencyVet.clinic ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${data.emergencyVet.clinic}</div>` : ''}
-                            ${data.emergencyVet.phone ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;">${data.emergencyVet.phone}</div>` : ''}
-                        </div>
-                    ` : '<p style="font-size:0.82rem; color:var(--text-muted);">No emergency vet linked.</p>'}
-                </div>
-
                 <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household Link</h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}', 'pet')">
-                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
-                        </button>
-                    </div>
-
-                    <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value, 'pet')">
-                        <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
-                    </div>
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
 
                     ${data.households ? `
                         <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
                             <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                                <strong><i data-lucide="house"></i> ${data.households.name}</strong>
+                                <strong>${data.households.name}</strong>
                                 <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${id}', 'pet', '${id}')" title="Unlink household" style="background:none; border:none; cursor:pointer;">
                                     <i data-lucide="x" style="width:14px;height:14px;"></i>
                                 </button>
                             </div>
-                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                         <div style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.5rem;">
                             <div>
                                 <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Members</div>
-                                ${data.households.people && data.households.people.length ? data.households.people.map(p => `
-                                    <div style="padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); font-size:0.85rem; margin-bottom:0.35rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
-                                        <span><strong>${personDisplayName(p)}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${p.role || 'Member'})</span></span>
-                                        <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${p.id}', 'pet', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
-                                            <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                        </button>
-                                    </div>
-                                `).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No members on file.</p>'}
+                                ${data.households.people && data.households.people.length ? data.households.people.map(p => renderPersonRow(p, 'pet', id)).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No members on file.</p>'}
                             </div>
                             <div>
                                 <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Pets</div>
-                                ${data.households.pets && data.households.pets.length ? data.households.pets.map(p => `
-                                    <div style="padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); font-size:0.85rem; margin-bottom:0.35rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                                        <span><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:14px;height:14px;"></i> <strong>${p.name}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${speciesLabel(p)})</span></span>
-                                        <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', 'pet', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
-                                            <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                        </button>
-                                    </div>
-                                `).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No other pets.</p>'}
-                            </div>
-                            <div>
-                                <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Vets</div>
-                                ${renderHouseholdVetsSummary(data.households.pets || [], data.households.vetsById || {})}
+                                ${data.households.pets && data.households.pets.length ? data.households.pets.map(p => renderPetRow(p, { vetsById: data.households.vetsById || {}, currentPetId: id, refreshType: 'pet', refreshId: id })).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No other pets.</p>'}
                             </div>
                         </div>
-                    ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
+                    ` : `
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">Unassigned to any household.</p>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}', 'pet')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
+                        </button>
+                        <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                            <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value, 'pet')">
+                            <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                        </div>
+                        <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+                            <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Vets</div>
+                            ${renderPetRow(data, { vetsById: { ...(data.vet ? { [data.vet.id]: data.vet } : {}), ...(data.emergencyVet ? { [data.emergencyVet.id]: data.emergencyVet } : {}) }, currentPetId: id, refreshType: 'pet', refreshId: id })}
+                        </div>
+                    `}
                 </div>
+
             </div>
         `;
     } else if (type === 'vet') {
@@ -2534,16 +2440,12 @@ function renderEntitySections(type, data, id) {
                 <!-- Vet Client Pets -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin:0 0 0.5rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="building"></i> Client Pets</h3>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.75rem;">Pets that use this vet as their regular or emergency vet. Linking happens from each pet's profile.</p>
-                    ${data.clientPets && data.clientPets.length ? data.clientPets.map(p => `
-                        <div style="margin-top:0.5rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <strong><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:14px;height:14px;"></i> ${p.name}</strong>
-                                <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:var(--text-muted);">${p.vet_id === id ? 'Regular' : 'Emergency'}</span>
-                            </div>
-                            ${p.households?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${p.households.name}</div>` : ''}
-                        </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted);">No pets are currently linked to this vet.</p>'}
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.75rem;">Pets that use this vet as their regular or emergency vet.</p>
+
+                    <input type="text" placeholder="Search pets to link as regular or emergency vet..." class="biz-select" style="width:100%; padding:0.4rem; margin-bottom:0.5rem;" onkeyup="executeVetPetSearch('${id}', this.value)">
+                    <div id="vet-pet-search-results-${id}" style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.75rem;"></div>
+
+                    ${renderVetClientGroups(data.clientPets || [], id)}
                 </div>
             </div>
         `;
@@ -2631,6 +2533,109 @@ function personDisplayContact(p) {
     return [email, phone].filter(Boolean).join(' · ') || p.contact || '';
 }
 
+function renderPetRow(p, opts) {
+    const { vetsById = {}, currentPetId = null, refreshType = 'household', refreshId } = opts;
+    const isCurrent = currentPetId && p.id === currentPetId;
+    const regular = p.vet_id ? vetsById[p.vet_id] : null;
+    const emergency = p.emergency_vet_id ? vetsById[p.emergency_vet_id] : null;
+
+    const vetLine = (label, vet, column) => `
+        <div style="margin-top:0.3rem; padding-left:1.35rem; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.78rem; color:var(--text-muted); ${vet ? 'cursor:pointer;' : ''}" ${vet ? `onclick="event.stopPropagation(); openFullWidthProfile('vet', '${vet.id}')"` : ''}>
+                <i data-lucide="stethoscope" style="width:11px;height:11px;"></i> ${label}: ${vet ? vet.name : 'None linked'}
+            </span>
+            ${isCurrent ? `
+                <span style="display:flex; gap:0.3rem;">
+                    ${vet ? `<button class="btn-icon" onclick="event.stopPropagation(); unlinkPetVet('${p.id}', '${column}')" title="Unlink" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:11px;height:11px;"></i></button>`
+                          : `<button class="btn-icon" onclick="event.stopPropagation(); toggleInlineSearchPanel('${column === 'vet_id' ? 'vet-regular' : 'vet-emergency'}', '${p.id}', 'pet')" title="Link" style="background:none; border:none; cursor:pointer;"><i data-lucide="search" style="width:11px;height:11px;"></i></button>`}
+                </span>
+            ` : ''}
+        </div>
+        ${isCurrent ? `
+            <div id="search-panel-${column === 'vet_id' ? 'vet-regular' : 'vet-emergency'}-${p.id}" class="inline-search-panel hidden" style="margin:0.35rem 0 0 1.35rem; padding:0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+                <input type="text" placeholder="Type doctor or clinic..." class="biz-select" style="width:100%; padding:0.35rem; font-size:0.8rem;" onclick="event.stopPropagation();" onkeyup="event.stopPropagation(); executeLiveSearch('${column === 'vet_id' ? 'vet-regular' : 'vet-emergency'}', '${p.id}', this.value, 'pet')">
+                <div id="search-results-${column === 'vet_id' ? 'vet-regular' : 'vet-emergency'}-${p.id}" style="margin-top:0.4rem; display:flex; flex-direction:column; gap:0.3rem;"></div>
+            </div>
+        ` : ''}
+    `;
+
+    return `
+        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); ${isCurrent ? '' : 'cursor:pointer;'}" ${isCurrent ? '' : `onclick="openFullWidthProfile('pet', '${p.id}')"`}>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}</strong>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span style="font-size:0.75rem; color:var(--text-muted);">${speciesLabel(p)}</span>
+                    ${!isCurrent ? `<button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', '${refreshType}', '${refreshId}')" title="Remove from household" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:14px;height:14px;"></i></button>` : ''}
+                </div>
+            </div>
+            ${vetLine('Regular', regular, 'vet_id')}
+            ${vetLine('Emergency', emergency, 'emergency_vet_id')}
+        </div>
+    `;
+}
+
+function renderVetClientGroups(clientPets, vetId) {
+    if (!clientPets.length) return '<p style="font-size:0.85rem; color:var(--text-muted);">No pets are currently linked to this vet.</p>';
+
+    const groups = {}; // householdKey -> { name, people, pets: [] }
+    clientPets.forEach(p => {
+        const key = p.households?.name || p.household_id || 'unassigned';
+        if (!groups[key]) groups[key] = { name: p.households?.name || 'No household', people: p.households?.people || [], pets: [] };
+        groups[key].pets.push(p);
+    });
+
+    return Object.values(groups).map(g => `
+        <div style="margin-top:0.5rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
+            <strong><i data-lucide="home" style="width:14px;height:14px;"></i> ${g.name}</strong>
+            ${g.people.length ? `
+                <div style="margin-top:0.4rem; padding-left:1.35rem;">
+                    ${g.people.map(person => `
+                        <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">
+                            <i data-lucide="user" style="width:11px;height:11px;"></i> ${personDisplayName(person)}${personDisplayContact(person) ? ' — ' + personDisplayContact(person) : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+            <div style="margin-top:0.5rem; padding-left:1.35rem;">
+                ${g.pets.map(p => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.25rem; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
+                        <span style="font-size:0.85rem;"><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:13px;height:13px;"></i> ${p.name}</span>
+                        <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:var(--text-muted);">${p.vet_id === vetId ? 'Regular' : 'Emergency'}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+async function executeVetPetSearch(vetId, query) {
+    const container = document.getElementById(`vet-pet-search-results-${vetId}`);
+    if (!container) return;
+    if (!query.trim()) { container.innerHTML = ''; return; }
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: pets } = await client.from('pets').select('*, households(name)').ilike('name', `%${query.trim()}%`).limit(5);
+
+    container.innerHTML = (pets && pets.length) ? pets.map(p => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem;">
+            <span><strong>${p.name}</strong> ${p.households?.name ? '(' + p.households.name + ')' : ''}</span>
+            <span style="display:flex; gap:0.3rem;">
+                <button class="btn btn-primary" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="linkPetToVet('${p.id}', '${vetId}', 'vet_id')">Set Regular</button>
+                <button class="btn" style="font-size:0.7rem; padding:0.2rem 0.4rem;" onclick="linkPetToVet('${p.id}', '${vetId}', 'emergency_vet_id')">Set Emergency</button>
+            </span>
+        </div>
+    `).join('') : '<div style="font-size:0.8rem; color:var(--text-muted); padding:0.25rem 0;">No matching pets found.</div>';
+}
+
+async function linkPetToVet(petId, vetId, column) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('pets').update({ [column]: vetId }).eq('id', petId);
+    openFullWidthProfile('vet', vetId);
+}
+
 function renderHouseholdVetsSummary(pets, vetsById) {
     const groups = {}; // vetId -> { vet, entries: [{petName, role}] }
     pets.forEach(p => {
@@ -2662,19 +2667,22 @@ function renderHouseholdVetsSummary(pets, vetsById) {
     }).join('');
 }
 
-function renderPersonRow(p, householdId) {
+function renderPersonRow(p, refreshType, refreshId) {
     return `
         <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <strong>${personDisplayName(p)}</strong>
                 <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
-                    <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${p.id}', 'household', '${householdId}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
+                    <select onclick="event.stopPropagation();" onchange="event.stopPropagation(); autoSaveField('people', '${p.id}', 'role', this.value)" style="font-size:0.75rem; padding:0.15rem 0.35rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px; cursor:pointer;">
+                        <option value="Primary" ${p.role === 'Primary' ? 'selected' : ''}>Primary</option>
+                        <option value="Backup" ${p.role !== 'Primary' ? 'selected' : ''}>Backup</option>
+                    </select>
+                    <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${p.id}', '${refreshType}', '${refreshId}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
                         <i data-lucide="x" style="width:14px;height:14px;"></i>
                     </button>
                 </div>
             </div>
-            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;"><i data-lucide="phone"></i> ${personDisplayContact(p) || 'No contact set'}</div>
+            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;"><i data-lucide="phone" style="width:12px;height:12px;"></i> ${personDisplayContact(p) || 'No contact set'}</div>
             ${p.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem; font-style:italic;">${p.notes}</div>` : ''}
         </div>
     `;
@@ -2701,11 +2709,15 @@ async function executeLiveSearch(targetType, sourceId, query, sourceType) {
     const client = getSupabase();
     if (!client) return;
 
-    const tableMap = { person: 'people', pet: 'pets', vet: 'vets', household: 'households', 'vet-regular': 'vets', 'vet-emergency': 'vets' };
-    const labelMap = { person: 'Person', pet: 'Pet', vet: 'Vet', household: 'Household', 'vet-regular': 'Vet', 'vet-emergency': 'Vet' };
+    const tableMap = { person: 'people', 'person-other': 'people', pet: 'pets', vet: 'vets', household: 'households', 'vet-regular': 'vets', 'vet-emergency': 'vets' };
+    const labelMap = { person: 'Person', 'person-other': 'Contact', pet: 'Pet', vet: 'Vet', household: 'Household', 'vet-regular': 'Vet', 'vet-emergency': 'Vet' };
     const table = tableMap[targetType];
 
     let dbQuery = client.from(table).select('*').limit(5);
+    // A person/pet can only belong to one household, so only offer unlinked ones to link.
+    if (targetType === 'person' || targetType === 'person-other' || targetType === 'pet') {
+        dbQuery = dbQuery.is('household_id', null);
+    }
     if (query.trim()) {
         dbQuery = dbQuery.ilike('name', `%${query.trim()}%`);
     }
@@ -2746,6 +2758,8 @@ async function linkEntities(targetType, targetId, sourceId, sourceType) {
         await client.from('pets').update({ vet_id: targetId }).eq('id', sourceId);
     } else if (targetType === 'vet-emergency') {
         await client.from('pets').update({ emergency_vet_id: targetId }).eq('id', sourceId);
+    } else if (targetType === 'person-other') {
+        await client.from('people').update({ household_id: sourceId, category: 'other' }).eq('id', targetId);
     } else {
         await client.from(targetType === 'person' ? 'people' : 'pets').update({ household_id: sourceId }).eq('id', targetId);
     }
@@ -2788,11 +2802,15 @@ let activeLinkingHouseholdId = null;
 // profile's link-search panel, so saving doesn't dump the user back to the list view.
 let returnToProfile = null; // { type, id } | null
 let pendingPetVetLink = null; // { petId, column } | null — which pet/slot to link a newly-created vet to
+let pendingPersonCategory = null; // 'other' | null — set before opening the person modal via "+ Add Contact"
 
 function createNewEntityFallback(targetType, sourceId, sourceType) {
     returnToProfile = sourceType ? { type: sourceType, id: sourceId } : null;
 
     if (targetType === 'person') {
+        openPersonModal(null, sourceId);
+    } else if (targetType === 'person-other') {
+        pendingPersonCategory = 'other';
         openPersonModal(null, sourceId);
     } else if (targetType === 'pet') {
         openPetModal();
