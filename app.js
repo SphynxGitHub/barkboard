@@ -1,7 +1,17 @@
-// Initialize Supabase Client
+// Credentials
 const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function getSupabase() {
+    if (!window.supabaseClient) {
+        if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+            console.error('Supabase Client SDK has not loaded yet.');
+            return null;
+        }
+        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+    return window.supabaseClient;
+}
 
 /* ==========================================================================
    APP CONTROLLER: Event Handlers & View Management
@@ -117,6 +127,14 @@ function populateStaffSelects() {
 }
 
 async function renderStaffRoster() {
+   const client = getSupabase();
+   if (!client) return;
+   
+   const { data: staff, error } = await client
+       .from('resources')
+       .select('*')
+       .order('created_at', { ascending: false });
+   
     const el = document.getElementById('staff-roster-list');
     if (!el) return;
 
@@ -150,6 +168,7 @@ async function renderStaffRoster() {
         </div>
     `).join('');
 }
+
 /**
  * Switch active tab inside the Staff Management section
  */
@@ -204,6 +223,13 @@ function closeStaffModal() {
 }
 
 async function saveStaffMember() {
+   const client = getSupabase();
+   if (!client) return alert('Database connection unavailable.');
+   
+   const { error } = await client
+       .from('resources')
+       .insert([{ name: name, description: role }]);
+   
     const nameInput = document.getElementById('stf-name');
     const roleSelect = document.getElementById('stf-role');
     const name = nameInput ? nameInput.value.trim() : '';
@@ -227,6 +253,14 @@ async function saveStaffMember() {
 }
 
 async function deleteStaff(id) {
+   const client = getSupabase();
+   if (!client) return;
+   
+   const { error } = await client
+       .from('resources')
+       .delete()
+       .eq('id', id);
+   
     if (!confirm('Remove this staff member from Supabase?')) return;
 
     const { error } = await supabase
