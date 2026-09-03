@@ -1696,16 +1696,23 @@ async function openFullWidthProfile(type, id) {
     refreshIcons();
 }
 
+/* ==========================================================================
+   INLINE ENTITY SECTIONS WITH QUICK CREATION & JUMP LINKS
+   ========================================================================== */
+
 function renderEntitySections(type, data, id) {
     if (type === 'household') {
         return `
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
-                <!-- Main Info Card -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="info"></i> Household Details
-                    </h3>
-                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
+                
+                <!-- 1. Household Details Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="info"></i> Household Details
+                        </h3>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'name', this.value)">
@@ -1721,53 +1728,88 @@ function renderEntitySections(type, data, id) {
                     </div>
                 </div>
 
-                <!-- Household Members Card -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="users"></i> Household Members
-                    </h3>
+                <!-- 2. Household Members Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="users"></i> Household Members
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openHouseholdModal('${id}')">
+                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Member
+                        </button>
+                    </div>
                     ${data.people && data.people.length ? data.people.map(p => `
-                        <div style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
-                            <strong>${p.name}</strong> (${p.role || 'Member'})
-                            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;">📞 ${p.contact || 'No phone/email set'}</div>
+                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong>${p.name}</strong>
+                                <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
+                            </div>
+                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem; display:flex; align-items:center; gap:0.35rem;">
+                                <i data-lucide="phone" style="width:12px;height:12px;"></i> ${p.contact || 'No contact info set'}
+                            </div>
                         </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached to this household.</p>'}
                 </div>
 
-                <!-- Pets Card -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="dog"></i> Pets
-                    </h3>
+                <!-- 3. Pets Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="dog"></i> Pets
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openPetModal(); setTimeout(() => { const sel = document.getElementById('pet-household-id'); if(sel) sel.value='${id}'; }, 100);">
+                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Pet
+                        </button>
+                    </div>
                     ${data.pets && data.pets.length ? data.pets.map(p => `
-                        <div style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
-                            <strong>${p.name}</strong> (${p.species})
-                            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;">Vaccines: ${p.vaccine_status || 'Current'}</div>
+                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong style="display:flex; align-items:center; gap:0.4rem;">
+                                    <i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}
+                                </strong>
+                                <span style="font-size:0.75rem; color:var(--text-muted);">${p.species}</span>
+                            </div>
+                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Vaccines: ${p.vaccine_status || 'Current'}</div>
                         </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached to this household.</p>'}
                 </div>
 
-                <!-- Scheduled Events Card -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="calendar"></i> Scheduled Events
-                    </h3>
-                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>
+                <!-- 4. Visits / Scheduled Events Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="calendar"></i> Scheduled Visits / Events
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openBookingModal('${id}')">
+                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Visit
+                        </button>
+                    </div>
+                    <div id="hh-visits-container">
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found on file.</p>
+                    </div>
                 </div>
 
-                <!-- Open Invoices Card -->
-                <div class="stat-card alert" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="credit-card"></i> Open Invoices
-                    </h3>
-                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No unpaid balances on file.</p>
+                <!-- 5. Open Invoices Card -->
+                <div class="stat-card alert" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="credit-card"></i> Invoices & Billing
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openInvoiceModal('${id}')">
+                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Create Invoice
+                        </button>
+                    </div>
+                    <div id="hh-invoices-container">
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No unpaid balances or invoices on file.</p>
+                    </div>
                 </div>
+
             </div>
         `;
     } else if (type === 'person') {
         return `
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user"></i> Contact Details</h3>
                     <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
                         <div>
@@ -1784,16 +1826,18 @@ function renderEntitySections(type, data, id) {
                         </div>
                     </div>
                 </div>
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
-                    <p style="margin-top:0.5rem; font-size:0.9rem;"><strong>Household:</strong> ${data.households?.name || 'Unassigned'}</p>
-                </div>
+                ${data.households ? `
+                    <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
+                        <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
+                        <p style="margin-top:0.5rem; font-size:0.95rem;"><strong>${data.households.name}</strong> (Click to jump to Household View)</p>
+                    </div>
+                ` : ''}
             </div>
         `;
     } else if (type === 'pet') {
         return `
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="dog"></i> Pet Profile</h3>
                     <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
                         <div>
@@ -1812,22 +1856,24 @@ function renderEntitySections(type, data, id) {
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Vaccine Status</label>
                             <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'vaccine_status', this.value)">
                                 <option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option>
-                                <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending</option>
+                                <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending Verification</option>
                                 <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
                             </select>
                         </div>
                     </div>
                 </div>
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household Link</h3>
-                    <p style="margin-top:0.5rem; font-size:0.9rem;"><strong>Belongs to:</strong> ${data.households?.name || 'Unassigned'}</p>
-                </div>
+                ${data.households ? `
+                    <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
+                        <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
+                        <p style="margin-top:0.5rem; font-size:0.95rem;"><strong>${data.households.name}</strong> (Click to jump to Household View)</p>
+                    </div>
+                ` : ''}
             </div>
         `;
     } else if (type === 'vet') {
         return `
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Vet Info</h3>
                     <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
                         <div>
