@@ -653,7 +653,7 @@
             </div>
         </div>
 
-        <!-- ADD VET / COI MODAL -->
+        <!-- ADD / EDIT VET MODAL -->
         <div id="vet-modal" class="modal-overlay hidden">
             <div class="modal-card" style="background:var(--bg-card); padding:1.5rem; border-radius:0.5rem; max-width:500px; margin:2rem auto; border:1px solid var(--border);">
                 <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
@@ -674,20 +674,15 @@
                         <input type="text" id="vt-phone" placeholder="555-0199" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
                     </div>
                     <div>
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">COI Status</label>
-                        <select id="vt-coi-status" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                            <option value="valid">Valid / On File</option>
-                            <option value="pending">Pending Renewal</option>
-                            <option value="expired">Expired</option>
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Status</label>
+                        <select id="vt-status" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
                         </select>
                     </div>
                     <div>
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">COI Expiry Date</label>
-                        <input type="date" id="vt-coi-expiry" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                    </div>
-                    <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
-                        <textarea id="vt-notes" placeholder="Special emergency instructions..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem; height:70px;"></textarea>
+                        <textarea id="vt-notes" placeholder="Emergency policies, preferred contact hours..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem; height:70px;"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
@@ -696,7 +691,7 @@
                 </div>
             </div>
         </div>
-        
+                
         <!-- ── Relationship modal ── -->
         <div id="relationship-modal" class="modal hidden">
             <div class="modal-content">
