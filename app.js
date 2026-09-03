@@ -72,6 +72,12 @@ window.addEventListener('resize', () => {
    STAFF MANAGEMENT CONTROLLER
    ========================================================================== */
 
+/* switchView hook for staff-mgmt-view */
+function initStaffView() {
+    populateStaffSelects();
+    switchStaffTab('roster'); // Ensures Roster tab and list load by default
+}
+
 /**
  * Switch active tab inside the Staff Management section
  */
