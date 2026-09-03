@@ -123,6 +123,8 @@ var staffBookingLedger = {
 var staffAvailability = [];
 var petAssignments = [];
 var staffTasks = [];
+var editingStaffId = null;
+var nextStaffId = 10;
 
 // App Runtime Control State
 var currentEntityFilter = 'all';
