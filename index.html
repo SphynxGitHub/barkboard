@@ -595,9 +595,17 @@
                     <button class="btn-close" onclick="closeHouseholdModal()" style="background:none; border:none; cursor:pointer; font-size:1.2rem;">✕</button>
                 </div>
                 <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
-                    <div>
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Household Name *</label>
-                        <input type="text" id="hh-name" placeholder="e.g. The Miller Family" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
+                    <div id="hh-context-group">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;" id="hh-name-label">Household Name *</label>
+                        
+                        <!-- Container for Person creation search dropdown -->
+                        <div style="position: relative;">
+                            <input type="text" id="hh-name" placeholder="e.g. The Miller Family" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onkeyup="searchHouseholdDropdown(this.value)">
+                            <input type="hidden" id="selected-household-id">
+                            
+                            <!-- Search Dropdown Results -->
+                            <div id="hh-search-dropdown" class="hidden" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card, #ffffff); border: 1px solid var(--border); border-radius: 0.375rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 100001; max-height: 180px; overflow-y: auto; margin-top: 0.25rem;"></div>
+                        </div>
                     </div>
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Primary Contact Name</label>
