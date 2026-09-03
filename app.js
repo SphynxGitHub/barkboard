@@ -1193,72 +1193,6 @@ async function deletePet(id) {
 }
 
 /* ==========================================================================
-   VET & COI CONTROLLER (SUPABASE)
-   ========================================================================== */
-
-let editingVetId = null;
-
-function openVetModal(id = null) {
-    editingVetId = id;
-    const titleEl = document.getElementById('vet-modal-title');
-    const nameInput = document.getElementById('vt-name');
-    const clinicInput = document.getElementById('vt-clinic');
-    const phoneInput = document.getElementById('vt-phone');
-    const statusSel = document.getElementById('vt-coi-status');
-    const expiryInput = document.getElementById('vt-coi-expiry');
-    const notesInput = document.getElementById('vt-notes');
-
-    if (titleEl) titleEl.textContent = id ? 'Edit Vet Record' : 'Add Vet / COI Entry';
-    if (nameInput) nameInput.value = '';
-    if (clinicInput) clinicInput.value = '';
-    if (phoneInput) phoneInput.value = '';
-    if (statusSel) statusSel.value = 'valid';
-    if (expiryInput) expiryInput.value = '';
-    if (notesInput) notesInput.value = '';
-
-    const modal = document.getElementById('vet-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-function closeVetModal() {
-    editingVetId = null;
-    const modal = document.getElementById('vet-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function saveVet() {
-    const client = getSupabase();
-    if (!client) return alert('Database connection unavailable.');
-
-    const name = document.getElementById('vt-name')?.value.trim();
-    const clinic = document.getElementById('vt-clinic')?.value.trim();
-    const phone = document.getElementById('vt-phone')?.value.trim();
-    const coiStatus = document.getElementById('vt-coi-status')?.value || 'valid';
-    const coiExpiry = document.getElementById('vt-coi-expiry')?.value || null;
-    const notes = document.getElementById('vt-notes')?.value.trim();
-
-    if (!name) return alert('Please enter a doctor/vet name.');
-
-    const payload = {
-        name,
-        clinic,
-        phone,
-        coi_status: coiStatus,
-        coi_expiry: coiExpiry,
-        notes
-    };
-
-    const { error } = await client.from('vets').insert([payload]);
-
-    if (error) {
-        alert('Failed to save vet: ' + error.message);
-    } else {
-        closeVetModal();
-        if (typeof renderAllDashboards === 'function') await renderAllDashboards();
-    }
-}
-
-/* ==========================================================================
    FIXED PET SAVER (EXPLICIT REFRESH)
    ========================================================================== */
 
@@ -1310,6 +1244,96 @@ async function savePet() {
     } else {
         closePetModal();
         // Explicitly re-query Supabase and force UI update
+        if (typeof renderAllDashboards === 'function') {
+            await renderAllDashboards();
+        }
+    }
+}
+
+/* ==========================================================================
+   VET & COI CONTROLLER (SUPABASE)
+   ========================================================================== */
+
+let editingVetId = null;
+
+async function openVetModal(id = null) {
+    editingVetId = id;
+    const titleEl = document.getElementById('vet-modal-title');
+    const nameInput = document.getElementById('vt-name');
+    const clinicInput = document.getElementById('vt-clinic');
+    const phoneInput = document.getElementById('vt-phone');
+    const statusSel = document.getElementById('vt-status');
+    const notesInput = document.getElementById('vt-notes');
+
+    if (id) {
+        if (titleEl) titleEl.textContent = 'Edit Vet Record';
+        const client = getSupabase();
+        if (client) {
+            const { data: v, error } = await client
+                .from('vets')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (!error && v) {
+                if (nameInput) nameInput.value = v.name || '';
+                if (clinicInput) clinicInput.value = v.clinic || '';
+                if (phoneInput) phoneInput.value = v.phone || '';
+                if (statusSel) statusSel.value = v.status || 'active';
+                if (notesInput) notesInput.value = v.notes || '';
+            }
+        }
+    } else {
+        if (titleEl) titleEl.textContent = 'Add Vet / COI Entry';
+        if (nameInput) nameInput.value = '';
+        if (clinicInput) clinicInput.value = '';
+        if (phoneInput) phoneInput.value = '';
+        if (statusSel) statusSel.value = 'active';
+        if (notesInput) notesInput.value = '';
+    }
+
+    const modal = document.getElementById('vet-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeVetModal() {
+    editingVetId = null;
+    const modal = document.getElementById('vet-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function saveVet() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const name = document.getElementById('vt-name')?.value.trim();
+    const clinic = document.getElementById('vt-clinic')?.value.trim();
+    const phone = document.getElementById('vt-phone')?.value.trim();
+    const status = document.getElementById('vt-status')?.value || 'active';
+    const notes = document.getElementById('vt-notes')?.value.trim();
+
+    if (!name) return alert('Please enter a doctor/vet name.');
+
+    const payload = {
+        name: name,
+        clinic: clinic,
+        phone: phone,
+        status: status,
+        notes: notes
+    };
+
+    let response;
+    if (editingVetId) {
+        response = await client.from('vets').update(payload).eq('id', editingVetId);
+    } else {
+        response = await client.from('vets').insert([payload]);
+    }
+
+    if (response.error) {
+        alert('Failed to save vet: ' + response.error.message);
+        console.error('Supabase vet error:', response.error);
+    } else {
+        closeVetModal();
         if (typeof renderAllDashboards === 'function') {
             await renderAllDashboards();
         }
