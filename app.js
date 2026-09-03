@@ -147,8 +147,9 @@ async function renderStaffRoster() {
         return;
     }
    
+    // Query the new 'staff' table
     const { data: staff, error } = await client
-        .from('resources')
+        .from('staff')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -165,10 +166,11 @@ async function renderStaffRoster() {
 
     el.innerHTML = staff.map(s => `
         <div class="staff-card">
-            <div class="staff-avatar">${s.name.slice(0, 2).toUpperCase()}</div>
+            <div class="staff-avatar">${s.initials || s.name.slice(0, 2).toUpperCase()}</div>
             <div class="staff-info">
                 <h4>${s.name}</h4>
-                <p>${s.description || 'No role/contact details'}</p>
+                <p>${s.role} ${s.contact ? '· ' + s.contact : ''}</p>
+                ${s.notes ? `<p style="font-size:0.78rem;color:var(--text-muted);">${s.notes}</p>` : ''}
             </div>
             <div class="staff-actions">
                 <button class="btn" style="color:var(--danger-text);" onclick="deleteStaff('${s.id}')">Remove</button>
@@ -226,18 +228,31 @@ function closeStaffModal() {
 async function saveStaffMember() {
     const nameInput = document.getElementById('stf-name');
     const roleSelect = document.getElementById('stf-role');
+    const contactInput = document.getElementById('stf-contact');
+    const notesInput = document.getElementById('stf-notes');
     
     const name = nameInput ? nameInput.value.trim() : '';
-    const role = roleSelect ? roleSelect.value : 'Staff';
+    const role = roleSelect ? roleSelect.value : 'Trainer';
+    const contact = contactInput ? contactInput.value.trim() : '';
+    const notes = notesInput ? notesInput.value.trim() : '';
     
     if (!name) return alert('Please enter a name.');
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
-   
+
+    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+    // Insert into the new 'staff' table
     const { error } = await client
-        .from('resources')
-        .insert([{ name: name, description: role }]);
+        .from('staff')
+        .insert([{ 
+            name: name, 
+            role: role, 
+            contact: contact, 
+            notes: notes, 
+            initials: initials 
+        }]);
 
     if (error) {
         alert('Error saving to Supabase: ' + error.message);
@@ -255,7 +270,7 @@ async function deleteStaff(id) {
     if (!client) return alert('Database connection unavailable.');
    
     const { error } = await client
-        .from('resources')
+        .from('staff')
         .delete()
         .eq('id', id);
 
