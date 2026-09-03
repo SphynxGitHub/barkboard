@@ -13,11 +13,21 @@ function getSupabase() {
     return window.supabaseClient;
 }
 
+/**
+ * Safely triggers Lucide icon generation after dynamic DOM updates
+ */
+function refreshIcons() {
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+}
+
 /* ==========================================================================
    APP CONTROLLER: Event Handlers & View Management
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
+    refreshIcons();
     if (typeof renderAllDashboards === 'function') {
         renderAllDashboards();
     }
@@ -215,6 +225,48 @@ function switchStaffTab(tab) {
     if (tab === 'availability' && typeof renderStaffAvailability === 'function') renderStaffAvailability();
     if (tab === 'assignments' && typeof renderStaffAssignments === 'function') renderStaffAssignments();
     if (tab === 'tasks' && typeof renderStaffTasks === 'function') renderStaffTasks();
+}
+
+async function openStaffFullView(staffId) {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: staff } = await client.from('staff').select('*').eq('id', staffId).single();
+    if (!staff) return;
+
+    const { data: tasks } = await client.from('staff_tasks').select('*').eq('staff_id', staffId);
+
+    const modal = document.getElementById('fullscreen-modal');
+    const titleEl = document.getElementById('fs-title');
+    const bodyEl = document.getElementById('fs-details-payload');
+
+    if (titleEl) titleEl.textContent = `👤 Staff Profile: ${staff.name}`;
+
+    if (bodyEl) {
+        bodyEl.innerHTML = `
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem; padding:1rem 0;">
+                <div class="stat-card">
+                    <h3>Role & Contact</h3>
+                    <p><strong>Role:</strong> ${staff.role}</p>
+                    <p><strong>Contact:</strong> ${staff.contact || 'N/A'}</p>
+                    <p><strong>Notes:</strong> ${staff.notes || 'None'}</p>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Assigned Tasks</h3>
+                    ${tasks && tasks.length ? tasks.map(t => `
+                        <div style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid var(--border);">
+                            <strong>${t.text || t.task}</strong>
+                            <div style="font-size:0.82rem; color:var(--text-muted);">Due: ${t.due || t.due_date || 'Today'}</div>
+                        </div>
+                    `).join('') : '<p style="color:var(--text-muted);">No assigned tasks.</p>'}
+                </div>
+            </div>
+        `;
+    }
+
+    if (modal) modal.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
 }
 
 async function openStaffModal(id) {
@@ -429,14 +481,42 @@ async function saveStaffAvail() {
    CROSS-ENTITY RELATIONSHIP MODAL CONTROLLER
    ========================================================================== */
 
-function openRelationshipModal() {
+async function openRelationshipModal() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: households } = await client
+        .from('households')
+        .select('id, name')
+        .order('name');
+
     const selectA = document.getElementById('modal-entity-a');
-    if (selectA && typeof households !== 'undefined') {
+    if (selectA && households) {
         selectA.innerHTML = households.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
     }
-    populateTargetDropdown();
+
+    await populateTargetDropdown();
     const modal = document.getElementById('relationship-modal');
     if (modal) modal.classList.remove('hidden');
+}
+
+async function populateTargetDropdown() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const typeEl = document.getElementById('modal-relation-type');
+    const selectB = document.getElementById('modal-entity-b');
+    if (!typeEl || !selectB) return;
+
+    const type = typeEl.value;
+
+    if (type === 'vet') {
+        const { data: vets } = await client.from('vets').select('id, name, clinic').order('name');
+        selectB.innerHTML = (vets || []).map(v => `<option value="${v.id}">${v.name} (${v.clinic || 'Vet'})</option>`).join('');
+    } else {
+        const { data: households } = await client.from('households').select('id, name').order('name');
+        selectB.innerHTML = (households || []).map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+    }
 }
 
 function closeRelationshipModal() {
@@ -446,21 +526,6 @@ function closeRelationshipModal() {
 
 function toggleRelationshipFields() {
     populateTargetDropdown();
-}
-
-function populateTargetDropdown() {
-    const typeEl = document.getElementById('modal-relation-type');
-    const selectB = document.getElementById('modal-entity-b');
-    if (!typeEl || !selectB) return;
-
-    const type = typeEl.value;
-    selectB.innerHTML = '';
-
-    if (type === 'vet' && typeof vets !== 'undefined') {
-        selectB.innerHTML = vets.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
-    } else if (typeof households !== 'undefined') {
-        selectB.innerHTML = households.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
-    }
 }
 
 function saveNewRelationship(e) {
@@ -921,6 +986,86 @@ function deleteClosure(id) {
 
 let editingHouseholdId = null;
 
+async function openHouseholdFullView(id) {
+    const client = getSupabase();
+    if (!client) return;
+
+    // Fetch household details
+    const { data: hh } = await client
+        .from('households')
+        .select('*, people(*), pets(*)')
+        .eq('id', id)
+        .single();
+
+    if (!hh) return;
+
+    // Fetch related bookings
+    const { data: bookings } = await client
+        .from('bookings')
+        .select('*')
+        .eq('household_id', id);
+
+    const modal = document.getElementById('fullscreen-modal');
+    const titleEl = document.getElementById('fs-title');
+    const bodyEl = document.getElementById('fs-details-payload');
+
+    if (titleEl) titleEl.textContent = `🏡 ${hh.name}`;
+
+    if (bodyEl) {
+        bodyEl.innerHTML = `
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem; padding:1rem 0;">
+                
+                <!-- Household Members & Contact Info -->
+                <div class="stat-card">
+                    <h3><i data-lucide="users"></i> Household Members</h3>
+                    ${hh.people && hh.people.length ? hh.people.map(p => `
+                        <div style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid var(--border);">
+                            <strong>${p.name}</strong> (${p.role || 'Member'})
+                            <div style="font-size:0.85rem; color:var(--text-muted);">${p.contact || 'No contact provided'}</div>
+                        </div>
+                    `).join('') : '<p style="color:var(--text-muted);">No members recorded.</p>'}
+                </div>
+
+                <!-- Household Pets -->
+                <div class="stat-card">
+                    <h3><i data-lucide="dog"></i> Pets</h3>
+                    ${hh.pets && hh.pets.length ? hh.pets.map(p => `
+                        <div style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid var(--border);">
+                            <strong>${p.name}</strong> (${p.species})
+                            <div style="font-size:0.85rem; color:var(--text-muted);">Vaccines: ${p.vaccine_status || 'Current'}</div>
+                        </div>
+                    `).join('') : '<p style="color:var(--text-muted);">No pets attached.</p>'}
+                </div>
+
+                <!-- Scheduled Events -->
+                <div class="stat-card">
+                    <h3><i data-lucide="calendar"></i> Scheduled Events</h3>
+                    ${bookings && bookings.length ? bookings.map(b => `
+                        <div style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid var(--border);">
+                            <strong>${b.service_type || 'Booking'}</strong>
+                            <div style="font-size:0.85rem; color:var(--text-muted);">${b.start_date} → ${b.end_date}</div>
+                        </div>
+                    `).join('') : '<p style="color:var(--text-muted);">No upcoming events.</p>'}
+                </div>
+
+                <!-- Open Invoices -->
+                <div class="stat-card alert">
+                    <h3><i data-lucide="credit-card"></i> Open Invoices</h3>
+                    <p style="font-size:0.9rem; color:var(--text-muted); margin-top:0.5rem;">No active balance or unpaid invoices on file.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    if (modal) modal.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeFullscreenProfile() {
+    const modal = document.getElementById('fullscreen-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
 async function openHouseholdModal(id = null) {
     editingHouseholdId = id;
 
@@ -1372,9 +1517,9 @@ async function populateHouseholdSelects() {
         .map(h => `<option value="${h.id}">${h.name}</option>`)
         .join('');
 }
-    
+
 /* ==========================================================================
-   CRM: LIVE SEARCH & ENTITY FILTERING (SUPABASE)
+   CRM DIRECTORY RENDERER (SUPABASE + LUCIDE ICONS)
    ========================================================================== */
 
 async function renderAllDashboards() {
@@ -1382,105 +1527,123 @@ async function renderAllDashboards() {
     if (!container) return;
 
     const client = getSupabase();
-    if (!client) {
-        container.innerHTML = '<div class="biz-empty" style="color:var(--danger-text);">Supabase connection unavailable.</div>';
-        return;
+    if (!client) return;
+
+    const query = document.getElementById('crm-search')?.value.trim().toLowerCase() || '';
+    const filter = typeof currentEntityFilter !== 'undefined' ? currentEntityFilter : 'all';
+
+    container.className = (typeof crmLayoutMode !== 'undefined' && crmLayoutMode === 'cards') ? 'card-layout' : 'list-layout';
+    let html = '';
+
+    // 1. HOUSEHOLDS
+    if (filter === 'all' || filter === 'household') {
+        const { data: households } = await client
+            .from('households')
+            .select('*, people(*), pets(*)')
+            .order('name');
+
+        if (households) {
+            households.forEach(hh => {
+                const primary = hh.people?.find(p => p.role === 'Primary') || hh.people?.[0];
+                if (!query || hh.name?.toLowerCase().includes(query) || primary?.name?.toLowerCase().includes(query)) {
+                    html += `
+                        <div class="crm-card" onclick="openHouseholdFullView('${hh.id}')" style="cursor:pointer;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <div>
+                                    <h3 style="margin:0 0 0.25rem 0; display:flex; align-items:center; gap:0.4rem;">
+                                        <i data-lucide="home"></i> ${hh.name}
+                                    </h3>
+                                    ${primary ? `<p style="margin:0; font-size:0.85rem; color:var(--text-muted);"><i data-lucide="user" style="width:14px;height:14px;vertical-align:middle;"></i> Contact: ${primary.name}</p>` : ''}
+                                </div>
+                                <button class="btn-icon" style="color:var(--danger-text);" onclick="event.stopPropagation(); deleteHousehold('${hh.id}')" title="Delete">
+                                    <i data-lucide="x"></i>
+                                </button>
+                            </div>
+                        </div>`;
+                }
+            });
+        }
     }
 
-    // 1. Get current search term and entity filter state
-    const searchInput = document.getElementById('crm-search');
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
-    const activeFilter = (typeof currentEntityFilter !== 'undefined') ? currentEntityFilter : 'all';
+    // 2. PEOPLE
+    if (filter === 'all' || filter === 'people') {
+        const { data: people } = await client
+            .from('people')
+            .select('*, households(name)')
+            .order('name');
 
-    // 2. Query households with joined people and pets tables
-    const { data: households, error } = await client
-        .from('households')
-        .select(`
-            *,
-            people (*),
-            pets (*)
-        `)
-        .order('created_at', { ascending: false });
-
-    if (error) {
-        console.error('Error fetching CRM records:', error);
-        container.innerHTML = `<div class="biz-empty" style="color:var(--danger-text);">Error loading CRM: ${error.message}</div>`;
-        return;
+        if (people) {
+            people.forEach(p => {
+                if (!query || p.name?.toLowerCase().includes(query) || p.contact?.toLowerCase().includes(query)) {
+                    html += `
+                        <div class="crm-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <h3 style="margin:0; display:flex; align-items:center; gap:0.4rem;">
+                                        <i data-lucide="user"></i> ${p.name}
+                                    </h3>
+                                    <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--text-muted);">${p.contact || 'No contact info'} · ${p.households?.name || 'Unassigned'}</p>
+                                </div>
+                                <button class="btn-icon" style="color:var(--danger-text);" onclick="deletePerson('${p.id}')"><i data-lucide="x"></i></button>
+                            </div>
+                        </div>`;
+                }
+            });
+        }
     }
 
-    if (!households || households.length === 0) {
-        container.innerHTML = `
-            <div class="biz-empty" style="text-align: center; padding: 3rem 1rem;">
-                <p style="margin-bottom: 1rem; color: var(--text-muted);">No records in database yet.</p>
-                <button class="btn btn-primary" onclick="openHouseholdModal()">+ Add First Household</button>
-            </div>`;
-        return;
+    // 3. PETS
+    if (filter === 'all' || filter === 'pets') {
+        const { data: pets } = await client
+            .from('pets')
+            .select('*, households(name)')
+            .order('name');
+
+        if (pets) {
+            pets.forEach(p => {
+                if (!query || p.name?.toLowerCase().includes(query)) {
+                    const iconName = p.species === 'cat' ? 'cat' : 'dog';
+                    html += `
+                        <div class="crm-card" onclick="openPetFullView('${p.id}')" style="cursor:pointer;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <h3 style="margin:0; display:flex; align-items:center; gap:0.4rem;">
+                                        <i data-lucide="${iconName}"></i> ${p.name} 
+                                        <small style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">(${p.households?.name || 'Unassigned'})</small>
+                                    </h3>
+                                    <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--text-muted);">Vaccines: ${p.vaccine_status || 'Current'}</p>
+                                </div>
+                                <button class="btn-icon" style="color:var(--danger-text);" onclick="event.stopPropagation(); deletePet('${p.id}')"><i data-lucide="x"></i></button>
+                            </div>
+                        </div>`;
+                }
+            });
+        }
     }
 
-    // 3. Apply search query and entity type filters in memory
-    let filtered = households.filter(hh => {
-        const hhMatch = hh.name?.toLowerCase().includes(query) || hh.address?.toLowerCase().includes(query);
-        const peopleMatch = hh.people?.some(p => p.name?.toLowerCase().includes(query) || p.contact?.toLowerCase().includes(query));
-        const petMatch = hh.pets?.some(p => p.name?.toLowerCase().includes(query) || p.details?.toLowerCase().includes(query));
-
-        const matchesSearch = !query || hhMatch || peopleMatch || petMatch;
-
-        if (!matchesSearch) return false;
-
-        // Apply Entity Chip Filters
-        if (activeFilter === 'household') return true; // Show households
-        if (activeFilter === 'people') return hh.people && hh.people.length > 0;
-        if (activeFilter === 'pets') return hh.pets && hh.pets.length > 0;
-        if (activeFilter === 'vets') return hh.note?.toLowerCase().includes('vet') || hh.note?.toLowerCase().includes('coi');
-
-        return true; // 'all'
-    });
-
-    if (filtered.length === 0) {
-        container.innerHTML = `<div class="biz-empty">No results matching "${query}" for filter [${activeFilter}].</div>`;
-        return;
+    // 4. VETS
+    if (filter === 'all' || filter === 'vets') {
+        const { data: vets } = await client.from('vets').select('*').order('name');
+        if (vets) {
+            vets.forEach(v => {
+                if (!query || v.name?.toLowerCase().includes(query) || v.clinic?.toLowerCase().includes(query)) {
+                    html += `
+                        <div class="crm-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <h3 style="margin:0; display:flex; align-items:center; gap:0.4rem;">
+                                        <i data-lucide="stethoscope"></i> ${v.name}
+                                    </h3>
+                                    <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--text-muted);">${v.clinic || 'Independent Clinic'} · ${v.phone || 'No phone'}</p>
+                                </div>
+                                <button class="btn-icon" style="color:var(--danger-text);" onclick="deleteVet('${v.id}')"><i data-lucide="x"></i></button>
+                            </div>
+                        </div>`;
+                }
+            });
+        }
     }
 
-    // 4. Render matched entries
-    container.innerHTML = filtered.map(hh => {
-        const contacts = hh.people || [];
-        const pets = hh.pets || [];
-        const primary = contacts.find(p => p.role === 'Primary') || contacts[0];
-
-        return `
-            <div class="crm-card" style="border:1px solid var(--border); border-radius:0.5rem; padding:1rem; margin-bottom:0.75rem; background:var(--bg-card);">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <h3 style="margin:0 0 0.25rem 0;">
-                            <a href="#" onclick="activateOwnerView('${hh.id}'); return false;" style="color:inherit; text-decoration:none; font-weight:700;">
-                                🏡 ${hh.name}
-                            </a>
-                        </h3>
-                        ${primary ? `<p style="margin:0; font-size:0.875rem; color:var(--text-muted);">👤 Contact: <strong>${primary.name}</strong> ${primary.contact ? '· ' + primary.contact : ''}</p>` : ''}
-                        ${hh.address ? `<p style="margin:0.2rem 0 0 0; font-size:0.8rem; color:var(--text-muted);">📍 ${hh.address}</p>` : ''}
-                    </div>
-                    <div style="display:flex; gap:0.35rem;">
-                        <button class="btn" style="font-size:0.78rem; padding:0.3rem 0.65rem;" onclick="openHouseholdModal('${hh.id}')">Edit</button>
-                        <button class="btn" style="font-size:0.78rem; padding:0.3rem 0.65rem; color:var(--danger-text);" onclick="deleteHousehold('${hh.id}')">Remove</button>
-                    </div>
-                </div>
-        
-                ${pets.length > 0 ? `
-                    <div style="margin-top:0.75rem; padding-top:0.6rem; border-top:1px dashed var(--border); display:flex; flex-wrap:wrap; gap:0.4rem;">
-                        ${pets.map(p => `
-                            <span style="font-size:0.78rem; padding:0.25rem 0.6rem; border-radius:9999px; background:var(--bg-muted); border:1px solid var(--border); display:inline-flex; align-items:center; gap:0.35rem;">
-                                ${p.species === 'dog' ? '🐕' : p.species === 'cat' ? '🐈' : '🐾'} <strong>${p.name}</strong>
-                                <button onclick="openPetModal('${p.id}')" style="background:none;border:none;cursor:pointer;padding:0;font-size:0.75rem;" title="Edit Pet">✏️</button>
-                                <button onclick="deletePet('${p.id}')" style="background:none;border:none;cursor:pointer;padding:0;font-size:0.75rem;color:var(--danger-text);" title="Delete Pet">🗑️</button>
-                            </span>
-                        `).join('')}
-                    </div>
-                ` : `
-                    <div style="margin-top:0.5rem; font-size:0.78rem; color:var(--text-muted);">
-                        No pets assigned yet. <a href="#" onclick="openPetModal(); return false;" style="color:var(--primary);">+ Add Pet</a>
-                    </div>
-                `}
-            </div>
-        `;
-    }).join('');
+    container.innerHTML = html || '<div class="biz-empty">No entries found matching criteria.</div>';
+    refreshIcons();
 }
