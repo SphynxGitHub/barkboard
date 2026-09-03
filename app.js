@@ -1193,6 +1193,130 @@ async function deletePet(id) {
 }
 
 /* ==========================================================================
+   VET & COI CONTROLLER (SUPABASE)
+   ========================================================================== */
+
+let editingVetId = null;
+
+function openVetModal(id = null) {
+    editingVetId = id;
+    const titleEl = document.getElementById('vet-modal-title');
+    const nameInput = document.getElementById('vt-name');
+    const clinicInput = document.getElementById('vt-clinic');
+    const phoneInput = document.getElementById('vt-phone');
+    const statusSel = document.getElementById('vt-coi-status');
+    const expiryInput = document.getElementById('vt-coi-expiry');
+    const notesInput = document.getElementById('vt-notes');
+
+    if (titleEl) titleEl.textContent = id ? 'Edit Vet Record' : 'Add Vet / COI Entry';
+    if (nameInput) nameInput.value = '';
+    if (clinicInput) clinicInput.value = '';
+    if (phoneInput) phoneInput.value = '';
+    if (statusSel) statusSel.value = 'valid';
+    if (expiryInput) expiryInput.value = '';
+    if (notesInput) notesInput.value = '';
+
+    const modal = document.getElementById('vet-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeVetModal() {
+    editingVetId = null;
+    const modal = document.getElementById('vet-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function saveVet() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const name = document.getElementById('vt-name')?.value.trim();
+    const clinic = document.getElementById('vt-clinic')?.value.trim();
+    const phone = document.getElementById('vt-phone')?.value.trim();
+    const coiStatus = document.getElementById('vt-coi-status')?.value || 'valid';
+    const coiExpiry = document.getElementById('vt-coi-expiry')?.value || null;
+    const notes = document.getElementById('vt-notes')?.value.trim();
+
+    if (!name) return alert('Please enter a doctor/vet name.');
+
+    const payload = {
+        name,
+        clinic,
+        phone,
+        coi_status: coiStatus,
+        coi_expiry: coiExpiry,
+        notes
+    };
+
+    const { error } = await client.from('vets').insert([payload]);
+
+    if (error) {
+        alert('Failed to save vet: ' + error.message);
+    } else {
+        closeVetModal();
+        if (typeof renderAllDashboards === 'function') await renderAllDashboards();
+    }
+}
+
+/* ==========================================================================
+   FIXED PET SAVER (EXPLICIT REFRESH)
+   ========================================================================== */
+
+async function savePet() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const householdSel = document.getElementById('pet-household-id');
+    const nameInput = document.getElementById('pet-name');
+    const speciesSel = document.getElementById('pet-species');
+    const vaccineSel = document.getElementById('pet-vaccine-status');
+    const vaccineExpInput = document.getElementById('pet-vaccine-expiry');
+    const allergiesInput = document.getElementById('pet-allergies');
+    const foodInput = document.getElementById('pet-food');
+    const detailsInput = document.getElementById('pet-details');
+
+    const householdId = householdSel ? householdSel.value : null;
+    const name = nameInput ? nameInput.value.trim() : '';
+    const species = speciesSel ? speciesSel.value : 'dog';
+    const vaccineStatus = vaccineSel ? vaccineSel.value : 'current';
+    const vaccineExpiry = (vaccineExpInput && vaccineExpInput.value) ? vaccineExpInput.value : null;
+    const allergies = allergiesInput ? allergiesInput.value.trim() : 'None';
+    const food = foodInput ? foodInput.value.trim() : '';
+    const details = detailsInput ? detailsInput.value.trim() : '';
+
+    if (!name) return alert('Please enter a pet name.');
+    if (!householdId) return alert('Please select a household.');
+
+    const payload = {
+        household_id: householdId,
+        name: name,
+        species: species,
+        vaccine_status: vaccineStatus,
+        vaccine_expiry: vaccineExpiry,
+        allergies: allergies,
+        food: food,
+        details: details
+    };
+
+    let response;
+    if (editingPetId) {
+        response = await client.from('pets').update(payload).eq('id', editingPetId);
+    } else {
+        response = await client.from('pets').insert([payload]);
+    }
+
+    if (response.error) {
+        alert('Failed to save pet: ' + response.error.message);
+    } else {
+        closePetModal();
+        // Explicitly re-query Supabase and force UI update
+        if (typeof renderAllDashboards === 'function') {
+            await renderAllDashboards();
+        }
+    }
+}
+
+/* ==========================================================================
    HOUSEHOLD DROPDOWN LOADER FOR PET MODAL
    ========================================================================== */
 
