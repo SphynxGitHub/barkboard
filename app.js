@@ -45,8 +45,12 @@ function setEntityFilter(filterType) {
         currentEntityFilter = filterType;
     }
     document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-    const filterBtn = document.getElementById('filter-' + filterType);
+    
+    // Normalize singular/plural filter IDs
+    const targetId = filterType === 'households' ? 'filter-household' : 'filter-' + filterType;
+    const filterBtn = document.getElementById(targetId) || document.getElementById('filter-' + filterType);
     if (filterBtn) filterBtn.classList.add('active');
+
     if (typeof renderAllDashboards === 'function') {
         renderAllDashboards();
     }
@@ -1058,4 +1062,112 @@ function openPetModal() {
     populateHouseholdSelects(); // Fetch live households for dropdown
     const modal = document.getElementById('pet-modal');
     if (modal) modal.classList.remove('hidden');
+}
+
+/* ==========================================================================
+   CRM: LIVE SEARCH & ENTITY FILTERING (SUPABASE)
+   ========================================================================== */
+
+async function renderAllDashboards() {
+    const container = document.getElementById('crm-list-container');
+    if (!container) return;
+
+    const client = getSupabase();
+    if (!client) {
+        container.innerHTML = '<div class="biz-empty" style="color:var(--danger-text);">Supabase connection unavailable.</div>';
+        return;
+    }
+
+    // 1. Get current search term and entity filter state
+    const searchInput = document.getElementById('crm-search');
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const activeFilter = (typeof currentEntityFilter !== 'undefined') ? currentEntityFilter : 'all';
+
+    // 2. Query households with joined people and pets tables
+    const { data: households, error } = await client
+        .from('households')
+        .select(`
+            *,
+            people (*),
+            pets (*)
+        `)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching CRM records:', error);
+        container.innerHTML = `<div class="biz-empty" style="color:var(--danger-text);">Error loading CRM: ${error.message}</div>`;
+        return;
+    }
+
+    if (!households || households.length === 0) {
+        container.innerHTML = `
+            <div class="biz-empty" style="text-align: center; padding: 3rem 1rem;">
+                <p style="margin-bottom: 1rem; color: var(--text-muted);">No records in database yet.</p>
+                <button class="btn btn-primary" onclick="openHouseholdModal()">+ Add First Household</button>
+            </div>`;
+        return;
+    }
+
+    // 3. Apply search query and entity type filters in memory
+    let filtered = households.filter(hh => {
+        const hhMatch = hh.name?.toLowerCase().includes(query) || hh.address?.toLowerCase().includes(query);
+        const peopleMatch = hh.people?.some(p => p.name?.toLowerCase().includes(query) || p.contact?.toLowerCase().includes(query));
+        const petMatch = hh.pets?.some(p => p.name?.toLowerCase().includes(query) || p.details?.toLowerCase().includes(query));
+
+        const matchesSearch = !query || hhMatch || peopleMatch || petMatch;
+
+        if (!matchesSearch) return false;
+
+        // Apply Entity Chip Filters
+        if (activeFilter === 'household') return true; // Show households
+        if (activeFilter === 'people') return hh.people && hh.people.length > 0;
+        if (activeFilter === 'pets') return hh.pets && hh.pets.length > 0;
+        if (activeFilter === 'vets') return hh.note?.toLowerCase().includes('vet') || hh.note?.toLowerCase().includes('coi');
+
+        return true; // 'all'
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="biz-empty">No results matching "${query}" for filter [${activeFilter}].</div>`;
+        return;
+    }
+
+    // 4. Render matched entries
+    container.innerHTML = filtered.map(hh => {
+        const contacts = hh.people || [];
+        const pets = hh.pets || [];
+        const primary = contacts.find(p => p.role === 'Primary') || contacts[0];
+
+        return `
+            <div class="crm-card" style="border:1px solid var(--border); border-radius:0.5rem; padding:1rem; margin-bottom:0.75rem; background:var(--bg-card);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <h3 style="margin:0 0 0.25rem 0;">
+                            <a href="#" onclick="activateOwnerView('${hh.id}'); return false;" style="color:inherit; text-decoration:none; font-weight:700;">
+                                🏡 ${hh.name}
+                            </a>
+                        </h3>
+                        ${primary ? `<p style="margin:0; font-size:0.875rem; color:var(--text-muted);">👤 Contact: <strong>${primary.name}</strong> ${primary.contact ? '· ' + primary.contact : ''}</p>` : ''}
+                        ${hh.address ? `<p style="margin:0.2rem 0 0 0; font-size:0.8rem; color:var(--text-muted);">📍 ${hh.address}</p>` : ''}
+                    </div>
+                    <button class="btn" style="font-size:0.78rem; padding:0.3rem 0.65rem;" onclick="activateOwnerView('${hh.id}')">View Owner Profile</button>
+                </div>
+
+                ${pets.length > 0 ? `
+                    <div style="margin-top:0.75rem; padding-top:0.6rem; border-top:1px dashed var(--border); display:flex; flex-wrap:wrap; gap:0.4rem;">
+                        ${pets.map(p => `
+                            <span style="font-size:0.78rem; padding:0.2rem 0.5rem; border-radius:9999px; background:var(--bg-muted); border:1px solid var(--border);">
+                                ${p.species === 'dog' ? '🐕' : p.species === 'cat' ? '🐈' : '🐾'} <strong>${p.name}</strong>
+                                <small style="color:var(--text-muted);">(${p.vaccine_status || 'current'})</small>
+                            </span>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div style="margin-top:0.5rem; font-size:0.78rem; color:var(--text-muted);">
+                        No pets assigned yet. <a href="#" onclick="openPetModal(); return false;" style="color:var(--primary);">+ Add Pet</a>
+                    </div>
+                `}
+            </div>
+        `;
+    }).join('');
 }
