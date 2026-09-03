@@ -2095,8 +2095,6 @@ function removeAssignment(id) {
    STAFF TASK MODAL CONTROLLER
    ========================================================================== */
 
-let editingStaffTaskId = null;
-
 function renderStaffTasks() {
     const el = document.getElementById('staff-tasks-list');
     if (!el) return;
