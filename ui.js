@@ -87,3 +87,54 @@ function applyLayout() {
   const btn = document.querySelector('.toggle-layout-btn');
   if (btn) btn.innerText = isCardLayoutMode ? '📋 Switch to List View' : '🗂️ Switch to Card View';
 }
+
+/* ==========================================================================
+   STAFF ROSTER UI RENDERERS
+   ========================================================================== */
+
+function renderStaffRoster() {
+    const el = document.getElementById('staff-roster-list');
+    if (!el) return;
+    if (!staffMembers.length) { 
+        el.innerHTML = '<div class="biz-empty">No staff members yet.</div>'; 
+        return; 
+    }
+    
+    el.innerHTML = staffMembers.map(s => {
+        return `
+            <div class="staff-card">
+                <div class="staff-avatar">${s.initials || 'ST'}</div>
+                <div class="staff-info">
+                    <h4>${s.name}</h4>
+                    <p>${s.contact || 'No contact on file'}</p>
+                    <span class="staff-role-pill">${s.role}</span>
+                </div>
+                <div class="staff-actions">
+                    <button class="btn" onclick="openStaffModal('${s.id}')">Edit</button>
+                    <button class="btn" style="color:var(--danger-text);" onclick="deleteStaff('${s.id}')">Remove</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderStaffQualEditor(staffObj) {
+    const editor = document.getElementById('stf-qual-editor');
+    if (!editor) return;
+    const currentQuals = staffObj ? (staffQualifications[staffObj.id] || []) : [];
+    
+    editor.innerHTML = serviceTypes.map(svc => {
+        const q = currentQuals.find(item => item.serviceId === svc.id);
+        const checked = q ? 'checked' : '';
+        const cap = q ? q.dailyMax : (svc.category === 'boarding' ? 99 : 3);
+        return `
+            <div class="qual-row">
+                <input type="checkbox" id="qual-chk-${svc.id}" ${checked}>
+                <label class="qual-row-label" for="qual-chk-${svc.id}">${svc.name}</label>
+                <div class="qual-row-cap">
+                    <input type="number" id="qual-cap-${svc.id}" value="${cap}" min="1" max="99">
+                </div>
+            </div>
+        `;
+    }).join('');
+}
