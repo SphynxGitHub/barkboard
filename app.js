@@ -210,6 +210,8 @@ async function openStaffModal(id) {
     const contactInput = document.getElementById('stf-contact');
     const notesInput = document.getElementById('stf-notes');
 
+    let currentStaff = null;
+
     if (id) {
         if (titleEl) titleEl.textContent = 'Edit Staff Member';
         
@@ -223,6 +225,7 @@ async function openStaffModal(id) {
                 .single();
 
             if (!error && s) {
+                currentStaff = s;
                 if (nameInput) nameInput.value = s.name || '';
                 if (roleSelect) roleSelect.value = s.role || 'Trainer';
                 if (contactInput) contactInput.value = s.contact || '';
@@ -237,6 +240,11 @@ async function openStaffModal(id) {
         if (notesInput) notesInput.value = '';
     }
 
+    // Render qualification checkboxes and daily capacity inputs
+    if (typeof renderStaffQualEditor === 'function') {
+        renderStaffQualEditor(currentStaff);
+    }
+    
     const modal = document.getElementById('staff-modal');
     if (modal) modal.classList.remove('hidden');
 }
