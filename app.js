@@ -1057,8 +1057,9 @@ function closeFullscreenProfile() {
     if (modal) modal.classList.add('hidden');
 }
 
-async function openHouseholdModal(id = null) {
+function openHouseholdModal(id = null) {
     editingHouseholdId = id;
+    activeLinkingHouseholdId = null;
 
     const titleEl = document.getElementById('household-modal-title');
     const nameInput = document.getElementById('hh-name');
@@ -1067,28 +1068,23 @@ async function openHouseholdModal(id = null) {
     const addressInput = document.getElementById('hh-address');
     const noteInput = document.getElementById('hh-notes');
 
-    if (id) {
-        if (titleEl) titleEl.textContent = 'Edit Household / Client';
-        
-        const client = getSupabase();
-        if (client) {
-            const { data: hh, error } = await client
-                .from('households')
-                .select('*, people(*)')
-                .eq('id', id)
-                .single();
+    if (titleEl) titleEl.textContent = id ? 'Edit Household' : 'Add Household';
 
-            if (!error && hh) {
-                const primary = hh.people?.find(p => p.role === 'Primary') || hh.people?.[0];
-                if (nameInput) nameInput.value = hh.name || '';
-                if (contactNameInput) contactNameInput.value = primary ? primary.name : '';
-                if (contactInfoInput) contactInfoInput.value = primary ? primary.contact : '';
-                if (addressInput) addressInput.value = hh.address || '';
-                if (noteInput) noteInput.value = hh.note || '';
-            }
+    // Make sure Household Name label and unlock state are active
+    if (nameInput) {
+        nameInput.readOnly = false;
+        nameInput.style.backgroundColor = 'var(--bg-card)';
+        if (nameInput.parentElement && nameInput.parentElement.querySelector('label')) {
+            nameInput.parentElement.querySelector('label').textContent = 'Household Name *';
         }
-    } else {
-        if (titleEl) titleEl.textContent = 'Add Household / Client';
+    }
+
+    // Re-enable Address field for Household creation
+    if (addressInput && addressInput.parentElement) {
+        addressInput.parentElement.style.display = 'block';
+    }
+
+    if (!id) {
         if (nameInput) nameInput.value = '';
         if (contactNameInput) contactNameInput.value = '';
         if (contactInfoInput) contactInfoInput.value = '';
@@ -1097,7 +1093,10 @@ async function openHouseholdModal(id = null) {
     }
 
     const modal = document.getElementById('household-modal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+        modal.classList.remove('hidden');
+        refreshIcons();
+    }
 }
 
 function closeHouseholdModal() {
