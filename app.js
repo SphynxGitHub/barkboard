@@ -147,7 +147,7 @@ async function renderStaffRoster() {
         return;
     }
    
-    // Query the new 'staff' table
+    // Fetch live rows from Supabase
     const { data: staff, error } = await client
         .from('staff')
         .select('*')
@@ -164,15 +164,22 @@ async function renderStaffRoster() {
         return;
     }
 
+    // Render cards with clickable names that trigger openStaffModal
     el.innerHTML = staff.map(s => `
         <div class="staff-card">
             <div class="staff-avatar">${s.initials || s.name.slice(0, 2).toUpperCase()}</div>
             <div class="staff-info">
-                <h4>${s.name}</h4>
+                <h4 class="clickable-profile-zone" 
+                    onclick="openStaffModal('${s.id}')" 
+                    title="Click to edit ${s.name}" 
+                    style="cursor:pointer; display:inline-block;">
+                    ${s.name}
+                </h4>
                 <p>${s.role} ${s.contact ? '· ' + s.contact : ''}</p>
                 ${s.notes ? `<p style="font-size:0.78rem;color:var(--text-muted);">${s.notes}</p>` : ''}
             </div>
             <div class="staff-actions">
+                <button class="btn" onclick="openStaffModal('${s.id}')">Edit</button>
                 <button class="btn" style="color:var(--danger-text);" onclick="deleteStaff('${s.id}')">Remove</button>
             </div>
         </div>
@@ -195,27 +202,41 @@ function switchStaffTab(tab) {
     if (tab === 'tasks' && typeof renderStaffTasks === 'function') renderStaffTasks();
 }
 
-function openStaffModal(id) {
-    if (typeof editingStaffId !== 'undefined') editingStaffId = id;
-    const s = (id && typeof staffMembers !== 'undefined') ? staffMembers.find(x => x.id === id) : null;
-    
+async function openStaffModal(id) {
+    editingStaffId = id;
     const titleEl = document.getElementById('staff-modal-title');
-    if (titleEl) titleEl.textContent = s ? 'Edit Staff Member' : 'Add Staff Member';
-    
     const nameInput = document.getElementById('stf-name');
     const roleSelect = document.getElementById('stf-role');
     const contactInput = document.getElementById('stf-contact');
     const notesInput = document.getElementById('stf-notes');
-    
-    if (nameInput) nameInput.value = s ? s.name : '';
-    if (roleSelect) roleSelect.value = s ? s.role : 'Trainer';
-    if (contactInput) contactInput.value = s ? s.contact : '';
-    if (notesInput) notesInput.value = s ? s.notes : '';
 
-    if (typeof renderStaffQualEditor === 'function') {
-        renderStaffQualEditor(s);
+    if (id) {
+        if (titleEl) titleEl.textContent = 'Edit Staff Member';
+        
+        // Fetch existing staff details from Supabase by ID
+        const client = getSupabase();
+        if (client) {
+            const { data: s, error } = await client
+                .from('staff')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (!error && s) {
+                if (nameInput) nameInput.value = s.name || '';
+                if (roleSelect) roleSelect.value = s.role || 'Trainer';
+                if (contactInput) contactInput.value = s.contact || '';
+                if (notesInput) notesInput.value = s.notes || '';
+            }
+        }
+    } else {
+        if (titleEl) titleEl.textContent = 'Add Staff Member';
+        if (nameInput) nameInput.value = '';
+        if (roleSelect) roleSelect.value = 'Trainer';
+        if (contactInput) contactInput.value = '';
+        if (notesInput) notesInput.value = '';
     }
-    
+
     const modal = document.getElementById('staff-modal');
     if (modal) modal.classList.remove('hidden');
 }
@@ -230,12 +251,12 @@ async function saveStaffMember() {
     const roleSelect = document.getElementById('stf-role');
     const contactInput = document.getElementById('stf-contact');
     const notesInput = document.getElementById('stf-notes');
-    
+
     const name = nameInput ? nameInput.value.trim() : '';
     const role = roleSelect ? roleSelect.value : 'Trainer';
     const contact = contactInput ? contactInput.value.trim() : '';
     const notes = notesInput ? notesInput.value.trim() : '';
-    
+
     if (!name) return alert('Please enter a name.');
 
     const client = getSupabase();
@@ -243,21 +264,33 @@ async function saveStaffMember() {
 
     const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
-    // Insert into the new 'staff' table
-    const { error } = await client
-        .from('staff')
-        .insert([{ 
-            name: name, 
-            role: role, 
-            contact: contact, 
-            notes: notes, 
-            initials: initials 
-        }]);
+    const payload = {
+        name: name,
+        role: role,
+        contact: contact,
+        notes: notes,
+        initials: initials
+    };
 
-    if (error) {
-        alert('Error saving to Supabase: ' + error.message);
-        console.error('Supabase insert error:', error);
+    let response;
+
+    // Check if updating an existing record or inserting a new one
+    if (editingStaffId) {
+        response = await client
+            .from('staff')
+            .update(payload)
+            .eq('id', editingStaffId);
     } else {
+        response = await client
+            .from('staff')
+            .insert([payload]);
+    }
+
+    if (response.error) {
+        alert('Error saving to Supabase: ' + response.error.message);
+        console.error('Supabase save error:', response.error);
+    } else {
+        editingStaffId = null;
         closeStaffModal();
         await renderStaffRoster();
     }
@@ -281,3 +314,4 @@ async function deleteStaff(id) {
         await renderStaffRoster();
     }
 }
+Uncaught ReferenceError: openStaffAvailModal is not defined
