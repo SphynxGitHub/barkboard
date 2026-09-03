@@ -1019,7 +1019,7 @@ async function openHouseholdFullView(id) {
     const titleEl = document.getElementById('fs-title');
     const bodyEl = document.getElementById('fs-details-payload');
 
-    if (titleEl) titleEl.textContent = `🏡 ${hh.name}`;
+    if (titleEl) titleEl.textContent = `<i data-lucide="house"></i> ${hh.name}`;
 
     if (bodyEl) {
         bodyEl.innerHTML = `
@@ -1706,250 +1706,226 @@ async function openFullWidthProfile(type, id) {
    INLINE ENTITY SECTIONS WITH QUICK CREATION & JUMP LINKS
    ========================================================================== */
 
+Here is the complete, unified implementation for app.js.
+
+Now, every entity type (Households, People, Pets, and Vets) utilizes the exact same inline Search-First dropdown panel with dynamic live results and a "+ Create New" fallback button whenever linking cross-entity relationships.
+
+1. Updated Unified Section Renderer (app.js)
+Replace renderEntitySections() in app.js:
+
+JavaScript
+/* ==========================================================================
+   UNIFIED RELATIONAL ENTITY SECTIONS (SEARCH-FIRST LINKING FOR ALL TYPES)
+   ========================================================================== */
+
 function renderEntitySections(type, data, id) {
     if (type === 'household') {
-    return `
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
-            
-            <!-- 1. Household Details Card -->
-            <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                    <i data-lucide="info"></i> Household Details
-                </h3>
-                <div style="display:flex; flex-direction:column; gap:0.85rem;">
-                    <div>
-                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household Name</label>
-                        <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'name', this.value)">
-                    </div>
-                    <div>
-                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
-                        <input type="text" value="${data.address || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'address', this.value)">
-                    </div>
-                    <div>
-                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
-                        <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="3" onchange="autoSaveField('households', '${id}', 'note', this.value)">${data.note || ''}</textarea>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 2. Household Members Card -->
-            <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                    <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="users"></i> Household Members
-                    </h3>
-                    <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="promptSearchAndLink('person', '${id}')">
-                        <i data-lucide="search" style="width:14px;height:14px;"></i> Add / Link Member
-                    </button>
-                </div>
-                ${data.people && data.people.length ? data.people.map(p => `
-                    <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <strong>${p.name}</strong>
-                            <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
-                        </div>
-                        <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem; display:flex; align-items:center; gap:0.35rem;">
-                            <i data-lucide="phone" style="width:12px;height:12px;"></i> ${p.contact || 'No contact set'}
-                        </div>
-                    </div>
-                `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
-            </div>
-
-            <!-- 3. Pets Card -->
-            <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                    <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="dog"></i> Pets
-                    </h3>
-                    <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="promptSearchAndLink('pet', '${id}')">
-                        <i data-lucide="search" style="width:14px;height:14px;"></i> Add / Link Pet
-                    </button>
-                </div>
-                ${data.pets && data.pets.length ? data.pets.map(p => `
-                    <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <strong style="display:flex; align-items:center; gap:0.4rem;">
-                                <i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}
-                            </strong>
-                            <span style="font-size:0.75rem; color:var(--text-muted);">${p.species}</span>
-                        </div>
-                        <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Vaccines: ${p.vaccine_status || 'Current'}</div>
-                    </div>
-                `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
-            </div>
-
-            <!-- 4. Primary Veterinary Clinic Card (SEARCH-FIRST) -->
-            <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                    <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="stethoscope"></i> Veterinary Clinic
-                    </h3>
-                    <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="promptSearchAndLink('vet', '${id}')">
-                        <i data-lucide="search" style="width:14px;height:14px;"></i> Search / Link Vet
-                    </button>
-                </div>
-                <div id="hh-vet-content">
-                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No primary vet facility linked yet.</p>
-                </div>
-            </div>
-
-            <!-- 5. Scheduled Events Card -->
-            <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                    <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="calendar"></i> Scheduled Visits / Events
-                    </h3>
-                    <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openBookingModal('${id}')">
-                        <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Event
-                    </button>
-                </div>
-                <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>
-            </div>
-
-            <!-- 6. Invoices & Billing Card (RESTORED) -->
-            <div class="stat-card alert" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                    <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="credit-card"></i> Invoices & Billing
-                    </h3>
-                    <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openInvoiceModal('${id}')">
-                        <i data-lucide="plus" style="width:14px;height:14px;"></i> Create Invoice
-                    </button>
-                </div>
-                <div id="hh-invoices-container">
-                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No unpaid balances or invoices on file.</p>
-                </div>
-            </div>
-
-        </div>
-    `;
-} else if (type === 'person') {
         return `
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
                 
-                <!-- Person Details Card -->
+                <!-- Household Details -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="user"></i> Contact Details
+                        <i data-lucide="info"></i> Household Details
                     </h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household Name</label>
+                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'name', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
+                            <input type="text" value="${data.address || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'address', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
+                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="3" onchange="autoSaveField('households', '${id}', 'note', this.value)">${data.note || ''}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Household Members -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="users"></i> Household Members
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('person', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Member
+                        </button>
+                    </div>
+
+                    <div id="search-panel-person-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type member name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('person', '${id}', this.value)">
+                        <div id="search-results-person-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
+                    ${data.people && data.people.length ? data.people.map(p => `
+                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong>${p.name}</strong>
+                                <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
+                            </div>
+                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">📞 ${p.contact || 'No contact set'}</div>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
+                </div>
+
+                <!-- Pets -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="dog"></i> Pets
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('pet', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Pet
+                        </button>
+                    </div>
+
+                    <div id="search-panel-pet-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type pet name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('pet', '${id}', this.value)">
+                        <div id="search-results-pet-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
+                    ${data.pets && data.pets.length ? data.pets.map(p => `
+                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}</strong>
+                                <span style="font-size:0.75rem; color:var(--text-muted);">${p.species}</span>
+                            </div>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
+                </div>
+
+                <!-- Primary Vet -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="stethoscope"></i> Veterinary Clinic
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('vet', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Vet
+                        </button>
+                    </div>
+
+                    <div id="search-panel-vet-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type doctor or clinic..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('vet', '${id}', this.value)">
+                        <div id="search-results-vet-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
+                    <div id="hh-vet-content">
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No primary vet facility linked.</p>
+                    </div>
+                </div>
+
+                <!-- Scheduled Events -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="calendar"></i> Scheduled Events</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openBookingModal('${id}')">+ Add Event</button>
+                    </div>
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>
+                </div>
+
+                <!-- Invoices -->
+                <div class="stat-card alert" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="credit-card"></i> Invoices</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openInvoiceModal('${id}')">+ Create Invoice</button>
+                    </div>
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No unpaid balances on file.</p>
+                </div>
+
+            </div>
+        `;
+    } else if (type === 'person') {
+        return `
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
+                <!-- Person Details -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user"></i> Contact Details</h3>
                     <div style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Full Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'name', this.value)">
                         </div>
                         <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Info (Phone / Email)</label>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Info</label>
                             <input type="text" value="${data.contact || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'contact', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Role</label>
-                            <input type="text" value="${data.role || 'Primary'}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'role', this.value)">
                         </div>
                     </div>
                 </div>
 
-                <!-- Household & Other Members Card -->
+                <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="home"></i> Household & Other Members
-                    </h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
+                        </button>
+                    </div>
+
+                    <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value)">
+                        <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
                     ${data.households ? `
                         <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                            <strong>🏡 ${data.households.name}</strong>
+                            <strong><i data-lucide="house"></i> ${data.households.name}</strong>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                     ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
                 </div>
-
-                <!-- Related Pets Card -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="dog"></i> Pets in Household
-                    </h3>
-                    <div id="person-pets-list">
-                        <p style="font-size:0.85rem; color:var(--text-muted);">Loading household pets...</p>
-                    </div>
-                </div>
-
             </div>
         `;
     } else if (type === 'pet') {
         return `
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
-                
-                <!-- Pet Profile & Medical Info -->
+                <!-- Pet Profile -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="dog"></i> Pet Profile & Medical Notes
-                    </h3>
+                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="dog"></i> Pet Profile</h3>
                     <div style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Pet Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'name', this.value)">
                         </div>
                         <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Species</label>
-                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'species', this.value)">
-                                <option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option>
-                                <option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option>
-                                <option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Vaccine Status</label>
-                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'vaccine_status', this.value)">
-                                <option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option>
-                                <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending Verification</option>
-                                <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
-                            </select>
-                        </div>
-                        <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Allergies</label>
-                            <input type="text" value="${data.allergies || ''}" placeholder="e.g. Chicken, Bee stings" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'allergies', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Diet & Food Instructions</label>
-                            <input type="text" value="${data.food || ''}" placeholder="e.g. 2 cups kibble morning/night" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'food', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Behavioral / Other Notes</label>
-                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="3" onchange="autoSaveField('pets', '${id}', 'details', this.value)">${data.details || ''}</textarea>
+                            <input type="text" value="${data.allergies || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'allergies', this.value)">
                         </div>
                     </div>
                 </div>
 
-                <!-- Household Link Card -->
+                <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="home"></i> Household
-                    </h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household Link</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
+                        </button>
+                    </div>
+
+                    <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value)">
+                        <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
                     ${data.households ? `
                         <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                            <strong>🏡 ${data.households.name}</strong>
+                            <strong><i data-lucide="house"></i> ${data.households.name}</strong>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                     ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
                 </div>
-
-                <!-- Scheduled Events & Visits -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="calendar"></i> Scheduled Visits & Events
-                    </h3>
-                    <p style="font-size:0.85rem; color:var(--text-muted);">No upcoming scheduled events for this pet.</p>
-                </div>
-
             </div>
         `;
     } else if (type === 'vet') {
         return `
             <div style="display:flex; flex-direction:column; gap:1.5rem;">
-                
-                <!-- Vet Profile Form -->
+                <!-- Vet Details -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="stethoscope"></i> Vet Details
-                    </h3>
+                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Vet Details</h3>
                     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Doctor / Vet Name</label>
@@ -1959,26 +1935,27 @@ function renderEntitySections(type, data, id) {
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Clinic Name</label>
                             <input type="text" value="${data.clinic || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)">
                         </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone / Emergency</label>
-                            <input type="text" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'phone', this.value)">
-                        </div>
                     </div>
                 </div>
 
-                <!-- Client Search & Linked Households / Pets -->
+                <!-- Vet Client Households & Pets -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                            <i data-lucide="building"></i> Associated Client Households & Pets
-                        </h3>
-                        <input type="text" id="vet-client-search" placeholder="Search vet clients or pets..." onkeyup="filterVetClients('${id}')" class="biz-select" style="padding:0.4rem 0.75rem; width:260px;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="building"></i> Client Households & Pets</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Link Client Household
+                        </button>
                     </div>
-                    <div id="vet-clients-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem;">
-                        <p style="font-size:0.85rem; color:var(--text-muted);">Loading client households...</p>
+
+                    <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Search household to link..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value)">
+                        <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
+                    <div id="vet-clients-grid">
+                        <p style="font-size:0.85rem; color:var(--text-muted);">No client households attached to this vet facility.</p>
                     </div>
                 </div>
-
             </div>
         `;
     }
@@ -2058,6 +2035,77 @@ async function promptSearchAndLink(entityType, householdId) {
             if (sel) sel.value = householdId;
         }, 100);
     }
+}
+
+/* ==========================================================================
+   UNIVERSAL INLINE LIVE SEARCH & CROSS-ENTITY LINKING
+   ========================================================================== */
+
+function toggleInlineSearchPanel(targetEntityType, sourceEntityId) {
+    const panel = document.getElementById(`search-panel-${targetEntityType}-${sourceEntityId}`);
+    if (panel) {
+        panel.classList.toggle('hidden');
+        if (!panel.classList.contains('hidden')) {
+            executeLiveSearch(targetEntityType, sourceEntityId, '');
+        }
+    }
+}
+
+async function executeLiveSearch(targetType, sourceId, query) {
+    const container = document.getElementById(`search-results-${targetType}-${sourceId}`);
+    if (!container) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const tableMap = { person: 'people', pet: 'pets', vet: 'vets', household: 'households' };
+    const table = tableMap[targetType];
+
+    let dbQuery = client.from(table).select('*').limit(5);
+    if (query.trim()) {
+        dbQuery = dbQuery.ilike('name', `%${query.trim()}%`);
+    }
+
+    const { data: results } = await dbQuery;
+
+    let html = '';
+
+    if (results && results.length > 0) {
+        html = results.map(r => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem;">
+                <span><strong>${r.name}</strong> ${r.clinic ? '(' + r.clinic + ')' : r.contact ? '(' + r.contact + ')' : ''}</span>
+                <button class="btn btn-primary" style="font-size:0.72rem; padding:0.2rem 0.45rem;" onclick="linkEntities('${targetType}', '${r.id}', '${sourceId}')">Link</button>
+            </div>
+        `).join('');
+    } else {
+        html = `<div style="font-size:0.8rem; color:var(--text-muted); padding:0.25rem 0;">No matching ${targetType}s found.</div>`;
+    }
+
+    // Dynamic + Create New fallback button
+    html += `
+        <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.25rem; border:1px dashed var(--border);" onclick="createNewEntityFallback('${targetType}', '${sourceId}')">
+            + Create New ${targetType.charAt(0).toUpperCase() + targetType.slice(1)}
+        </button>
+    `;
+
+    container.innerHTML = html;
+}
+
+async function linkEntities(targetType, targetId, sourceId) {
+    const client = getSupabase();
+    if (!client) return;
+
+    if (targetType === 'household') {
+        // Person or Pet linked to Household
+        await client.from('people').update({ household_id: targetId }).eq('id', sourceId);
+        await client.from('pets').update({ household_id: targetId }).eq('id', sourceId);
+    } else if (targetType === 'vet') {
+        await client.from('households').update({ note: `Linked Vet ID: ${targetId}` }).eq('id', sourceId);
+    } else {
+        await client.from(targetType === 'person' ? 'people' : 'pets').update({ household_id: sourceId }).eq('id', targetId);
+    }
+
+    renderAllDashboards();
 }
 
 /* ==========================================================================
