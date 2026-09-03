@@ -1647,3 +1647,60 @@ async function renderAllDashboards() {
     container.innerHTML = html || '<div class="biz-empty">No entries found matching criteria.</div>';
     refreshIcons();
 }
+
+/* ==========================================================================
+   MOBILE NAVIGATION & PORTAL CONTROLLERS
+   ========================================================================== */
+
+function closeMobileNav() {
+    const drawer = document.getElementById('mobile-nav-drawer');
+    if (drawer) drawer.classList.remove('open');
+}
+
+function mobileNav(viewId) {
+    if (typeof switchView === 'function') {
+        switchView(viewId);
+    } else {
+        document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+        const target = document.getElementById(viewId);
+        if (target) target.classList.remove('hidden');
+    }
+
+    closeMobileNav();
+    if (window.lucide) lucide.createIcons();
+}
+
+function mobileOwnerNav(tabName) {
+    // 1. Ensure owner portal view is active
+    mobileNav('owner-portal-view');
+
+    // 2. Switch sub-tab within owner portal if available
+    if (typeof switchOwnerTab === 'function') {
+        switchOwnerTab(tabName);
+    } else {
+        document.querySelectorAll('.owner-tab-sec').forEach(sec => sec.classList.add('hidden'));
+        const targetSec = document.getElementById('owner-sec-' + tabName);
+        if (targetSec) targetSec.classList.remove('hidden');
+    }
+
+    closeMobileNav();
+    if (window.lucide) lucide.createIcons();
+}
+
+/**
+ * Toggle between Admin and Owner Portal mode in the drawer
+ */
+function setPortalRole(role) {
+    const adminLinks = document.getElementById('mobile-admin-links');
+    const ownerLinks = document.getElementById('mobile-owner-links');
+
+    if (role === 'owner') {
+        if (adminLinks) adminLinks.classList.add('hidden');
+        if (ownerLinks) ownerLinks.classList.remove('hidden');
+    } else {
+        if (adminLinks) adminLinks.classList.remove('hidden');
+        if (ownerLinks) ownerLinks.classList.add('hidden');
+    }
+
+    if (window.lucide) lucide.createIcons();
+}
