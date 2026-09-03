@@ -684,3 +684,125 @@ function deleteResource(id) {
     if (typeof renderResourceList === 'function') renderResourceList();
     if (typeof renderCalendar === 'function') renderCalendar();
 }
+
+/* ==========================================================================
+   BUSINESS MANAGEMENT & CLOSURES CONTROLLER
+   ========================================================================== */
+
+/**
+ * Switch active tab inside the Business view (Dashboard vs. Availability)
+ */
+function switchBizTab(tab) {
+    document.querySelectorAll('.biz-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.biz-section').forEach(s => s.classList.remove('active'));
+    
+    const targetTab = document.getElementById('biztab-' + tab);
+    const targetSec = document.getElementById('bizsec-' + tab);
+    
+    if (targetTab) targetTab.classList.add('active');
+    if (targetSec) targetSec.classList.add('active');
+    
+    if (tab === 'dashboard' && typeof renderBizDashboard === 'function') {
+        renderBizDashboard();
+    }
+    if (tab === 'availability' && typeof renderAvailabilityList === 'function') {
+        renderAvailabilityList();
+    }
+}
+
+/* === BUSINESS AVAILABILITY / CLOSURES MODAL CONTROLLERS === */
+
+let editingClosureId = null;
+
+function renderAvailabilityList() {
+    const el = document.getElementById('availability-list');
+    if (!el) return;
+
+    if (typeof businessClosures === 'undefined' || !businessClosures.length) {
+        el.innerHTML = '<div class="biz-empty">No business closures scheduled.</div>';
+        return;
+    }
+
+    const sorted = [...businessClosures].sort((a, b) => a.start.localeCompare(b.start));
+    
+    el.innerHTML = sorted.map(c => {
+        const span = c.start === c.end ? c.start : `${c.start} → ${c.end}`;
+        return `
+            <div class="closure-item type-${c.type}" style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;border:1px solid var(--border);border-radius:0.375rem;">
+                <div class="closure-info">
+                    <h4 style="margin:0;">${c.label}</h4>
+                    <p style="margin:0;font-size:0.8rem;color:var(--text-muted);">${span} ${c.notes ? '· ' + c.notes : ''}</p>
+                </div>
+                <div style="display:flex;gap:0.4rem;align-items:center;">
+                    <span class="closure-type-pill ${c.type}" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:9999px;font-weight:600;">${c.type === 'closure' ? 'Closed' : c.type === 'reduced' ? 'Reduced' : 'Holiday'}</span>
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openAvailabilityModal('${c.id}')">Edit</button>
+                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteClosure('${c.id}')">Remove</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function openAvailabilityModal(id) {
+    editingClosureId = id;
+    const c = (id && typeof businessClosures !== 'undefined') 
+        ? businessClosures.find(x => x.id === id) 
+        : null;
+
+    const titleEl = document.getElementById('avail-modal-title');
+    if (titleEl) titleEl.textContent = c ? 'Edit Closure' : 'Add Closure';
+
+    const labelInput = document.getElementById('av-label');
+    const typeSelect = document.getElementById('av-type');
+    const startInput = document.getElementById('av-start');
+    const endInput = document.getElementById('av-end');
+    const notesInput = document.getElementById('av-notes');
+
+    if (labelInput) labelInput.value = c ? c.label : '';
+    if (typeSelect) typeSelect.value = c ? c.type : 'closure';
+    if (startInput) startInput.value = c ? c.start : '';
+    if (endInput) endInput.value = c ? c.end : '';
+    if (notesInput) notesInput.value = c ? c.notes : '';
+
+    const modal = document.getElementById('availability-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeAvailabilityModal() {
+    const modal = document.getElementById('availability-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function saveAvailability() {
+    const label = document.getElementById('av-label')?.value.trim();
+    const start = document.getElementById('av-start')?.value;
+    const end = document.getElementById('av-end')?.value || start;
+    const type = document.getElementById('av-type')?.value || 'closure';
+    const notes = document.getElementById('av-notes')?.value.trim() || '';
+
+    if (!label || !start) return alert('Please enter a label and start date.');
+
+    const data = { label, type, start, end, notes };
+
+    if (typeof businessClosures !== 'undefined') {
+        if (editingClosureId) {
+            const c = businessClosures.find(x => x.id === editingClosureId);
+            if (c) Object.assign(c, data);
+        } else {
+            const nextId = typeof nextClosureId !== 'undefined' ? nextClosureId++ : Date.now();
+            businessClosures.push({ id: 'cl' + nextId, ...data });
+        }
+    }
+
+    editingClosureId = null;
+    closeAvailabilityModal();
+    renderAvailabilityList();
+}
+
+function deleteClosure(id) {
+    if (!confirm('Remove this business closure date?')) return;
+
+    if (typeof businessClosures !== 'undefined') {
+        businessClosures = businessClosures.filter(x => x.id !== id);
+    }
+    renderAvailabilityList();
+}
