@@ -1123,26 +1123,27 @@ async function saveHousehold() {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const nameInput = document.getElementById('hh-name');
+    const hiddenIdInput = document.getElementById('selected-household-id');
+    const targetHouseholdId = activeLinkingHouseholdId || (hiddenIdInput ? hiddenIdInput.value : null);
+
     const contactNameInput = document.getElementById('hh-contact-name');
     const contactInfoInput = document.getElementById('hh-contact-info');
-    const addressInput = document.getElementById('hh-address');
     const noteInput = document.getElementById('hh-notes');
 
     const personName = contactNameInput && contactNameInput.value.trim() 
         ? contactNameInput.value.trim() 
-        : (nameInput ? nameInput.value.trim() : '');
-    const contactInfo = contactInfoInput ? contactInfoInput.value.trim() : ''; // Phone / Email
+        : (document.getElementById('hh-name') ? document.getElementById('hh-name').value.trim() : '');
+    const contactInfo = contactInfoInput ? contactInfoInput.value.trim() : '';
     const role = noteInput ? noteInput.value.trim() : 'Member';
 
-    // 1. FLOW: Adding a Person directly to a Household
-    if (activeLinkingHouseholdId) {
+    // Flow: Creating/Attaching Person to a selected Household
+    if (targetHouseholdId) {
         if (!personName) return alert('Please enter the person’s name.');
 
         const { error } = await client.from('people').insert([{
-            household_id: activeLinkingHouseholdId,
+            household_id: targetHouseholdId,
             name: personName,
-            contact: contactInfo, // Phone and/or Email only
+            contact: contactInfo,
             role: role
         }]);
 
@@ -1150,30 +1151,21 @@ async function saveHousehold() {
             alert('Error adding person: ' + error.message);
         } else {
             closeHouseholdModal();
-            openFullWidthProfile('household', activeLinkingHouseholdId);
+            openFullWidthProfile('household', targetHouseholdId);
         }
-        activeLinkingHouseholdId = null;
         return;
     }
 
-    // 2. FLOW: Master Household Record Creation (Address stays here)
-    const hhName = nameInput ? nameInput.value.trim() : '';
-    const address = addressInput ? addressInput.value.trim() : '';
+    // Flow: Standalone Household Creation
+    const hhName = document.getElementById('hh-name')?.value.trim() || '';
+    const address = document.getElementById('hh-address')?.value.trim() || '';
 
-    if (!hhName) return alert('Please enter a Household name.');
+    if (!hhName) return alert('Please select or enter a Household name.');
 
     if (editingHouseholdId) {
-        await client.from('households').update({ 
-            name: hhName, 
-            address: address, 
-            note: role 
-        }).eq('id', editingHouseholdId);
+        await client.from('households').update({ name: hhName, address, note: role }).eq('id', editingHouseholdId);
     } else {
-        await client.from('households').insert([{ 
-            name: hhName, 
-            address: address, 
-            note: role 
-        }]);
+        await client.from('households').insert([{ name: hhName, address, note: role }]);
     }
 
     closeHouseholdModal();
@@ -2030,20 +2022,23 @@ function createNewEntityFallback(targetType, sourceId) {
     }
 }
 
-async function openPersonModal(personId = null, householdId = null) {
+unction openPersonModal(personId = null, householdId = null) {
     activeLinkingHouseholdId = householdId;
-    const client = getSupabase();
+    editingHouseholdId = null;
 
     const titleEl = document.getElementById('household-modal-title');
-    const nameInput = document.getElementById('hh-name'); // Used for Household Context / Name
-    const contactNameInput = document.getElementById('hh-contact-name'); // Person's Full Name
-    const contactInfoInput = document.getElementById('hh-contact-info'); // Phone / Email
+    const nameInput = document.getElementById('hh-name');
+    const labelEl = document.getElementById('hh-name-label');
+    const hiddenIdInput = document.getElementById('selected-household-id');
+    const contactNameInput = document.getElementById('hh-contact-name');
+    const contactInfoInput = document.getElementById('hh-contact-info');
     const addressInput = document.getElementById('hh-address');
-    const noteInput = document.getElementById('hh-notes'); // Role (e.g. Primary, Secondary, Spouse)
+    const noteInput = document.getElementById('hh-notes');
 
-    if (titleEl) titleEl.textContent = personId ? 'Edit Person Details' : 'Add Household Member';
+    if (titleEl) titleEl.textContent = personId ? 'Edit Person Details' : 'Add New Person';
+    if (labelEl) labelEl.textContent = 'Select Household *';
 
-    // Completely hide physical address when managing an individual person
+    // Hide physical address input (belongs to Household level)
     if (addressInput && addressInput.parentElement) {
         addressInput.parentElement.style.display = 'none';
     }
@@ -2052,24 +2047,25 @@ async function openPersonModal(personId = null, householdId = null) {
     if (contactNameInput) contactNameInput.value = '';
     if (contactInfoInput) contactInfoInput.value = '';
     if (noteInput) noteInput.value = '';
+    if (hiddenIdInput) hiddenIdInput.value = householdId || '';
 
-    // Pre-fill and lock Household context name if created inside a household profile
-    if (householdId && client) {
-        const { data: hh } = await client
-            .from('households')
-            .select('name')
-            .eq('id', householdId)
-            .single();
-
-        if (hh && nameInput) {
-            nameInput.value = hh.name;
-            nameInput.readOnly = true;
-            nameInput.style.backgroundColor = 'var(--bg-hover)';
+    // If opening from inside a specific Household view, pre-fill and lock
+    if (householdId) {
+        const client = getSupabase();
+        if (client) {
+            client.from('households').select('name').eq('id', householdId).single().then(({ data }) => {
+                if (data && nameInput) {
+                    nameInput.value = data.name;
+                    nameInput.readOnly = true;
+                    nameInput.style.backgroundColor = 'var(--bg-hover, #f1f5f9)';
+                }
+            });
         }
     } else {
         if (nameInput) {
             nameInput.value = '';
             nameInput.readOnly = false;
+            nameInput.placeholder = 'Type to search existing households...';
             nameInput.style.backgroundColor = 'var(--bg-card)';
         }
     }
@@ -2079,6 +2075,48 @@ async function openPersonModal(personId = null, householdId = null) {
         modal.classList.remove('hidden');
         refreshIcons();
     }
+}
+
+async function searchHouseholdDropdown(query) {
+    const dropdown = document.getElementById('hh-search-dropdown');
+    if (!dropdown || activeLinkingHouseholdId) return; // Skip if locked to household
+
+    const client = getSupabase();
+    if (!client) return;
+
+    let dbQuery = client.from('households').select('id, name').order('name').limit(5);
+    if (query.trim()) {
+        dbQuery = dbQuery.ilike('name', `%${query.trim()}%`);
+    }
+
+    const { data: households } = await dbQuery;
+
+    if (households && households.length > 0) {
+        dropdown.innerHTML = households.map(h => `
+            <div style="padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 0.85rem;" 
+                 onclick="selectHouseholdFromDropdown('${h.id}', '${h.name.replace(/'/g, "\\'")}')"
+                 onmouseover="this.style.background='var(--bg-hover)'" 
+                 onmouseout="this.style.background='transparent'">
+                🏡 <strong>${h.name}</strong>
+            </div>
+        `).join('');
+        dropdown.classList.remove('hidden');
+    } else {
+        dropdown.innerHTML = `<div style="padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--text-muted);">No existing households found.</div>`;
+        dropdown.classList.remove('hidden');
+    }
+}
+
+function selectHouseholdFromDropdown(id, name) {
+    const nameInput = document.getElementById('hh-name');
+    const hiddenIdInput = document.getElementById('selected-household-id');
+    const dropdown = document.getElementById('hh-search-dropdown');
+
+    if (nameInput) nameInput.value = name;
+    if (hiddenIdInput) hiddenIdInput.value = id;
+    activeLinkingHouseholdId = id;
+
+    if (dropdown) dropdown.classList.add('hidden');
 }
 
 /* ==========================================================================
