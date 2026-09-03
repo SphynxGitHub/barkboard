@@ -1102,6 +1102,20 @@ async function openHouseholdModal(id = null) {
 
 function closeHouseholdModal() {
     editingHouseholdId = null;
+    activeLinkingHouseholdId = null;
+
+    const nameInput = document.getElementById('hh-name');
+    if (nameInput) {
+        nameInput.readOnly = false;
+        nameInput.style.backgroundColor = 'var(--bg-card)';
+    }
+
+    // Re-enable address input display for full household creation
+    const addressInput = document.getElementById('hh-address');
+    if (addressInput && addressInput.parentElement) {
+        addressInput.parentElement.style.display = 'block';
+    }
+
     const modal = document.getElementById('household-modal');
     if (modal) modal.classList.add('hidden');
 }
@@ -1111,40 +1125,56 @@ async function saveHousehold() {
     if (!client) return alert('Database connection unavailable.');
 
     const nameInput = document.getElementById('hh-name');
+    const contactNameInput = document.getElementById('hh-contact-name');
     const contactInfoInput = document.getElementById('hh-contact-info');
+    const addressInput = document.getElementById('hh-address');
     const noteInput = document.getElementById('hh-notes');
 
-    const personName = nameInput ? nameInput.value.trim() : '';
-    const contactInfo = contactInfoInput ? contactInfoInput.value.trim() : '';
-    const note = noteInput ? noteInput.value.trim() : '';
+    const personName = contactNameInput && contactNameInput.value.trim() 
+        ? contactNameInput.value.trim() 
+        : (nameInput ? nameInput.value.trim() : '');
+    const contactInfo = contactInfoInput ? contactInfoInput.value.trim() : ''; // Phone / Email
+    const role = noteInput ? noteInput.value.trim() : 'Member';
 
-    if (!personName) return alert('Please enter a name.');
-
-    // If linking directly to an active Household View
+    // 1. FLOW: Adding a Person directly to a Household
     if (activeLinkingHouseholdId) {
+        if (!personName) return alert('Please enter the person’s name.');
+
         const { error } = await client.from('people').insert([{
             household_id: activeLinkingHouseholdId,
             name: personName,
-            contact: contactInfo,
-            role: note || 'Member'
+            contact: contactInfo, // Phone and/or Email only
+            role: role
         }]);
 
         if (error) {
             alert('Error adding person: ' + error.message);
         } else {
             closeHouseholdModal();
-            // Refresh inline profile view immediately
             openFullWidthProfile('household', activeLinkingHouseholdId);
         }
         activeLinkingHouseholdId = null;
         return;
     }
 
-    // Standard Household Insert/Update Flow
+    // 2. FLOW: Master Household Record Creation (Address stays here)
+    const hhName = nameInput ? nameInput.value.trim() : '';
+    const address = addressInput ? addressInput.value.trim() : '';
+
+    if (!hhName) return alert('Please enter a Household name.');
+
     if (editingHouseholdId) {
-        await client.from('households').update({ name: personName, note: note }).eq('id', editingHouseholdId);
+        await client.from('households').update({ 
+            name: hhName, 
+            address: address, 
+            note: role 
+        }).eq('id', editingHouseholdId);
     } else {
-        await client.from('households').insert([{ name: personName, note: note }]);
+        await client.from('households').insert([{ 
+            name: hhName, 
+            address: address, 
+            note: role 
+        }]);
     }
 
     closeHouseholdModal();
@@ -2001,24 +2031,53 @@ function createNewEntityFallback(targetType, sourceId) {
     }
 }
 
-function openPersonModal(personId = null, householdId = null) {
+async function openPersonModal(personId = null, householdId = null) {
     activeLinkingHouseholdId = householdId;
-    
-    // Use household modal as container, set title and fields for Person details
+    const client = getSupabase();
+
     const titleEl = document.getElementById('household-modal-title');
-    const nameInput = document.getElementById('hh-name');
-    const contactNameInput = document.getElementById('hh-contact-name');
-    const contactInfoInput = document.getElementById('hh-contact-info');
-    
-    if (titleEl) titleEl.textContent = personId ? 'Edit Person Details' : 'Add Person / Household Member';
-    if (nameInput) nameInput.value = '';
+    const nameInput = document.getElementById('hh-name'); // Used for Household Context / Name
+    const contactNameInput = document.getElementById('hh-contact-name'); // Person's Full Name
+    const contactInfoInput = document.getElementById('hh-contact-info'); // Phone / Email
+    const addressInput = document.getElementById('hh-address');
+    const noteInput = document.getElementById('hh-notes'); // Role (e.g. Primary, Secondary, Spouse)
+
+    if (titleEl) titleEl.textContent = personId ? 'Edit Person Details' : 'Add Household Member';
+
+    // Completely hide physical address when managing an individual person
+    if (addressInput && addressInput.parentElement) {
+        addressInput.parentElement.style.display = 'none';
+    }
+
+    // Reset Person fields
     if (contactNameInput) contactNameInput.value = '';
     if (contactInfoInput) contactInfoInput.value = '';
+    if (noteInput) noteInput.value = '';
+
+    // Pre-fill and lock Household context name if created inside a household profile
+    if (householdId && client) {
+        const { data: hh } = await client
+            .from('households')
+            .select('name')
+            .eq('id', householdId)
+            .single();
+
+        if (hh && nameInput) {
+            nameInput.value = hh.name;
+            nameInput.readOnly = true;
+            nameInput.style.backgroundColor = 'var(--bg-hover)';
+        }
+    } else {
+        if (nameInput) {
+            nameInput.value = '';
+            nameInput.readOnly = false;
+            nameInput.style.backgroundColor = 'var(--bg-card)';
+        }
+    }
 
     const modal = document.getElementById('household-modal');
     if (modal) {
         modal.classList.remove('hidden');
-        // Re-trigger icon rendering for Lucide icons inside modal
         refreshIcons();
     }
 }
