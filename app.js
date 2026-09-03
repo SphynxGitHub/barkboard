@@ -1688,7 +1688,7 @@ function renderEntitySections(type, data, id) {
                                 <strong>${p.name}</strong>
                                 <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
                             </div>
-                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">📞 ${p.contact || 'No contact set'}</div>
+                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;"><i data-lucide="phone"></i> ${p.contact || 'No contact set'}</div>
                         </div>
                     `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
                 </div>
@@ -1794,7 +1794,7 @@ function renderEntitySections(type, data, id) {
 
                     ${data.households ? `
                         <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                            <strong>🏡 ${data.households.name}</strong>
+                            <strong><i data-lucide="house"></i> ${data.households.name}</strong>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                     ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
@@ -1859,7 +1859,7 @@ function renderEntitySections(type, data, id) {
 
                     ${data.households ? `
                         <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                            <strong>🏡 ${data.households.name}</strong>
+                            <strong><i data-lucide="house"></i> ${data.households.name}</strong>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                     ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
