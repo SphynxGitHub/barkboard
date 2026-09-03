@@ -118,19 +118,30 @@ function initStaffView() {
     }
 }
 
-function populateStaffSelects() {
-    if (typeof staffMembers === 'undefined' || !Array.isArray(staffMembers)) return;
+async function populateStaffSelects() {
+    const client = getSupabase();
+    if (!client) return;
 
-    const opts = staffMembers
+    // Fetch real team members from Supabase
+    const { data: staff, error } = await client
+        .from('staff')
+        .select('*')
+        .order('name', { ascending: true });
+
+    if (error || !staff || staff.length === 0) return;
+
+    const opts = staff
         .map(s => `<option value="${s.id}">${s.name} · ${s.role}</option>`)
         .join('');
 
+    // Update target modal dropdowns
     const selectIds = ['sav-who', 'asgn-staff', 'stsk-who'];
     selectIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = opts;
     });
 
+    // Update staff task filter menu
     const filterSel = document.getElementById('staff-task-filter');
     if (filterSel) {
         filterSel.innerHTML = '<option value="all">All staff</option>' + opts;
@@ -377,6 +388,36 @@ function openStaffAvailModal(id) {
     const modal = document.getElementById('staff-avail-modal');
     if (modal) {
         modal.classList.remove('hidden');
+    }
+}
+
+function closeStaffAvailModal() {
+    const modal = document.getElementById('staff-avail-modal');
+    if (modal) modal.classList.add('hidden');
+
+    // Reset inputs
+    const startInput = document.getElementById('sav-start');
+    const endInput = document.getElementById('sav-end');
+    const notesInput = document.getElementById('sav-notes');
+    if (startInput) startInput.value = '';
+    if (endInput) endInput.value = '';
+    if (notesInput) notesInput.value = '';
+}
+
+async function saveStaffAvail() {
+    const staffId = document.getElementById('sav-who')?.value;
+    const type = document.getElementById('sav-type')?.value || 'vacation';
+    const start = document.getElementById('sav-start')?.value;
+    const end = document.getElementById('sav-end')?.value || start;
+    const notes = document.getElementById('sav-notes')?.value.trim() || '';
+
+    if (!staffId || !start) {
+        return alert('Please select a staff member and start date.');
+    }
+
+    closeStaffAvailModal();
+    if (typeof renderStaffAvailability === 'function') {
+        renderStaffAvailability();
     }
 }
 
@@ -868,4 +909,153 @@ function deleteClosure(id) {
         businessClosures = businessClosures.filter(x => x.id !== id);
     }
     renderAvailabilityList();
+}
+
+/* ==========================================================================
+   HOUSEHOLD & CLIENT CONTROLLER (SUPABASE)
+   ========================================================================== */
+
+async function saveHousehold() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const nameInput = document.getElementById('hh-name');
+    const contactNameInput = document.getElementById('hh-contact-name');
+    const contactInfoInput = document.getElementById('hh-contact-info');
+    const addressInput = document.getElementById('hh-address');
+    const noteInput = document.getElementById('hh-notes');
+
+    const hhName = nameInput ? nameInput.value.trim() : '';
+    const contactName = contactNameInput ? contactNameInput.value.trim() : '';
+    const contactInfo = contactInfoInput ? contactInfoInput.value.trim() : '';
+    const address = addressInput ? addressInput.value.trim() : '';
+    const note = noteInput ? noteInput.value.trim() : '';
+
+    if (!hhName) return alert('Please enter a Household name (e.g. "The Miller Family").');
+
+    // 1. Insert Household Record
+    const { data: hhData, error: hhError } = await client
+        .from('households')
+        .insert([{ name: hhName, note: note, address: address }])
+        .select()
+        .single();
+
+    if (hhError) {
+        console.error('Error saving household:', hhError);
+        return alert('Failed to create household: ' + hhError.message);
+    }
+
+    // 2. Insert Primary Contact into 'people' table (if contact name provided)
+    if (contactName && hhData) {
+        const { error: personError } = await client
+            .from('people')
+            .insert([{
+                household_id: hhData.id,
+                name: contactName,
+                contact: contactInfo,
+                role: 'Primary'
+            }]);
+
+        if (personError) {
+            console.error('Error creating primary contact:', personError);
+        }
+    }
+
+    // Reset inputs and close modal
+    if (nameInput) nameInput.value = '';
+    if (contactNameInput) contactNameInput.value = '';
+    if (contactInfoInput) contactInfoInput.value = '';
+    if (addressInput) addressInput.value = '';
+    if (noteInput) noteInput.value = '';
+
+    closeHouseholdModal();
+
+    // Refresh CRM View
+    if (typeof renderAllDashboards === 'function') renderAllDashboards();
+}
+
+/* ==========================================================================
+   PET CONTROLLER (SUPABASE)
+   ========================================================================== */
+
+async function savePet() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const householdSel = document.getElementById('pet-household-id');
+    const nameInput = document.getElementById('pet-name');
+    const speciesSel = document.getElementById('pet-species');
+    const vaccineSel = document.getElementById('pet-vaccine-status');
+    const vaccineExpInput = document.getElementById('pet-vaccine-expiry');
+    const allergiesInput = document.getElementById('pet-allergies');
+    const foodInput = document.getElementById('pet-food');
+    const detailsInput = document.getElementById('pet-details');
+
+    const householdId = householdSel ? householdSel.value : null;
+    const name = nameInput ? nameInput.value.trim() : '';
+    const species = speciesSel ? speciesSel.value : 'dog';
+    const vaccineStatus = vaccineSel ? vaccineSel.value : 'current';
+    const vaccineExpiry = (vaccineExpInput && vaccineExpInput.value) ? vaccineExpInput.value : null;
+    const allergies = allergiesInput ? allergiesInput.value.trim() : 'None';
+    const food = foodInput ? foodInput.value.trim() : '';
+    const details = detailsInput ? detailsInput.value.trim() : '';
+
+    if (!name) return alert('Please enter a pet name.');
+    if (!householdId) return alert('Please select or assign a household to this pet.');
+
+    const payload = {
+        household_id: householdId,
+        name: name,
+        species: species,
+        vaccine_status: vaccineStatus,
+        vaccine_expiry: vaccineExpiry,
+        allergies: allergies,
+        food: food,
+        details: details
+    };
+
+    const { error } = await client
+        .from('pets')
+        .insert([payload]);
+
+    if (error) {
+        console.error('Error saving pet:', error);
+        return alert('Failed to save pet: ' + error.message);
+    }
+
+    // Reset inputs and close modal
+    if (nameInput) nameInput.value = '';
+    if (allergiesInput) allergiesInput.value = '';
+    if (foodInput) foodInput.value = '';
+    if (detailsInput) detailsInput.value = '';
+
+    closePetModal();
+
+    // Refresh CRM View
+    if (typeof renderAllDashboards === 'function') renderAllDashboards();
+}
+
+async function populateHouseholdSelects() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: households, error } = await client
+        .from('households')
+        .select('id, name')
+        .order('name', { ascending: true });
+
+    if (error || !households) return;
+
+    const selectEl = document.getElementById('pet-household-id');
+    if (selectEl) {
+        selectEl.innerHTML = households
+            .map(h => `<option value="${h.id}">${h.name}</option>`)
+            .join('');
+    }
+}
+
+function openPetModal() {
+    populateHouseholdSelects(); // Fetch live households for dropdown
+    const modal = document.getElementById('pet-modal');
+    if (modal) modal.classList.remove('hidden');
 }
