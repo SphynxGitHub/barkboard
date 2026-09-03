@@ -2345,8 +2345,6 @@ function onBizPresetChange() {
     }
 }
 
-let editingClosureId = null;
-
 function renderAvailabilityList() {
     const el = document.getElementById('availability-list');
     if (!el) return;
