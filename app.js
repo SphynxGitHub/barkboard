@@ -1641,8 +1641,11 @@ async function renderAllDashboards() {
    ========================================================================== */
 
 async function openFullWidthProfile(type, id) {
-    const container = document.getElementById('crm-list-container');
-    if (!container) return;
+    const modal = document.getElementById('fullscreen-modal');
+    const titleEl = document.getElementById('fs-title');
+    const bodyEl = document.getElementById('fs-details-payload');
+
+    if (!modal || !bodyEl) return;
 
     const client = getSupabase();
     if (!client) return;
@@ -1665,117 +1668,128 @@ async function openFullWidthProfile(type, id) {
 
     if (!payload) return;
 
-    container.innerHTML = `
-        <div class="full-width-profile-view">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-bottom:1.25rem;">
-                <h2 style="margin:0; font-size:1.35rem; display:flex; align-items:center; gap:0.5rem;">
-                    <i data-lucide="${type === 'household' ? 'home' : type === 'person' ? 'user' : type === 'pet' ? 'dog' : 'stethoscope'}"></i> 
-                    Manage ${type.charAt(0).toUpperCase() + type.slice(1)}: ${payload.name}
-                </h2>
-                <button class="btn" onclick="renderAllDashboards()"><i data-lucide="x"></i> Close View</button>
-            </div>
+    const iconName = type === 'household' ? 'home' : type === 'person' ? 'user' : type === 'pet' ? 'dog' : 'stethoscope';
 
-            <!-- EDITABLE FIELDS FORM -->
-            <form id="inline-edit-form" onsubmit="saveInlineProfile(event, '${type}', '${id}')" style="display:flex; flex-direction:column; gap:1rem;">
-                ${renderInlineFormFields(type, payload)}
-                <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
-                    <button type="button" class="btn" onclick="renderAllDashboards()">Cancel</button>
-                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Changes</button>
-                </div>
+    if (titleEl) {
+        titleEl.innerHTML = `<i data-lucide="${iconName}"></i> ${payload.name}`;
+    }
+
+    bodyEl.innerHTML = `
+        <div class="auto-save-container" style="padding: 1rem 0;">
+            <div id="auto-save-status" style="font-size: 0.78rem; color: var(--text-muted); text-align: right; margin-bottom: 0.5rem; height: 1.2em;">
+                All changes saved
+            </div>
+            
+            <form onsubmit="return false;" style="display: flex; flex-direction: column; gap: 1rem;">
+                ${renderAutoSaveFields(type, payload, id)}
             </form>
         </div>
     `;
 
+    modal.classList.remove('hidden');
     refreshIcons();
 }
 
-function renderInlineFormFields(type, data) {
+function renderAutoSaveFields(type, data, id) {
     if (type === 'household') {
         return `
-            <div class="form-group"><label>Household Name</label><input type="text" id="edit-hh-name" value="${data.name || ''}" class="biz-select" required></div>
-            <div class="form-group"><label>Address</label><input type="text" id="edit-hh-address" value="${data.address || ''}" class="biz-select"></div>
-            <div class="form-group"><label>Notes</label><textarea id="edit-hh-note" class="biz-select" rows="3">${data.note || ''}</textarea></div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Household Name</label>
+                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('households', '${id}', 'name', this.value)">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Address</label>
+                <input type="text" value="${data.address || ''}" class="biz-select" onchange="autoSaveField('households', '${id}', 'address', this.value)">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Notes</label>
+                <textarea class="biz-select" rows="3" onchange="autoSaveField('households', '${id}', 'note', this.value)">${data.note || ''}</textarea>
+            </div>
         `;
     } else if (type === 'person') {
         return `
-            <div class="form-group"><label>Full Name</label><input type="text" id="edit-p-name" value="${data.name || ''}" class="biz-select" required></div>
-            <div class="form-group"><label>Contact Info (Phone / Email)</label><input type="text" id="edit-p-contact" value="${data.contact || ''}" class="biz-select"></div>
-            <div class="form-group"><label>Role</label><input type="text" id="edit-p-role" value="${data.role || 'Primary'}" class="biz-select"></div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Full Name</label>
+                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('people', '${id}', 'name', this.value)">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Contact Info (Phone / Email)</label>
+                <input type="text" value="${data.contact || ''}" class="biz-select" onchange="autoSaveField('people', '${id}', 'contact', this.value)">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Role</label>
+                <input type="text" value="${data.role || 'Primary'}" class="biz-select" onchange="autoSaveField('people', '${id}', 'role', this.value)">
+            </div>
         `;
     } else if (type === 'pet') {
         return `
-            <div class="form-group"><label>Pet Name</label><input type="text" id="edit-pet-name" value="${data.name || ''}" class="biz-select" required></div>
-            <div class="form-group"><label>Species</label>
-                <select id="edit-pet-species" class="biz-select">
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Pet Name</label>
+                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('pets', '${id}', 'name', this.value)">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Species</label>
+                <select class="biz-select" onchange="autoSaveField('pets', '${id}', 'species', this.value)">
                     <option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option>
                     <option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option>
                     <option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option>
                 </select>
             </div>
-            <div class="form-group"><label>Vaccine Status</label>
-                <select id="edit-pet-vaccine" class="biz-select">
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Vaccine Status</label>
+                <select class="biz-select" onchange="autoSaveField('pets', '${id}', 'vaccine_status', this.value)">
                     <option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option>
-                    <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending</option>
+                    <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending Verification</option>
                     <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
                 </select>
             </div>
-            <div class="form-group"><label>Allergies</label><input type="text" id="edit-pet-allergies" value="${data.allergies || ''}" class="biz-select"></div>
         `;
     } else if (type === 'vet') {
         return `
-            <div class="form-group"><label>Doctor / Vet Name</label><input type="text" id="edit-vt-name" value="${data.name || ''}" class="biz-select" required></div>
-            <div class="form-group"><label>Clinic</label><input type="text" id="edit-vt-clinic" value="${data.clinic || ''}" class="biz-select"></div>
-            <div class="form-group"><label>Phone</label><input type="text" id="edit-vt-phone" value="${data.phone || ''}" class="biz-select"></div>
-            <div class="form-group"><label>Status</label>
-                <select id="edit-vt-status" class="biz-select">
-                    <option value="active" ${data.status === 'active' ? 'selected' : ''}>Active</option>
-                    <option value="inactive" ${data.status === 'inactive' ? 'selected' : ''}>Inactive</option>
-                </select>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Doctor / Vet Name</label>
+                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('vets', '${id}', 'name', this.value)">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Clinic Name</label>
+                <input type="text" value="${data.clinic || ''}" class="biz-select" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Phone / Emergency</label>
+                <input type="text" value="${data.phone || ''}" class="biz-select" onchange="autoSaveField('vets', '${id}', 'phone', this.value)">
             </div>
         `;
     }
 }
 
-async function saveInlineProfile(e, type, id) {
-    if (e && e.preventDefault) e.preventDefault();
+/**
+ * Direct Auto-Save Field Updater for Supabase
+ */
+async function autoSaveField(table, id, field, value) {
+    const statusEl = document.getElementById('auto-save-status');
+    if (statusEl) statusEl.textContent = 'Saving changes…';
+
     const client = getSupabase();
     if (!client) return;
 
-    let payload = {};
+    const payload = {};
+    payload[field] = value.trim();
 
-    if (type === 'household') {
-        payload = {
-            name: document.getElementById('edit-hh-name')?.value.trim(),
-            address: document.getElementById('edit-hh-address')?.value.trim(),
-            note: document.getElementById('edit-hh-note')?.value.trim()
-        };
-        await client.from('households').update(payload).eq('id', id);
-    } else if (type === 'person') {
-        payload = {
-            name: document.getElementById('edit-p-name')?.value.trim(),
-            contact: document.getElementById('edit-p-contact')?.value.trim(),
-            role: document.getElementById('edit-p-role')?.value.trim()
-        };
-        await client.from('people').update(payload).eq('id', id);
-    } else if (type === 'pet') {
-        payload = {
-            name: document.getElementById('edit-pet-name')?.value.trim(),
-            species: document.getElementById('edit-pet-species')?.value,
-            vaccine_status: document.getElementById('edit-pet-vaccine')?.value,
-            allergies: document.getElementById('edit-pet-allergies')?.value.trim()
-        };
-        await client.from('pets').update(payload).eq('id', id);
-    } else if (type === 'vet') {
-        payload = {
-            name: document.getElementById('edit-vt-name')?.value.trim(),
-            clinic: document.getElementById('edit-vt-clinic')?.value.trim(),
-            phone: document.getElementById('edit-vt-phone')?.value.trim(),
-            status: document.getElementById('edit-vt-status')?.value
-        };
-        await client.from('vets').update(payload).eq('id', id);
+    const { error } = await client.from(table).update(payload).eq('id', id);
+
+    if (error) {
+        if (statusEl) statusEl.textContent = '⚠️ Save failed: ' + error.message;
+    } else {
+        if (statusEl) statusEl.textContent = '✓ Saved to database';
+        if (typeof renderAllDashboards === 'function') {
+            renderAllDashboards();
+        }
     }
+}
 
-    renderAllDashboards();
+function closeFullscreenProfile() {
+    const modal = document.getElementById('fullscreen-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
 /* ==========================================================================
