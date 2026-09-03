@@ -1532,33 +1532,27 @@ async function renderAllDashboards() {
     const query = document.getElementById('crm-search')?.value.trim().toLowerCase() || '';
     const filter = typeof currentEntityFilter !== 'undefined' ? currentEntityFilter : 'all';
 
-    container.className = (typeof crmLayoutMode !== 'undefined' && crmLayoutMode === 'cards') ? 'card-layout' : 'list-layout';
     let html = '';
 
     // 1. HOUSEHOLDS
     if (filter === 'all' || filter === 'household') {
-        const { data: households } = await client
-            .from('households')
-            .select('*, people(*), pets(*)')
-            .order('name');
+        const { data: households } = await client.from('households').select('*, people(*), pets(*)').order('name');
 
         if (households) {
             households.forEach(hh => {
                 const primary = hh.people?.find(p => p.role === 'Primary') || hh.people?.[0];
                 if (!query || hh.name?.toLowerCase().includes(query) || primary?.name?.toLowerCase().includes(query)) {
                     html += `
-                        <div class="crm-card" onclick="openHouseholdFullView('${hh.id}')" style="cursor:pointer;">
-                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                                <div>
-                                    <h3 style="margin:0 0 0.25rem 0; display:flex; align-items:center; gap:0.4rem;">
-                                        <i data-lucide="home"></i> ${hh.name}
-                                    </h3>
-                                    ${primary ? `<p style="margin:0; font-size:0.85rem; color:var(--text-muted);"><i data-lucide="user" style="width:14px;height:14px;vertical-align:middle;"></i> Contact: ${primary.name}</p>` : ''}
-                                </div>
-                                <button class="btn-icon" style="color:var(--danger-text);" onclick="event.stopPropagation(); deleteHousehold('${hh.id}')" title="Delete">
-                                    <i data-lucide="x"></i>
-                                </button>
+                        <div class="crm-card" onclick="openFullWidthProfile('household', '${hh.id}')" style="cursor:pointer;">
+                            <div class="crm-card-content">
+                                <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem; font-size:1.1rem;">
+                                    <i data-lucide="home"></i> ${hh.name}
+                                </h3>
+                                ${primary ? `<p style="margin:0; font-size:0.85rem; color:var(--text-muted); display:flex; align-items:center; gap:0.35rem;"><i data-lucide="user" style="width:14px;height:14px;"></i> Primary: ${primary.name} ${primary.contact ? '· ' + primary.contact : ''}</p>` : ''}
                             </div>
+                            <button class="delete-action-btn" onclick="event.stopPropagation(); deleteHousehold('${hh.id}')" title="Delete Household">
+                                <i data-lucide="trash-2"></i>
+                            </button>
                         </div>`;
                 }
             });
@@ -1567,25 +1561,22 @@ async function renderAllDashboards() {
 
     // 2. PEOPLE
     if (filter === 'all' || filter === 'people') {
-        const { data: people } = await client
-            .from('people')
-            .select('*, households(name)')
-            .order('name');
+        const { data: people } = await client.from('people').select('*, households(name)').order('name');
 
         if (people) {
             people.forEach(p => {
                 if (!query || p.name?.toLowerCase().includes(query) || p.contact?.toLowerCase().includes(query)) {
                     html += `
-                        <div class="crm-card">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <h3 style="margin:0; display:flex; align-items:center; gap:0.4rem;">
-                                        <i data-lucide="user"></i> ${p.name}
-                                    </h3>
-                                    <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--text-muted);">${p.contact || 'No contact info'} · ${p.households?.name || 'Unassigned'}</p>
-                                </div>
-                                <button class="btn-icon" style="color:var(--danger-text);" onclick="deletePerson('${p.id}')"><i data-lucide="x"></i></button>
+                        <div class="crm-card" onclick="openFullWidthProfile('person', '${p.id}')" style="cursor:pointer;">
+                            <div class="crm-card-content">
+                                <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem; font-size:1.1rem;">
+                                    <i data-lucide="user"></i> ${p.name}
+                                </h3>
+                                <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">${p.role || 'Contact'} ${p.contact ? '· ' + p.contact : ''} ${p.households?.name ? '· Household: ' + p.households.name : ''}</p>
                             </div>
+                            <button class="delete-action-btn" onclick="event.stopPropagation(); deletePerson('${p.id}')" title="Delete Contact">
+                                <i data-lucide="trash-2"></i>
+                            </button>
                         </div>`;
                 }
             });
@@ -1594,27 +1585,23 @@ async function renderAllDashboards() {
 
     // 3. PETS
     if (filter === 'all' || filter === 'pets') {
-        const { data: pets } = await client
-            .from('pets')
-            .select('*, households(name)')
-            .order('name');
+        const { data: pets } = await client.from('pets').select('*, households(name)').order('name');
 
         if (pets) {
             pets.forEach(p => {
                 if (!query || p.name?.toLowerCase().includes(query)) {
-                    const iconName = p.species === 'cat' ? 'cat' : 'dog';
+                    const speciesIcon = p.species === 'cat' ? 'cat' : 'dog';
                     html += `
-                        <div class="crm-card" onclick="openPetFullView('${p.id}')" style="cursor:pointer;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <h3 style="margin:0; display:flex; align-items:center; gap:0.4rem;">
-                                        <i data-lucide="${iconName}"></i> ${p.name} 
-                                        <small style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">(${p.households?.name || 'Unassigned'})</small>
-                                    </h3>
-                                    <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--text-muted);">Vaccines: ${p.vaccine_status || 'Current'}</p>
-                                </div>
-                                <button class="btn-icon" style="color:var(--danger-text);" onclick="event.stopPropagation(); deletePet('${p.id}')"><i data-lucide="x"></i></button>
+                        <div class="crm-card" onclick="openFullWidthProfile('pet', '${p.id}')" style="cursor:pointer;">
+                            <div class="crm-card-content">
+                                <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem; font-size:1.1rem;">
+                                    <i data-lucide="${speciesIcon}"></i> ${p.name}
+                                </h3>
+                                <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">${p.species} ${p.households?.name ? '· Household: ' + p.households.name : ''} · Vaccines: ${p.vaccine_status || 'Current'}</p>
                             </div>
+                            <button class="delete-action-btn" onclick="event.stopPropagation(); deletePet('${p.id}')" title="Delete Pet">
+                                <i data-lucide="trash-2"></i>
+                            </button>
                         </div>`;
                 }
             });
@@ -1624,20 +1611,21 @@ async function renderAllDashboards() {
     // 4. VETS
     if (filter === 'all' || filter === 'vets') {
         const { data: vets } = await client.from('vets').select('*').order('name');
+
         if (vets) {
             vets.forEach(v => {
                 if (!query || v.name?.toLowerCase().includes(query) || v.clinic?.toLowerCase().includes(query)) {
                     html += `
-                        <div class="crm-card">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <h3 style="margin:0; display:flex; align-items:center; gap:0.4rem;">
-                                        <i data-lucide="stethoscope"></i> ${v.name}
-                                    </h3>
-                                    <p style="margin:0.25rem 0 0 0; font-size:0.82rem; color:var(--text-muted);">${v.clinic || 'Independent Clinic'} · ${v.phone || 'No phone'}</p>
-                                </div>
-                                <button class="btn-icon" style="color:var(--danger-text);" onclick="deleteVet('${v.id}')"><i data-lucide="x"></i></button>
+                        <div class="crm-card" onclick="openFullWidthProfile('vet', '${v.id}')" style="cursor:pointer;">
+                            <div class="crm-card-content">
+                                <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem; font-size:1.1rem;">
+                                    <i data-lucide="stethoscope"></i> ${v.name}
+                                </h3>
+                                <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">${v.clinic || 'Clinic'} ${v.phone ? '· ' + v.phone : ''} · Status: ${v.status || 'Active'}</p>
                             </div>
+                            <button class="delete-action-btn" onclick="event.stopPropagation(); deleteVet('${v.id}')" title="Delete Vet">
+                                <i data-lucide="trash-2"></i>
+                            </button>
                         </div>`;
                 }
             });
@@ -1646,6 +1634,148 @@ async function renderAllDashboards() {
 
     container.innerHTML = html || '<div class="biz-empty">No entries found matching criteria.</div>';
     refreshIcons();
+}
+
+/* ==========================================================================
+   FULL-WIDTH EDITABLE ENTITY VIEW (INLINE BELOW FILTER BAR)
+   ========================================================================== */
+
+async function openFullWidthProfile(type, id) {
+    const container = document.getElementById('crm-list-container');
+    if (!container) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    let payload = null;
+
+    if (type === 'household') {
+        const { data } = await client.from('households').select('*, people(*), pets(*)').eq('id', id).single();
+        payload = data;
+    } else if (type === 'person') {
+        const { data } = await client.from('people').select('*').eq('id', id).single();
+        payload = data;
+    } else if (type === 'pet') {
+        const { data } = await client.from('pets').select('*').eq('id', id).single();
+        payload = data;
+    } else if (type === 'vet') {
+        const { data } = await client.from('vets').select('*').eq('id', id).single();
+        payload = data;
+    }
+
+    if (!payload) return;
+
+    container.innerHTML = `
+        <div class="full-width-profile-view">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-bottom:1.25rem;">
+                <h2 style="margin:0; font-size:1.35rem; display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="${type === 'household' ? 'home' : type === 'person' ? 'user' : type === 'pet' ? 'dog' : 'stethoscope'}"></i> 
+                    Manage ${type.charAt(0).toUpperCase() + type.slice(1)}: ${payload.name}
+                </h2>
+                <button class="btn" onclick="renderAllDashboards()"><i data-lucide="x"></i> Close View</button>
+            </div>
+
+            <!-- EDITABLE FIELDS FORM -->
+            <form id="inline-edit-form" onsubmit="saveInlineProfile(event, '${type}', '${id}')" style="display:flex; flex-direction:column; gap:1rem;">
+                ${renderInlineFormFields(type, payload)}
+                <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                    <button type="button" class="btn" onclick="renderAllDashboards()">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Changes</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    refreshIcons();
+}
+
+function renderInlineFormFields(type, data) {
+    if (type === 'household') {
+        return `
+            <div class="form-group"><label>Household Name</label><input type="text" id="edit-hh-name" value="${data.name || ''}" class="biz-select" required></div>
+            <div class="form-group"><label>Address</label><input type="text" id="edit-hh-address" value="${data.address || ''}" class="biz-select"></div>
+            <div class="form-group"><label>Notes</label><textarea id="edit-hh-note" class="biz-select" rows="3">${data.note || ''}</textarea></div>
+        `;
+    } else if (type === 'person') {
+        return `
+            <div class="form-group"><label>Full Name</label><input type="text" id="edit-p-name" value="${data.name || ''}" class="biz-select" required></div>
+            <div class="form-group"><label>Contact Info (Phone / Email)</label><input type="text" id="edit-p-contact" value="${data.contact || ''}" class="biz-select"></div>
+            <div class="form-group"><label>Role</label><input type="text" id="edit-p-role" value="${data.role || 'Primary'}" class="biz-select"></div>
+        `;
+    } else if (type === 'pet') {
+        return `
+            <div class="form-group"><label>Pet Name</label><input type="text" id="edit-pet-name" value="${data.name || ''}" class="biz-select" required></div>
+            <div class="form-group"><label>Species</label>
+                <select id="edit-pet-species" class="biz-select">
+                    <option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option>
+                    <option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option>
+                    <option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Vaccine Status</label>
+                <select id="edit-pet-vaccine" class="biz-select">
+                    <option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option>
+                    <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending</option>
+                    <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Allergies</label><input type="text" id="edit-pet-allergies" value="${data.allergies || ''}" class="biz-select"></div>
+        `;
+    } else if (type === 'vet') {
+        return `
+            <div class="form-group"><label>Doctor / Vet Name</label><input type="text" id="edit-vt-name" value="${data.name || ''}" class="biz-select" required></div>
+            <div class="form-group"><label>Clinic</label><input type="text" id="edit-vt-clinic" value="${data.clinic || ''}" class="biz-select"></div>
+            <div class="form-group"><label>Phone</label><input type="text" id="edit-vt-phone" value="${data.phone || ''}" class="biz-select"></div>
+            <div class="form-group"><label>Status</label>
+                <select id="edit-vt-status" class="biz-select">
+                    <option value="active" ${data.status === 'active' ? 'selected' : ''}>Active</option>
+                    <option value="inactive" ${data.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                </select>
+            </div>
+        `;
+    }
+}
+
+async function saveInlineProfile(e, type, id) {
+    if (e && e.preventDefault) e.preventDefault();
+    const client = getSupabase();
+    if (!client) return;
+
+    let payload = {};
+
+    if (type === 'household') {
+        payload = {
+            name: document.getElementById('edit-hh-name')?.value.trim(),
+            address: document.getElementById('edit-hh-address')?.value.trim(),
+            note: document.getElementById('edit-hh-note')?.value.trim()
+        };
+        await client.from('households').update(payload).eq('id', id);
+    } else if (type === 'person') {
+        payload = {
+            name: document.getElementById('edit-p-name')?.value.trim(),
+            contact: document.getElementById('edit-p-contact')?.value.trim(),
+            role: document.getElementById('edit-p-role')?.value.trim()
+        };
+        await client.from('people').update(payload).eq('id', id);
+    } else if (type === 'pet') {
+        payload = {
+            name: document.getElementById('edit-pet-name')?.value.trim(),
+            species: document.getElementById('edit-pet-species')?.value,
+            vaccine_status: document.getElementById('edit-pet-vaccine')?.value,
+            allergies: document.getElementById('edit-pet-allergies')?.value.trim()
+        };
+        await client.from('pets').update(payload).eq('id', id);
+    } else if (type === 'vet') {
+        payload = {
+            name: document.getElementById('edit-vt-name')?.value.trim(),
+            clinic: document.getElementById('edit-vt-clinic')?.value.trim(),
+            phone: document.getElementById('edit-vt-phone')?.value.trim(),
+            status: document.getElementById('edit-vt-status')?.value
+        };
+        await client.from('vets').update(payload).eq('id', id);
+    }
+
+    renderAllDashboards();
 }
 
 /* ==========================================================================
