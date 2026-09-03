@@ -760,6 +760,42 @@ body {
 .obb-btn .obb-label { display: block; width: 100%; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .obb-btn.active { color: var(--owner-primary); border-top-color: var(--owner-primary); }
 
+/* ── OWNER BOTTOM TAB BAR & DRAWER DESKTOP RESET ── */
+.owner-more-overlay,
+.owner-more-drawer,
+.owner-bottom-bar {
+  display: none !important;
+}
+
+/* ── MOBILE ONLY OVERRIDES (Max Width 768px) ── */
+@media (max-width: 768px) {
+  body.in-owner-view .owner-bottom-bar {
+    display: block !important;
+  }
+
+  .owner-more-overlay.open {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 201;
+  }
+
+  .owner-more-drawer.open {
+    display: block !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 1rem 1rem 0 0;
+    z-index: 202;
+    padding: 0.5rem 0 1rem;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
 /* ==========================================================================
    8. BUSINESS & STAFF MANAGEMENT
    ========================================================================== */
