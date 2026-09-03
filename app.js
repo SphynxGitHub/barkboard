@@ -119,6 +119,16 @@ window.addEventListener('resize', () => {
     }, 80);
 });
 
+function openBookingModal(householdId) {
+    alert('Opening booking/visit creator for Household: ' + householdId);
+    // Links into your integrated scheduling modal when ready
+}
+
+function openInvoiceModal(householdId) {
+    alert('Opening invoice creator for Household: ' + householdId);
+    // Links into your integrated billing/invoicing module when ready
+}
+
 /* ==========================================================================
    STAFF MANAGEMENT CONTROLLER
    ========================================================================== */
