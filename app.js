@@ -336,6 +336,51 @@ async function deleteStaff(id) {
 }
 
 /* ==========================================================================
+   STAFF AVAILABILITY MODAL HANDLER
+   ========================================================================== */
+
+function openStaffAvailModal(id) {
+    if (typeof editingStaffAvailId !== 'undefined') {
+        editingStaffAvailId = id;
+    }
+
+    if (typeof populateStaffSelects === 'function') {
+        populateStaffSelects();
+    }
+
+    const titleEl = document.getElementById('staff-avail-modal-title');
+    if (titleEl) {
+        titleEl.textContent = id ? 'Edit Time Off' : 'Add Time Off';
+    }
+
+    const whoSel = document.getElementById('sav-who');
+    const typeSel = document.getElementById('sav-type');
+    const startInput = document.getElementById('sav-start');
+    const endInput = document.getElementById('sav-end');
+    const notesInput = document.getElementById('sav-notes');
+
+    if (id && typeof staffAvailability !== 'undefined') {
+        const a = staffAvailability.find(x => x.id === id);
+        if (a) {
+            if (whoSel) whoSel.value = a.staffId || a.staff_id || '';
+            if (typeSel) typeSel.value = a.type || 'vacation';
+            if (startInput) startInput.value = a.start || a.start_date || '';
+            if (endInput) endInput.value = a.end || a.end_date || '';
+            if (notesInput) notesInput.value = a.notes || '';
+        }
+    } else {
+        if (startInput) startInput.value = '';
+        if (endInput) endInput.value = '';
+        if (notesInput) notesInput.value = '';
+    }
+
+    const modal = document.getElementById('staff-avail-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+/* ==========================================================================
    CROSS-ENTITY RELATIONSHIP MODAL CONTROLLER
    ========================================================================== */
 
@@ -707,6 +752,24 @@ function switchBizTab(tab) {
     }
     if (tab === 'availability' && typeof renderAvailabilityList === 'function') {
         renderAvailabilityList();
+    }
+}
+
+function onBizPresetChange() {
+    const presetSelect = document.getElementById('biz-date-preset');
+    if (!presetSelect) return;
+
+    if (typeof bizDatePreset !== 'undefined') {
+        bizDatePreset = presetSelect.value;
+    }
+
+    const customDiv = document.getElementById('biz-custom-dates');
+    if (customDiv) {
+        customDiv.style.display = (presetSelect.value === 'custom') ? 'flex' : 'none';
+    }
+
+    if (typeof renderBizDashboard === 'function') {
+        renderBizDashboard();
     }
 }
 
