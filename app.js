@@ -1647,10 +1647,6 @@ async function renderAllDashboards() {
 }
 
 /* ==========================================================================
-   FULL-WIDTH EDITABLE ENTITY VIEW (INLINE BELOW FILTER BAR)
-   ========================================================================== */
-
-/* ==========================================================================
    INLINE FULL-WIDTH ENTITY VIEW (DIRECTLY BELOW FILTER BAR)
    ========================================================================== */
 
@@ -1717,11 +1713,9 @@ function renderEntitySections(type, data, id) {
                 
                 <!-- 1. Household Details Card -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                            <i data-lucide="info"></i> Household Details
-                        </h3>
-                    </div>
+                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="info"></i> Household Details
+                    </h3>
                     <div style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household Name</label>
@@ -1744,8 +1738,8 @@ function renderEntitySections(type, data, id) {
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
                             <i data-lucide="users"></i> Household Members
                         </h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openHouseholdModal('${id}')">
-                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Member
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="promptSearchAndLink('person', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Add / Link Member
                         </button>
                     </div>
                     ${data.people && data.people.length ? data.people.map(p => `
@@ -1755,10 +1749,10 @@ function renderEntitySections(type, data, id) {
                                 <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
                             </div>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem; display:flex; align-items:center; gap:0.35rem;">
-                                <i data-lucide="phone" style="width:12px;height:12px;"></i> ${p.contact || 'No contact info set'}
+                                <i data-lucide="phone" style="width:12px;height:12px;"></i> ${p.contact || 'No contact set'}
                             </div>
                         </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached to this household.</p>'}
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
                 </div>
 
                 <!-- 3. Pets Card -->
@@ -1767,8 +1761,8 @@ function renderEntitySections(type, data, id) {
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
                             <i data-lucide="dog"></i> Pets
                         </h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openPetModal(); setTimeout(() => { const sel = document.getElementById('pet-household-id'); if(sel) sel.value='${id}'; }, 100);">
-                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Pet
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="promptSearchAndLink('pet', '${id}')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Add / Link Pet
                         </button>
                     </div>
                     ${data.pets && data.pets.length ? data.pets.map(p => `
@@ -1781,47 +1775,49 @@ function renderEntitySections(type, data, id) {
                             </div>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Vaccines: ${p.vaccine_status || 'Current'}</div>
                         </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached to this household.</p>'}
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
                 </div>
 
-                <!-- 4. Visits / Scheduled Events Card -->
+                <!-- 4. Primary Veterinary Clinic Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="stethoscope"></i> Veterinary Clinic
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openVetModal()">
+                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Link Vet
+                        </button>
+                    </div>
+                    <div id="hh-vet-content">
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No primary vet facility linked.</p>
+                    </div>
+                </div>
+
+                <!-- 5. Scheduled Events Card -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
                             <i data-lucide="calendar"></i> Scheduled Visits / Events
                         </h3>
                         <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openBookingModal('${id}')">
-                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Visit
+                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Add Event
                         </button>
                     </div>
-                    <div id="hh-visits-container">
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found on file.</p>
-                    </div>
-                </div>
-
-                <!-- 5. Open Invoices Card -->
-                <div class="stat-card alert" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                            <i data-lucide="credit-card"></i> Invoices & Billing
-                        </h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openInvoiceModal('${id}')">
-                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Create Invoice
-                        </button>
-                    </div>
-                    <div id="hh-invoices-container">
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No unpaid balances or invoices on file.</p>
-                    </div>
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>
                 </div>
 
             </div>
         `;
     } else if (type === 'person') {
         return `
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
+                
+                <!-- Person Details Card -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user"></i> Contact Details</h3>
-                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="user"></i> Contact Details
+                    </h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Full Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'name', this.value)">
@@ -1836,20 +1832,42 @@ function renderEntitySections(type, data, id) {
                         </div>
                     </div>
                 </div>
-                ${data.households ? `
-                    <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                        <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
-                        <p style="margin-top:0.5rem; font-size:0.95rem;"><strong>${data.households.name}</strong> (Click to jump to Household View)</p>
+
+                <!-- Household & Other Members Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="home"></i> Household & Other Members
+                    </h3>
+                    ${data.households ? `
+                        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
+                            <strong>🏡 ${data.households.name}</strong>
+                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
+                        </div>
+                    ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
+                </div>
+
+                <!-- Related Pets Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="dog"></i> Pets in Household
+                    </h3>
+                    <div id="person-pets-list">
+                        <p style="font-size:0.85rem; color:var(--text-muted);">Loading household pets...</p>
                     </div>
-                ` : ''}
+                </div>
+
             </div>
         `;
     } else if (type === 'pet') {
         return `
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
+                
+                <!-- Pet Profile & Medical Info -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="dog"></i> Pet Profile</h3>
-                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="dog"></i> Pet Profile & Medical Notes
+                    </h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Pet Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'name', this.value)">
@@ -1870,22 +1888,54 @@ function renderEntitySections(type, data, id) {
                                 <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
                             </select>
                         </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Allergies</label>
+                            <input type="text" value="${data.allergies || ''}" placeholder="e.g. Chicken, Bee stings" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'allergies', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Diet & Food Instructions</label>
+                            <input type="text" value="${data.food || ''}" placeholder="e.g. 2 cups kibble morning/night" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'food', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Behavioral / Other Notes</label>
+                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="3" onchange="autoSaveField('pets', '${id}', 'details', this.value)">${data.details || ''}</textarea>
+                        </div>
                     </div>
                 </div>
-                ${data.households ? `
-                    <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                        <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
-                        <p style="margin-top:0.5rem; font-size:0.95rem;"><strong>${data.households.name}</strong> (Click to jump to Household View)</p>
-                    </div>
-                ` : ''}
+
+                <!-- Household Link Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="home"></i> Household
+                    </h3>
+                    ${data.households ? `
+                        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
+                            <strong>🏡 ${data.households.name}</strong>
+                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
+                        </div>
+                    ` : '<p style="font-size:0.85rem; color:var(--text-muted);">Unassigned to any household.</p>'}
+                </div>
+
+                <!-- Scheduled Events & Visits -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="calendar"></i> Scheduled Visits & Events
+                    </h3>
+                    <p style="font-size:0.85rem; color:var(--text-muted);">No upcoming scheduled events for this pet.</p>
+                </div>
+
             </div>
         `;
     } else if (type === 'vet') {
         return `
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+            <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                
+                <!-- Vet Profile Form -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Vet Info</h3>
-                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="stethoscope"></i> Vet Details
+                    </h3>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Doctor / Vet Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'name', this.value)">
@@ -1895,11 +1945,25 @@ function renderEntitySections(type, data, id) {
                             <input type="text" value="${data.clinic || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)">
                         </div>
                         <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone</label>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone / Emergency</label>
                             <input type="text" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'phone', this.value)">
                         </div>
                     </div>
                 </div>
+
+                <!-- Client Search & Linked Households / Pets -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="building"></i> Associated Client Households & Pets
+                        </h3>
+                        <input type="text" id="vet-client-search" placeholder="Search vet clients or pets..." onkeyup="filterVetClients('${id}')" class="biz-select" style="padding:0.4rem 0.75rem; width:260px;">
+                    </div>
+                    <div id="vet-clients-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem;">
+                        <p style="font-size:0.85rem; color:var(--text-muted);">Loading client households...</p>
+                    </div>
+                </div>
+
             </div>
         `;
     }
@@ -1933,6 +1997,52 @@ async function autoSaveField(table, id, field, value) {
 function closeFullscreenProfile() {
     const modal = document.getElementById('fullscreen-modal');
     if (modal) modal.classList.add('hidden');
+}
+
+/* ==========================================================================
+   SEARCH-FIRST ENTITY LINKING & PROMPT CONTROLLER
+   ========================================================================== */
+
+async function promptSearchAndLink(entityType, householdId) {
+    const searchTerm = prompt(`Search existing ${entityType === 'person' ? 'people' : 'pets'} by name to link to this household:`);
+    
+    if (searchTerm === null) return; // User cancelled prompt
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const table = entityType === 'person' ? 'people' : 'pets';
+    const { data: results } = await client
+        .from(table)
+        .select('*')
+        .ilike('name', `%${searchTerm.trim()}%`);
+
+    if (results && results.length > 0) {
+        const choice = prompt(
+            `Found matching entries:\n` +
+            results.map((r, i) => `${i + 1}. ${r.name} (${r.contact || r.species || 'No details'})`).join('\n') +
+            `\n\nEnter number to link, or type "0" to add a NEW ${entityType}:`
+        );
+
+        const index = parseInt(choice) - 1;
+        if (index >= 0 && index < results.length) {
+            // Link chosen entity to this household
+            await client.from(table).update({ household_id: householdId }).eq('id', results[index].id);
+            openFullWidthProfile('household', householdId);
+            return;
+        }
+    }
+
+    // Fallback: Open New Entity Creation Modal if not found or selected 0
+    if (entityType === 'person') {
+        openHouseholdModal(householdId);
+    } else {
+        openPetModal();
+        setTimeout(() => {
+            const sel = document.getElementById('pet-household-id');
+            if (sel) sel.value = householdId;
+        }, 100);
+    }
 }
 
 /* ==========================================================================
