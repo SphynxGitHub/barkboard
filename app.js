@@ -916,8 +916,59 @@ function deleteClosure(id) {
 }
 
 /* ==========================================================================
-   HOUSEHOLD & CLIENT CONTROLLER (SUPABASE)
+   HOUSEHOLD / CLIENT CRUD CONTROLLER (SUPABASE)
    ========================================================================== */
+
+let editingHouseholdId = null;
+
+async function openHouseholdModal(id = null) {
+    editingHouseholdId = id;
+
+    const titleEl = document.getElementById('household-modal-title');
+    const nameInput = document.getElementById('hh-name');
+    const contactNameInput = document.getElementById('hh-contact-name');
+    const contactInfoInput = document.getElementById('hh-contact-info');
+    const addressInput = document.getElementById('hh-address');
+    const noteInput = document.getElementById('hh-notes');
+
+    if (id) {
+        if (titleEl) titleEl.textContent = 'Edit Household / Client';
+        
+        const client = getSupabase();
+        if (client) {
+            const { data: hh, error } = await client
+                .from('households')
+                .select('*, people(*)')
+                .eq('id', id)
+                .single();
+
+            if (!error && hh) {
+                const primary = hh.people?.find(p => p.role === 'Primary') || hh.people?.[0];
+                if (nameInput) nameInput.value = hh.name || '';
+                if (contactNameInput) contactNameInput.value = primary ? primary.name : '';
+                if (contactInfoInput) contactInfoInput.value = primary ? primary.contact : '';
+                if (addressInput) addressInput.value = hh.address || '';
+                if (noteInput) noteInput.value = hh.note || '';
+            }
+        }
+    } else {
+        if (titleEl) titleEl.textContent = 'Add Household / Client';
+        if (nameInput) nameInput.value = '';
+        if (contactNameInput) contactNameInput.value = '';
+        if (contactInfoInput) contactInfoInput.value = '';
+        if (addressInput) addressInput.value = '';
+        if (noteInput) noteInput.value = '';
+    }
+
+    const modal = document.getElementById('household-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeHouseholdModal() {
+    editingHouseholdId = null;
+    const modal = document.getElementById('household-modal');
+    if (modal) modal.classList.add('hidden');
+}
 
 async function saveHousehold() {
     const client = getSupabase();
@@ -935,52 +986,137 @@ async function saveHousehold() {
     const address = addressInput ? addressInput.value.trim() : '';
     const note = noteInput ? noteInput.value.trim() : '';
 
-    if (!hhName) return alert('Please enter a Household name (e.g. "The Miller Family").');
+    if (!hhName) return alert('Please enter a Household name.');
 
-    // 1. Insert Household Record
-    const { data: hhData, error: hhError } = await client
-        .from('households')
-        .insert([{ name: hhName, note: note, address: address }])
-        .select()
-        .single();
+    if (editingHouseholdId) {
+        // Update Existing Household
+        const { error: hhErr } = await client
+            .from('households')
+            .update({ name: hhName, address: address, note: note })
+            .eq('id', editingHouseholdId);
 
-    if (hhError) {
-        console.error('Error saving household:', hhError);
-        return alert('Failed to create household: ' + hhError.message);
-    }
+        if (hhErr) return alert('Error updating household: ' + hhErr.message);
 
-    // 2. Insert Primary Contact into 'people' table (if contact name provided)
-    if (contactName && hhData) {
-        const { error: personError } = await client
-            .from('people')
-            .insert([{
-                household_id: hhData.id,
-                name: contactName,
-                contact: contactInfo,
-                role: 'Primary'
-            }]);
+        // Update or insert primary contact
+        if (contactName) {
+            const { data: existingPeople } = await client
+                .from('people')
+                .select('id')
+                .eq('household_id', editingHouseholdId)
+                .limit(1);
 
-        if (personError) {
-            console.error('Error creating primary contact:', personError);
+            if (existingPeople && existingPeople.length > 0) {
+                await client
+                    .from('people')
+                    .update({ name: contactName, contact: contactInfo })
+                    .eq('id', existingPeople[0].id);
+            } else {
+                await client
+                    .from('people')
+                    .insert([{ household_id: editingHouseholdId, name: contactName, contact: contactInfo, role: 'Primary' }]);
+            }
+        }
+    } else {
+        // Insert New Household
+        const { data: hhData, error: hhErr } = await client
+            .from('households')
+            .insert([{ name: hhName, address: address, note: note }])
+            .select()
+            .single();
+
+        if (hhErr) return alert('Error creating household: ' + hhErr.message);
+
+        if (contactName && hhData) {
+            await client
+                .from('people')
+                .insert([{ household_id: hhData.id, name: contactName, contact: contactInfo, role: 'Primary' }]);
         }
     }
 
-    // Reset inputs and close modal
-    if (nameInput) nameInput.value = '';
-    if (contactNameInput) contactNameInput.value = '';
-    if (contactInfoInput) contactInfoInput.value = '';
-    if (addressInput) addressInput.value = '';
-    if (noteInput) noteInput.value = '';
-
     closeHouseholdModal();
-
-    // Refresh CRM View
     if (typeof renderAllDashboards === 'function') renderAllDashboards();
 }
 
+async function deleteHousehold(id) {
+    if (!confirm('Are you sure? This will delete the household and all linked pets and contacts.')) return;
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const { error } = await client
+        .from('households')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        alert('Error deleting household: ' + error.message);
+    } else {
+        if (typeof renderAllDashboards === 'function') renderAllDashboards();
+    }
+}
+
 /* ==========================================================================
-   PET CONTROLLER (SUPABASE)
+   PET CRUD CONTROLLER (SUPABASE)
    ========================================================================== */
+
+let editingPetId = null;
+
+async function openPetModal(id = null) {
+    editingPetId = id;
+    await populateHouseholdSelects();
+
+    const titleEl = document.getElementById('pet-modal-title');
+    const householdSel = document.getElementById('pet-household-id');
+    const nameInput = document.getElementById('pet-name');
+    const speciesSel = document.getElementById('pet-species');
+    const vaccineSel = document.getElementById('pet-vaccine-status');
+    const vaccineExpInput = document.getElementById('pet-vaccine-expiry');
+    const allergiesInput = document.getElementById('pet-allergies');
+    const foodInput = document.getElementById('pet-food');
+    const detailsInput = document.getElementById('pet-details');
+
+    if (id) {
+        if (titleEl) titleEl.textContent = 'Edit Pet';
+
+        const client = getSupabase();
+        if (client) {
+            const { data: pet, error } = await client
+                .from('pets')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (!error && pet) {
+                if (householdSel) householdSel.value = pet.household_id || '';
+                if (nameInput) nameInput.value = pet.name || '';
+                if (speciesSel) speciesSel.value = pet.species || 'dog';
+                if (vaccineSel) vaccineSel.value = pet.vaccine_status || 'current';
+                if (vaccineExpInput) vaccineExpInput.value = pet.vaccine_expiry || '';
+                if (allergiesInput) allergiesInput.value = pet.allergies || '';
+                if (foodInput) foodInput.value = pet.food || '';
+                if (detailsInput) detailsInput.value = pet.details || '';
+            }
+        }
+    } else {
+        if (titleEl) titleEl.textContent = 'Add Pet';
+        if (nameInput) nameInput.value = '';
+        if (speciesSel) speciesSel.value = 'dog';
+        if (vaccineSel) vaccineSel.value = 'current';
+        if (vaccineExpInput) vaccineExpInput.value = '';
+        if (allergiesInput) allergiesInput.value = '';
+        if (foodInput) foodInput.value = '';
+        if (detailsInput) detailsInput.value = '';
+    }
+
+    const modal = document.getElementById('pet-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closePetModal() {
+    editingPetId = null;
+    const modal = document.getElementById('pet-modal');
+    if (modal) modal.classList.add('hidden');
+}
 
 async function savePet() {
     const client = getSupabase();
@@ -1005,7 +1141,7 @@ async function savePet() {
     const details = detailsInput ? detailsInput.value.trim() : '';
 
     if (!name) return alert('Please enter a pet name.');
-    if (!householdId) return alert('Please select or assign a household to this pet.');
+    if (!householdId) return alert('Please select a household.');
 
     const payload = {
         household_id: householdId,
@@ -1018,50 +1154,42 @@ async function savePet() {
         details: details
     };
 
+    let response;
+    if (editingPetId) {
+        response = await client
+            .from('pets')
+            .update(payload)
+            .eq('id', editingPetId);
+    } else {
+        response = await client
+            .from('pets')
+            .insert([payload]);
+    }
+
+    if (response.error) {
+        alert('Failed to save pet: ' + response.error.message);
+    } else {
+        closePetModal();
+        if (typeof renderAllDashboards === 'function') renderAllDashboards();
+    }
+}
+
+async function deletePet(id) {
+    if (!confirm('Remove this pet profile?')) return;
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
     const { error } = await client
         .from('pets')
-        .insert([payload]);
+        .delete()
+        .eq('id', id);
 
     if (error) {
-        console.error('Error saving pet:', error);
-        return alert('Failed to save pet: ' + error.message);
+        alert('Error deleting pet: ' + error.message);
+    } else {
+        if (typeof renderAllDashboards === 'function') renderAllDashboards();
     }
-
-    // Reset inputs and close modal
-    if (nameInput) nameInput.value = '';
-    if (allergiesInput) allergiesInput.value = '';
-    if (foodInput) foodInput.value = '';
-    if (detailsInput) detailsInput.value = '';
-
-    closePetModal();
-
-    // Refresh CRM View
-    if (typeof renderAllDashboards === 'function') renderAllDashboards();
-}
-
-async function populateHouseholdSelects() {
-    const client = getSupabase();
-    if (!client) return;
-
-    const { data: households, error } = await client
-        .from('households')
-        .select('id, name')
-        .order('name', { ascending: true });
-
-    if (error || !households) return;
-
-    const selectEl = document.getElementById('pet-household-id');
-    if (selectEl) {
-        selectEl.innerHTML = households
-            .map(h => `<option value="${h.id}">${h.name}</option>`)
-            .join('');
-    }
-}
-
-function openPetModal() {
-    populateHouseholdSelects(); // Fetch live households for dropdown
-    const modal = document.getElementById('pet-modal');
-    if (modal) modal.classList.remove('hidden');
 }
 
 /* ==========================================================================
@@ -1150,15 +1278,19 @@ async function renderAllDashboards() {
                         ${primary ? `<p style="margin:0; font-size:0.875rem; color:var(--text-muted);">👤 Contact: <strong>${primary.name}</strong> ${primary.contact ? '· ' + primary.contact : ''}</p>` : ''}
                         ${hh.address ? `<p style="margin:0.2rem 0 0 0; font-size:0.8rem; color:var(--text-muted);">📍 ${hh.address}</p>` : ''}
                     </div>
-                    <button class="btn" style="font-size:0.78rem; padding:0.3rem 0.65rem;" onclick="activateOwnerView('${hh.id}')">View Owner Profile</button>
+                    <div style="display:flex; gap:0.35rem;">
+                        <button class="btn" style="font-size:0.78rem; padding:0.3rem 0.65rem;" onclick="openHouseholdModal('${hh.id}')">Edit</button>
+                        <button class="btn" style="font-size:0.78rem; padding:0.3rem 0.65rem; color:var(--danger-text);" onclick="deleteHousehold('${hh.id}')">Remove</button>
+                    </div>
                 </div>
-
+        
                 ${pets.length > 0 ? `
                     <div style="margin-top:0.75rem; padding-top:0.6rem; border-top:1px dashed var(--border); display:flex; flex-wrap:wrap; gap:0.4rem;">
                         ${pets.map(p => `
-                            <span style="font-size:0.78rem; padding:0.2rem 0.5rem; border-radius:9999px; background:var(--bg-muted); border:1px solid var(--border);">
+                            <span style="font-size:0.78rem; padding:0.25rem 0.6rem; border-radius:9999px; background:var(--bg-muted); border:1px solid var(--border); display:inline-flex; align-items:center; gap:0.35rem;">
                                 ${p.species === 'dog' ? '🐕' : p.species === 'cat' ? '🐈' : '🐾'} <strong>${p.name}</strong>
-                                <small style="color:var(--text-muted);">(${p.vaccine_status || 'current'})</small>
+                                <button onclick="openPetModal('${p.id}')" style="background:none;border:none;cursor:pointer;padding:0;font-size:0.75rem;" title="Edit Pet">✏️</button>
+                                <button onclick="deletePet('${p.id}')" style="background:none;border:none;cursor:pointer;padding:0;font-size:0.75rem;color:var(--danger-text);" title="Delete Pet">🗑️</button>
                             </span>
                         `).join('')}
                     </div>
