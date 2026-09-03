@@ -192,6 +192,39 @@ body {
   margin-bottom: 0.85rem;
 }
 
+/* ── MODAL FLOATING BACKDROP & OVERLAY ── */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.45); /* Dimmed backdrop background */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* Keeps overlay on top of all page content */
+}
+
+/* Hide modal when the hidden class is active */
+.modal.hidden {
+  display: none !important;
+}
+
+/* Floating Card Container */
+.modal-content {
+  background: var(--surface, #ffffff);
+  padding: 1.75rem;
+  border-radius: 0.5rem;
+  width: 90%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 1001;
+}
+
 .modal .form-group label {
   font-size: 0.85rem;
   font-weight: 600;
