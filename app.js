@@ -2227,8 +2227,6 @@ function switchCalTab(tab) {
     }
 }
 
-let editingResourceId = null;
-
 function openResourceModal(id) {
     editingResourceId = id;
     const r = (id && typeof managedResources !== 'undefined') 
