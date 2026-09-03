@@ -106,12 +106,25 @@
         <!-- ═══ CRM ═══ -->
         <section id="crm-view" class="view-panel hidden">
             <div class="crm-header">
-                <h2 style="margin:0;">Registry Directory & Global Relations</h2>
-                <div class="controls-row">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.75rem;">
+                    <h2 style="margin:0;">Registry Directory & Global Relations</h2>
+                    
+                    <!-- Added Action Buttons -->
+                    <div class="action-bar-buttons" style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button class="btn btn-primary" onclick="openHouseholdModal()">+ Add Household / Client</button>
+                        <button class="btn btn-primary" onclick="openPetModal()">+ Add Pet</button>
+                    </div>
+                </div>
+        
+                <div class="controls-row" style="margin-top: 1rem;">
                     <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()">
                     <button class="btn toggle-layout-btn" onclick="toggleLayout()">📋 Switch to List View</button>
-                    <button class="btn btn-primary rel-link-btn" onclick="openRelationshipModal()"><span class="rel-btn-text">🔗 Link Relationship</span><span class="rel-btn-icon" aria-hidden="true">🔗</span></button>
+                    <button class="btn btn-primary rel-link-btn" onclick="openRelationshipModal()">
+                        <span class="rel-btn-text">🔗 Link Relationship</span>
+                        <span class="rel-btn-icon" aria-hidden="true">🔗</span>
+                    </button>
                 </div>
+        
                 <div class="filter-menu">
                     <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
                     <button id="filter-household" class="filter-chip" onclick="setEntityFilter('household')">Households</button>
