@@ -47,7 +47,7 @@ body {
   justify-content: space-between;
   align-items: center;
   background-color: var(--surface);
-  padding: 1rem 2rem;
+  padding: 0.85rem 2rem;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -61,35 +61,49 @@ body {
 
 .logo {
   font-size: 1.4rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--primary);
   letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .navbar.owner-mode .logo { color: #bae6fd; }
 
+#admin-nav, #owner-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .nav-btn {
   background: none;
   border: none;
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.92rem;
+  font-weight: 500;
   cursor: pointer;
-  border-radius: 0.375rem;
-  margin-left: 0.25rem;
+  border-radius: 0.5rem;
   color: var(--text);
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.15s ease;
 }
 
-.nav-btn.active, .nav-btn:hover {
+.nav-btn:hover {
+  color: var(--primary);
+}
+
+.nav-btn.active {
   background-color: var(--primary);
-  color: #ffffff;
+  color: #ffffff !important;
+  font-weight: 600;
 }
 
 .navbar.owner-mode .nav-btn { color: #bae6fd; }
 .navbar.owner-mode .nav-btn.active, 
 .navbar.owner-mode .nav-btn:hover {
   background-color: #0369a1;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .hamburger {
