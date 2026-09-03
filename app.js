@@ -282,7 +282,6 @@ async function saveStaffMember() {
 
     let response;
 
-    // Check if updating an existing record or inserting a new one
     if (editingStaffId) {
         response = await client
             .from('staff')
@@ -298,6 +297,19 @@ async function saveStaffMember() {
         alert('Error saving to Supabase: ' + response.error.message);
         console.error('Supabase save error:', response.error);
     } else {
+        // Collect local qualification state mapping
+        if (typeof serviceTypes !== 'undefined' && typeof staffQualifications !== 'undefined') {
+            const savedId = editingStaffId || (response.data && response.data[0] ? response.data[0].id : null);
+            if (savedId) {
+                staffQualifications[savedId] = serviceTypes
+                    .filter(svc => document.getElementById(`qual-chk-${svc.id}`)?.checked)
+                    .map(svc => ({
+                        serviceId: svc.id,
+                        dailyMax: parseInt(document.getElementById(`qual-cap-${svc.id}`)?.value) || 1
+                    }));
+            }
+        }
+
         editingStaffId = null;
         closeStaffModal();
         await renderStaffRoster();
