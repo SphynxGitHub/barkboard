@@ -314,4 +314,3 @@ async function deleteStaff(id) {
         await renderStaffRoster();
     }
 }
-Uncaught ReferenceError: openStaffAvailModal is not defined
