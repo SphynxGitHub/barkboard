@@ -77,10 +77,38 @@ window.addEventListener('resize', () => {
    STAFF MANAGEMENT CONTROLLER
    ========================================================================== */
 
-/* switchView hook for staff-mgmt-view */
+/* === STAFF VIEW INITIALIZATION === */
 function initStaffView() {
-    populateStaffSelects();
-    switchStaffTab('roster'); // Ensures Roster tab and list load by default
+    if (typeof populateStaffSelects === 'function') {
+        populateStaffSelects();
+    }
+    if (typeof switchStaffTab === 'function') {
+        switchStaffTab('roster');
+    }
+}
+
+/**
+ * Populates all staff dropdown selects across modals and filter menus
+ */
+function populateStaffSelects() {
+    if (typeof staffMembers === 'undefined' || !Array.isArray(staffMembers)) return;
+
+    const opts = staffMembers
+        .map(s => `<option value="${s.id}">${s.name} · ${s.role}</option>`)
+        .join('');
+
+    // Target dropdown IDs across all modals
+    const selectIds = ['sav-who', 'asgn-staff', 'stsk-who'];
+    selectIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = opts;
+    });
+
+    // Target task list filter dropdown
+    const filterSel = document.getElementById('staff-task-filter');
+    if (filterSel) {
+        filterSel.innerHTML = '<option value="all">All staff</option>' + opts;
+    }
 }
 
 /**
