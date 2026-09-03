@@ -1111,63 +1111,44 @@ async function saveHousehold() {
     if (!client) return alert('Database connection unavailable.');
 
     const nameInput = document.getElementById('hh-name');
-    const contactNameInput = document.getElementById('hh-contact-name');
     const contactInfoInput = document.getElementById('hh-contact-info');
-    const addressInput = document.getElementById('hh-address');
     const noteInput = document.getElementById('hh-notes');
 
-    const hhName = nameInput ? nameInput.value.trim() : '';
-    const contactName = contactNameInput ? contactNameInput.value.trim() : '';
+    const personName = nameInput ? nameInput.value.trim() : '';
     const contactInfo = contactInfoInput ? contactInfoInput.value.trim() : '';
-    const address = addressInput ? addressInput.value.trim() : '';
     const note = noteInput ? noteInput.value.trim() : '';
 
-    if (!hhName) return alert('Please enter a Household name.');
+    if (!personName) return alert('Please enter a name.');
 
+    // If linking directly to an active Household View
+    if (activeLinkingHouseholdId) {
+        const { error } = await client.from('people').insert([{
+            household_id: activeLinkingHouseholdId,
+            name: personName,
+            contact: contactInfo,
+            role: note || 'Member'
+        }]);
+
+        if (error) {
+            alert('Error adding person: ' + error.message);
+        } else {
+            closeHouseholdModal();
+            // Refresh inline profile view immediately
+            openFullWidthProfile('household', activeLinkingHouseholdId);
+        }
+        activeLinkingHouseholdId = null;
+        return;
+    }
+
+    // Standard Household Insert/Update Flow
     if (editingHouseholdId) {
-        const { error: hhErr } = await client
-            .from('households')
-            .update({ name: hhName, address: address, note: note })
-            .eq('id', editingHouseholdId);
-
-        if (hhErr) return alert('Error updating household: ' + hhErr.message);
-
-        if (contactName) {
-            const { data: existingPeople } = await client
-                .from('people')
-                .select('id')
-                .eq('household_id', editingHouseholdId)
-                .limit(1);
-
-            if (existingPeople && existingPeople.length > 0) {
-                await client
-                    .from('people')
-                    .update({ name: contactName, contact: contactInfo })
-                    .eq('id', existingPeople[0].id);
-            } else {
-                await client
-                    .from('people')
-                    .insert([{ household_id: editingHouseholdId, name: contactName, contact: contactInfo, role: 'Primary' }]);
-            }
-        }
+        await client.from('households').update({ name: personName, note: note }).eq('id', editingHouseholdId);
     } else {
-        const { data: hhData, error: hhErr } = await client
-            .from('households')
-            .insert([{ name: hhName, address: address, note: note }])
-            .select()
-            .single();
-
-        if (hhErr) return alert('Error creating household: ' + hhErr.message);
-
-        if (contactName && hhData) {
-            await client
-                .from('people')
-                .insert([{ household_id: hhData.id, name: contactName, contact: contactInfo, role: 'Primary' }]);
-        }
+        await client.from('households').insert([{ name: personName, note: note }]);
     }
 
     closeHouseholdModal();
-    if (typeof renderAllDashboards === 'function') renderAllDashboards();
+    renderAllDashboards();
 }
 
 async function deleteHousehold(id) {
@@ -2002,9 +1983,11 @@ async function linkEntities(targetType, targetId, sourceId) {
     renderAllDashboards();
 }
 
+let activeLinkingHouseholdId = null;
+
 function createNewEntityFallback(targetType, sourceId) {
     if (targetType === 'person') {
-        openHouseholdModal(sourceId);
+        openPersonModal(null, sourceId);
     } else if (targetType === 'pet') {
         openPetModal();
         setTimeout(() => {
@@ -2015,6 +1998,28 @@ function createNewEntityFallback(targetType, sourceId) {
         openVetModal();
     } else if (targetType === 'household') {
         openHouseholdModal();
+    }
+}
+
+function openPersonModal(personId = null, householdId = null) {
+    activeLinkingHouseholdId = householdId;
+    
+    // Use household modal as container, set title and fields for Person details
+    const titleEl = document.getElementById('household-modal-title');
+    const nameInput = document.getElementById('hh-name');
+    const contactNameInput = document.getElementById('hh-contact-name');
+    const contactInfoInput = document.getElementById('hh-contact-info');
+    
+    if (titleEl) titleEl.textContent = personId ? 'Edit Person Details' : 'Add Person / Household Member';
+    if (nameInput) nameInput.value = '';
+    if (contactNameInput) contactNameInput.value = '';
+    if (contactInfoInput) contactInfoInput.value = '';
+
+    const modal = document.getElementById('household-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        // Re-trigger icon rendering for Lucide icons inside modal
+        refreshIcons();
     }
 }
 
