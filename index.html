@@ -146,20 +146,15 @@
                     </div>
                 </div>
                     
-                <div class="controls-row" style="margin-top: 1rem;">
-                    <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()">
-                    <button class="btn toggle-layout-btn" onclick="toggleLayout()"><i data-lucide="layout-list"></i> Switch to List View</button>
-                    <button class="btn btn-primary rel-link-btn" onclick="openRelationshipModal()">
-                        <span class="rel-btn-text"><i data-lucide="link"></i> Link Relationship</span>
-                    </button>
-                </div>
-        
-                <div class="filter-menu">
-                    <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
-                    <button id="filter-household" class="filter-chip" onclick="setEntityFilter('household')">Households</button>
-                    <button id="filter-people" class="filter-chip" onclick="setEntityFilter('people')">People</button>
-                    <button id="filter-pets" class="filter-chip" onclick="setEntityFilter('pets')">Pets</button>
-                    <button id="filter-vets" class="filter-chip" onclick="setEntityFilter('vets')">Vets / COIs</button>
+                <div class="controls-row" style="margin-top: 1rem; display:flex; align-items:center; flex-wrap:wrap; gap:0.6rem;">
+                    <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()" style="flex:1; min-width:180px;">
+                    <div class="filter-menu" style="margin:0; display:flex; flex-wrap:wrap; gap:0.4rem;">
+                        <button id="filter-all" class="filter-chip active" onclick="setEntityFilter('all')">All Entries</button>
+                        <button id="filter-household" class="filter-chip" onclick="setEntityFilter('household')">Households</button>
+                        <button id="filter-people" class="filter-chip" onclick="setEntityFilter('people')">People</button>
+                        <button id="filter-pets" class="filter-chip" onclick="setEntityFilter('pets')">Pets</button>
+                        <button id="filter-vets" class="filter-chip" onclick="setEntityFilter('vets')">Vets / COIs</button>
+                    </div>
                 </div>
             </div>
             <div id="crm-list-container" class="card-layout"></div>

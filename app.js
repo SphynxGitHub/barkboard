@@ -31,7 +31,45 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof renderAllDashboards === 'function') {
         renderAllDashboards();
     }
+    if (typeof renderStaffGuests === 'function') {
+        renderStaffGuests();
+    }
 });
+
+async function renderStaffGuests() {
+    const container = document.getElementById('staff-guests-container');
+    if (!container) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00';
+    const todayEnd = new Date().toISOString().slice(0, 10) + 'T23:59:59';
+
+    const { data: bookings } = await client.from('bookings')
+        .select('*, pets(name, species), households(name)')
+        .lte('check_in', todayEnd).gte('check_out', todayStart)
+        .neq('status', 'cancelled')
+        .order('check_in');
+
+    if (!bookings || !bookings.length) {
+        container.innerHTML = '<div class="biz-empty">No active guests today.</div>';
+        return;
+    }
+
+    container.innerHTML = bookings.map(bk => `
+        <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('pet', '${bk.pet_id}')">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>${bk.pets?.name || 'Pet'}</strong>
+                <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:var(--text-muted); text-transform:capitalize;">${bk.status || 'scheduled'}</span>
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${bk.service_name || 'Event'} · ${bk.households?.name || ''}</div>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${(bk.check_in || '').slice(0, 10)}${bk.check_in && bk.check_in.slice(11,16) !== '00:00' ? ' at ' + bk.check_in.slice(11, 16) : ''} → ${(bk.check_out || '').slice(0, 10)}</div>
+            ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
+        </div>
+    `).join('');
+    refreshIcons();
+}
 
 function switchView(viewId) {
     document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
@@ -45,8 +83,17 @@ function switchView(viewId) {
     if (activeBtn) activeBtn.classList.add('active');
 
     // Hooks for view-specific initializations
+    if (viewId === 'staff-view' && typeof renderStaffGuests === 'function') {
+        renderStaffGuests();
+    }
     if (viewId === 'staff-mgmt-view') {
         initStaffView();
+    }
+    if (viewId === 'biz-view' && typeof renderBizDashboard === 'function') {
+        renderBizDashboard();
+    }
+    if (viewId === 'calendar-view' && typeof renderCalendar === 'function') {
+        renderCalendar();
     }
 }
 
@@ -166,6 +213,10 @@ async function openBookingModal(householdId, bookingId = null) {
     if (amountInput) amountInput.value = '';
     if (statusSel) statusSel.value = 'scheduled';
     if (notesInput) notesInput.value = '';
+    if (!bookingId && pendingCalendarDate && startDateInput) {
+        startDateInput.value = pendingCalendarDate;
+    }
+    pendingCalendarDate = null;
     toggleBookingTypeFields();
 
     const client = getSupabase();
@@ -884,39 +935,51 @@ function saveNewRelationship(e) {
    PET ASSIGNMENT MODAL CONTROLLER
    ========================================================================== */
 
-function renderStaffAssignments() {
+async function renderStaffAssignments() {
     const el = document.getElementById('staff-assignments-list');
     if (!el) return;
 
     if (typeof populateStaffSelects === 'function') populateStaffSelects();
-    if (typeof petAssignments === 'undefined' || !petAssignments.length) {
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: assignments } = await client.from('staff_assignments').select('*, staff(name, role), pets(name, species)').order('created_at');
+
+    if (!assignments || !assignments.length) {
         el.innerHTML = '<div class="biz-empty">No pet assignments yet.</div>';
         return;
     }
 
+    const byStaff = {};
+    assignments.forEach(a => {
+        const key = a.staff?.name || 'Unassigned';
+        if (!byStaff[key]) byStaff[key] = { role: a.staff?.role || '', items: [] };
+        byStaff[key].items.push(a);
+    });
+
     let html = '';
-    if (typeof staffMembers !== 'undefined') {
-        staffMembers.forEach(s => {
-            const aPets = typeof getStaffPets === 'function' ? getStaffPets(s.id) : [];
-            if (!aPets.length) return;
-            html += `<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);font-weight:700;margin:0.75rem 0 0.35rem;">${s.name} · ${s.role}</div>`;
-            aPets.forEach(p => {
-                html += `
-                    <div class="assignment-item" style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem;border-bottom:1px solid var(--border);">
-                        <span>${p.species === 'dog' ? '🐕' : '🐈'} <strong>${p.name}</strong> (${p.role})</span>
-                        <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.55rem;color:var(--danger-text);" onclick="removeAssignment('${p.assignId}')">Remove</button>
-                    </div>`;
-            });
+    Object.keys(byStaff).forEach(staffName => {
+        const group = byStaff[staffName];
+        html += `<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);font-weight:700;margin:0.75rem 0 0.35rem;">${staffName}${group.role ? ' · ' + group.role : ''}</div>`;
+        group.items.forEach(a => {
+            html += `
+                <div class="assignment-item" style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem;border-bottom:1px solid var(--border);">
+                    <span>${a.pets?.species === 'cat' ? '🐈' : '🐕'} <strong>${a.pets?.name || 'Unknown pet'}</strong>${a.role ? ' (' + a.role + ')' : ''}</span>
+                    <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.55rem;color:var(--danger-text);" onclick="removeAssignment('${a.id}')">Remove</button>
+                </div>`;
         });
-    }
+    });
     el.innerHTML = html || '<div class="biz-empty">No assignments yet.</div>';
 }
 
-function openAssignmentModal() {
+async function openAssignmentModal() {
     if (typeof populateStaffSelects === 'function') populateStaffSelects();
     const petSel = document.getElementById('asgn-pet');
-    if (petSel && typeof pets !== 'undefined') {
-        petSel.innerHTML = pets.map(p => `<option value="${p.id}">${p.name} (${p.species})</option>`).join('');
+    const client = getSupabase();
+    if (petSel && client) {
+        const { data: allPets } = await client.from('pets').select('id, name, species').order('name');
+        petSel.innerHTML = (allPets || []).map(p => `<option value="${p.id}">${p.name} (${speciesLabel(p)})</option>`).join('');
     }
     const modal = document.getElementById('assignment-modal');
     if (modal) modal.classList.remove('hidden');
@@ -927,29 +990,35 @@ function closeAssignmentModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function saveAssignment() {
+async function saveAssignment() {
     const staffId = document.getElementById('asgn-staff')?.value;
     const petId = document.getElementById('asgn-pet')?.value;
-    const role = document.getElementById('asgn-role')?.value;
+    const role = document.getElementById('asgn-role')?.value || null;
 
     if (!staffId || !petId) return alert('Please select a staff member and pet.');
 
-    if (typeof petAssignments !== 'undefined') {
-        if (petAssignments.some(a => a.staffId === staffId && a.petId === petId)) {
-            return alert('Pet is already assigned to this staff member.');
-        }
-        const nextId = typeof nextAssignId !== 'undefined' ? nextAssignId++ : Date.now();
-        petAssignments.push({ id: 'pa' + nextId, staffId, petId, role });
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const { data: existing } = await client.from('staff_assignments').select('id').eq('staff_id', staffId).eq('pet_id', petId).limit(1);
+    if (existing && existing.length) {
+        return alert('Pet is already assigned to this staff member.');
+    }
+
+    const { error } = await client.from('staff_assignments').insert([{ staff_id: staffId, pet_id: petId, role }]);
+    if (error) {
+        alert('Failed to save assignment: ' + error.message);
+        return;
     }
 
     closeAssignmentModal();
     renderStaffAssignments();
 }
 
-function removeAssignment(id) {
-    if (typeof petAssignments !== 'undefined') {
-        petAssignments = petAssignments.filter(x => x.id !== id);
-    }
+async function removeAssignment(id) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_assignments').delete().eq('id', id);
     renderStaffAssignments();
 }
 
@@ -960,44 +1029,45 @@ function removeAssignment(id) {
 
 let editingStaffTaskId = null;
 
-function renderStaffTasks() {
+async function renderStaffTasks() {
     const el = document.getElementById('staff-tasks-list');
     if (!el) return;
 
     const filterStaff = document.getElementById('staff-task-filter')?.value || 'all';
     const filterStatus = document.getElementById('staff-task-status-filter')?.value || 'all';
 
-    if (typeof staffTasks === 'undefined') return;
+    const client = getSupabase();
+    if (!client) return;
 
-    let tasks = [...staffTasks];
-    if (filterStaff !== 'all') tasks = tasks.filter(t => t.staffId === filterStaff);
-    if (filterStatus === 'pending') tasks = tasks.filter(t => !t.done);
-    if (filterStatus === 'done') tasks = tasks.filter(t => t.done);
+    let query = client.from('staff_tasks').select('*, staff(name)').order('due_date', { ascending: true });
+    if (filterStaff !== 'all') query = query.eq('staff_id', filterStaff);
+    if (filterStatus === 'pending') query = query.eq('is_done', false);
+    if (filterStatus === 'done') query = query.eq('is_done', true);
 
-    if (!tasks.length) {
+    const { data: tasks } = await query;
+
+    if (!tasks || !tasks.length) {
         el.innerHTML = '<div class="biz-empty">No tasks match this filter.</div>';
         return;
     }
 
-    el.innerHTML = tasks.map(t => {
-        const s = typeof staffMembers !== 'undefined' ? staffMembers.find(x => x.id === t.staffId) : null;
-        return `
-            <div class="staff-task-item ${t.done ? 'done' : ''}" style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem;border-bottom:1px solid var(--border);">
-                <div>
-                    <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleStaffTask('${t.id}')">
-                    <strong style="${t.done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.text}</strong>
-                    <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;">👤 ${s ? s.name : 'Unassigned'} · Due ${t.due}</span>
-                </div>
-                <div>
-                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openStaffTaskModal('${t.id}')">Edit</button>
-                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteStaffTask('${t.id}')">✕</button>
-                </div>
+    el.innerHTML = tasks.map(t => `
+        <div class="staff-task-item ${t.is_done ? 'done' : ''}" style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem;border-bottom:1px solid var(--border);">
+            <div>
+                <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleStaffTask('${t.id}', ${!t.is_done})">
+                <strong style="${t.is_done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.task_text}</strong>
+                <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;">👤 ${t.staff?.name || 'Unassigned'} · Due ${t.due_date || 'no date'}</span>
             </div>
-        `;
-    }).join('');
+            <div>
+                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openStaffTaskModal('${t.id}')">Edit</button>
+                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteStaffTask('${t.id}')">✕</button>
+            </div>
+        </div>
+    `).join('');
+    refreshIcons();
 }
 
-function openStaffTaskModal(id) {
+async function openStaffTaskModal(id) {
     editingStaffTaskId = id;
     if (typeof populateStaffSelects === 'function') populateStaffSelects();
 
@@ -1009,13 +1079,14 @@ function openStaffTaskModal(id) {
     const dueInput = document.getElementById('stsk-due');
     const prioritySel = document.getElementById('stsk-priority');
 
-    if (id && typeof staffTasks !== 'undefined') {
-        const t = staffTasks.find(x => x.id === id);
+    if (id) {
+        const client = getSupabase();
+        const { data: t } = client ? await client.from('staff_tasks').select('*').eq('id', id).single() : { data: null };
         if (t) {
-            if (whoSel) whoSel.value = t.staffId;
-            if (textInput) textInput.value = t.text;
-            if (dueInput) dueInput.value = t.due;
-            if (prioritySel) prioritySel.value = t.priority;
+            if (whoSel) whoSel.value = t.staff_id || '';
+            if (textInput) textInput.value = t.task_text || '';
+            if (dueInput) dueInput.value = t.due_date || '';
+            if (prioritySel) prioritySel.value = t.priority || 'normal';
         }
     } else {
         if (textInput) textInput.value = '';
@@ -1032,22 +1103,28 @@ function closeStaffTaskModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function saveStaffTask() {
-    const staffId = document.getElementById('stsk-who')?.value;
+async function saveStaffTask() {
+    const staffId = document.getElementById('stsk-who')?.value || null;
     const text = document.getElementById('stsk-text')?.value.trim();
-    const due = document.getElementById('stsk-due')?.value;
+    const due = document.getElementById('stsk-due')?.value || null;
     const priority = document.getElementById('stsk-priority')?.value || 'normal';
 
-    if (!text || !due) return alert('Please enter task description and due date.');
+    if (!text) return alert('Please enter a task description.');
 
-    if (typeof staffTasks !== 'undefined') {
-        if (editingStaffTaskId) {
-            const t = staffTasks.find(x => x.id === editingStaffTaskId);
-            if (t) Object.assign(t, { staffId, text, due, priority });
-        } else {
-            const nextId = typeof nextStaffTaskId !== 'undefined' ? nextStaffTaskId++ : Date.now();
-            staffTasks.push({ id: 'stsk' + nextId, staffId, text, due, priority, done: false });
-        }
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const payload = { staff_id: staffId, task_text: text, due_date: due, priority };
+    let response;
+    if (editingStaffTaskId) {
+        response = await client.from('staff_tasks').update(payload).eq('id', editingStaffTaskId);
+    } else {
+        response = await client.from('staff_tasks').insert([{ ...payload, is_done: false }]);
+    }
+
+    if (response.error) {
+        alert('Failed to save task: ' + response.error.message);
+        return;
     }
 
     editingStaffTaskId = null;
@@ -1055,24 +1132,116 @@ function saveStaffTask() {
     renderStaffTasks();
 }
 
-function toggleStaffTask(id) {
-    if (typeof staffTasks !== 'undefined') {
-        const t = staffTasks.find(x => x.id === id);
-        if (t) t.done = !t.done;
-    }
+async function toggleStaffTask(id, newValue) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_tasks').update({ is_done: newValue }).eq('id', id);
     renderStaffTasks();
 }
 
-function deleteStaffTask(id) {
-    if (typeof staffTasks !== 'undefined') {
-        staffTasks = staffTasks.filter(x => x.id !== id);
-    }
+async function deleteStaffTask(id) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_tasks').delete().eq('id', id);
     renderStaffTasks();
 }
 
 /* ==========================================================================
    RESOURCE GRID & CALENDAR SUB-TAB CONTROLLER
    ========================================================================== */
+
+let calWeekOffset = 0;
+let pendingCalendarDate = null;
+
+function shiftCalWeek(delta) {
+    calWeekOffset += delta;
+    renderCalendar();
+}
+
+function resetCalWeek() {
+    calWeekOffset = 0;
+    renderCalendar();
+}
+
+function getCalWeekDates() {
+    const today = new Date();
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() - today.getDay() + calWeekOffset * 7);
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + i);
+        dates.push(d);
+    }
+    return dates;
+}
+
+async function renderCalendar() {
+    const thead = document.getElementById('cal-thead');
+    const tbody = document.getElementById('calendar-body-target');
+    const weekLabel = document.getElementById('cal-week-label');
+    if (!thead || !tbody) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const dates = getCalWeekDates();
+    const fmt = d => d.toISOString().slice(0, 10);
+    const start = fmt(dates[0]);
+    const end = fmt(dates[6]);
+
+    if (weekLabel) weekLabel.textContent = `${start} — ${end}`;
+
+    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name)')
+        .gte('check_in', start + 'T00:00:00').lte('check_in', end + 'T23:59:59');
+
+    thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
+
+    const byDay = {};
+    dates.forEach(d => { byDay[fmt(d)] = []; });
+    (bookings || []).forEach(bk => {
+        const day = (bk.check_in || '').slice(0, 10);
+        if (byDay[day]) byDay[day].push(bk);
+    });
+
+    tbody.innerHTML = `<tr>${dates.map(d => {
+        const key = fmt(d);
+        const dayBookings = byDay[key].slice().sort((a, b) => (a.check_in || '').localeCompare(b.check_in || ''));
+        return `
+            <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px;">
+                ${dayBookings.map(bk => `
+                    <div style="padding:0.4rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer;" onclick="openBookingModal('${bk.household_id}', '${bk.id}')">
+                        <strong>${bk.check_in ? bk.check_in.slice(11, 16) : ''}</strong> ${bk.service_name || 'Event'}<br>
+                        <span style="color:var(--text-muted);">${bk.pets?.name || ''}${bk.pets?.name && bk.households?.name ? ' · ' : ''}${bk.households?.name || ''}</span>
+                    </div>
+                `).join('')}
+                <button class="btn" style="width:100%; font-size:0.72rem; padding:0.3rem; border:1px dashed var(--border);" onclick="scheduleFromCalendar('${key}')">+ Schedule</button>
+            </td>
+        `;
+    }).join('')}</tr>`;
+
+    refreshIcons();
+}
+
+async function scheduleFromCalendar(dateStr) {
+    const client = getSupabase();
+    if (!client) return;
+    const name = prompt('Which household is this for? (type a name to search)');
+    if (!name || !name.trim()) return;
+
+    const { data: matches } = await client.from('households').select('id, name').ilike('name', `%${name.trim()}%`).limit(5);
+    if (!matches || !matches.length) return alert('No matching household found.');
+
+    let target = matches[0];
+    if (matches.length > 1) {
+        const pick = prompt(`Multiple matches found:\n${matches.map((m, i) => `${i + 1}. ${m.name}`).join('\n')}\n\nEnter a number:`);
+        const idx = parseInt(pick, 10) - 1;
+        if (matches[idx]) target = matches[idx];
+    }
+
+    pendingCalendarDate = dateStr;
+    openBookingModal(target.id);
+}
 
 function switchCalTab(tab) {
     document.querySelectorAll('[id^="caltab-"]').forEach(b => b.classList.remove('active'));
@@ -1094,11 +1263,44 @@ function switchCalTab(tab) {
 
 let editingResourceId = null;
 
-function openResourceModal(id) {
+async function renderResourceList() {
+    const el = document.getElementById('resource-list');
+    if (!el) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: list } = await client.from('resources').select('*').order('name');
+
+    if (!list || !list.length) {
+        el.innerHTML = '<div class="biz-empty">No resource spaces yet.</div>';
+        return;
+    }
+
+    el.innerHTML = list.map(r => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+            <div>
+                <strong>${r.name}</strong>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${r.type || ''}</span>
+                ${r.blackouts && r.blackouts.length ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Blackouts: ${r.blackouts.join(', ')}</div>` : ''}
+                ${r.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${r.notes}</div>` : ''}
+            </div>
+            <div style="display:flex; gap:0.4rem;">
+                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openResourceModal('${r.id}')">Edit</button>
+                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteResource('${r.id}')">✕</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function openResourceModal(id) {
     editingResourceId = id;
-    const r = (id && typeof managedResources !== 'undefined') 
-        ? managedResources.find(x => x.id === id) 
-        : null;
+    let r = null;
+    if (id) {
+        const client = getSupabase();
+        const { data } = client ? await client.from('resources').select('*').eq('id', id).single() : { data: null };
+        r = data;
+    }
 
     const titleEl = document.getElementById('resource-modal-title');
     if (titleEl) titleEl.textContent = r ? 'Edit Resource' : 'Add Resource';
@@ -1111,7 +1313,7 @@ function openResourceModal(id) {
     if (nameInput) nameInput.value = r ? r.name : '';
     if (typeSelect) typeSelect.value = r ? r.type : 'Dog Suite';
     if (blackoutsArea) blackoutsArea.value = r && r.blackouts ? r.blackouts.join('\n') : '';
-    if (notesInput) notesInput.value = r ? r.notes : '';
+    if (notesInput) notesInput.value = r ? r.notes || '' : '';
 
     const modal = document.getElementById('resource-modal');
     if (modal) modal.classList.remove('hidden');
@@ -1122,7 +1324,7 @@ function closeResourceModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function saveResource() {
+async function saveResource() {
     const name = document.getElementById('rm-name')?.value.trim();
     if (!name) return alert('Please enter a resource name.');
 
@@ -1131,44 +1333,36 @@ function saveResource() {
     const blackoutsText = document.getElementById('rm-blackouts')?.value || '';
     const blackouts = blackoutsText.split('\n').map(s => s.trim()).filter(Boolean);
 
-    const data = { name, type, notes, blackouts };
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
 
-    if (typeof managedResources !== 'undefined') {
-        if (editingResourceId) {
-            const r = managedResources.find(x => x.id === editingResourceId);
-            if (r) Object.assign(r, data);
-            if (typeof resources !== 'undefined') {
-                const cr = resources.find(x => x.id === editingResourceId);
-                if (cr) { cr.name = data.name; cr.type = data.type; }
-            }
-        } else {
-            const nextId = typeof nextResourceId !== 'undefined' ? nextResourceId++ : Date.now();
-            const newId = 'r' + nextId;
-            managedResources.push({ id: newId, ...data });
-            if (typeof resources !== 'undefined') {
-                resources.push({ id: newId, name: data.name, type: data.type });
-            }
-        }
+    const payload = { name, type, notes, blackouts };
+    let response;
+    if (editingResourceId) {
+        response = await client.from('resources').update(payload).eq('id', editingResourceId);
+    } else {
+        response = await client.from('resources').insert([payload]);
+    }
+
+    if (response.error) {
+        alert('Failed to save resource: ' + response.error.message);
+        return;
     }
 
     editingResourceId = null;
     closeResourceModal();
-    
-    if (typeof renderResourceList === 'function') renderResourceList();
+    renderResourceList();
     if (typeof renderCalendar === 'function') renderCalendar();
 }
 
-function deleteResource(id) {
+async function deleteResource(id) {
     if (!confirm('Remove this resource space?')) return;
 
-    if (typeof managedResources !== 'undefined') {
-        managedResources = managedResources.filter(x => x.id !== id);
-    }
-    if (typeof resources !== 'undefined') {
-        resources = resources.filter(x => x.id !== id);
-    }
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('resources').delete().eq('id', id);
 
-    if (typeof renderResourceList === 'function') renderResourceList();
+    renderResourceList();
     if (typeof renderCalendar === 'function') renderCalendar();
 }
 
@@ -1194,6 +1388,128 @@ function switchBizTab(tab) {
     }
 }
 
+function bizDateRange() {
+    const preset = document.getElementById('biz-date-preset')?.value || 'mtd';
+    const today = new Date();
+    let from, to;
+    to = today.toISOString().slice(0, 10);
+
+    if (preset === 'custom') {
+        from = document.getElementById('biz-date-from')?.value || '';
+        to = document.getElementById('biz-date-to')?.value || to;
+    } else if (preset === 'last30') {
+        const d = new Date(today); d.setDate(d.getDate() - 30);
+        from = d.toISOString().slice(0, 10);
+    } else if (preset === 'last90') {
+        const d = new Date(today); d.setDate(d.getDate() - 90);
+        from = d.toISOString().slice(0, 10);
+    } else if (preset === 'ytd') {
+        from = `${today.getFullYear()}-01-01`;
+    } else {
+        from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+    }
+    return { from, to };
+}
+
+async function renderBizDashboard() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { from, to } = bizDateRange();
+    const labelEl = document.getElementById('biz-date-range-label');
+    if (labelEl) labelEl.textContent = from ? `${from} to ${to}` : '';
+
+    const { data: invoices } = await client.from('invoices').select('*, bookings(assigned_staff_id)').gte('due_date', from || '1970-01-01').lte('due_date', to);
+    const { data: bookings } = await client.from('bookings').select('*, staff:assigned_staff_id(name)').gte('check_in', from ? from + 'T00:00:00' : '1970-01-01').lte('check_in', to + 'T23:59:59');
+
+    const paidInvoices = (invoices || []).filter(i => i.status === 'paid');
+    const grossRevenue = paidInvoices.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+
+    const householdsWithInvoice = new Set((invoices || []).map(i => i.household_id).filter(Boolean));
+    const ltv = householdsWithInvoice.size ? grossRevenue / householdsWithInvoice.size : 0;
+
+    const bookingCountByHousehold = {};
+    (bookings || []).forEach(bk => {
+        if (!bk.household_id) return;
+        bookingCountByHousehold[bk.household_id] = (bookingCountByHousehold[bk.household_id] || 0) + 1;
+    });
+    const totalHouseholds = Object.keys(bookingCountByHousehold).length;
+    const returningHouseholds = Object.values(bookingCountByHousehold).filter(c => c >= 2).length;
+    const retention = totalHouseholds ? (returningHouseholds / totalHouseholds) * 100 : 0;
+
+    const revenueByStaff = {};
+    (bookings || []).forEach(bk => {
+        const name = bk.staff?.name || 'Unassigned';
+        revenueByStaff[name] = (revenueByStaff[name] || 0) + Number(bk.amount || 0);
+    });
+    const topStaffEntry = Object.entries(revenueByStaff).sort((a, b) => b[1] - a[1])[0];
+
+    const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    setText('biz-stat-revenue', `$${grossRevenue.toFixed(2)}`);
+    setText('biz-stat-ltv', `$${ltv.toFixed(2)}`);
+    setText('biz-stat-retention', `${retention.toFixed(0)}%`);
+    setText('biz-stat-packages', String((bookings || []).length));
+    setText('biz-stat-staff-rev', topStaffEntry ? `${topStaffEntry[0]}: $${topStaffEntry[1].toFixed(2)}` : '—');
+    setText('biz-stat-staff-ret', '—');
+
+    window.__bizDashboardCache = { invoices: invoices || [], bookings: bookings || [], revenueByStaff };
+}
+
+function openBizDetail(kind) {
+    const panel = document.getElementById('biz-detail-panel');
+    const title = document.getElementById('biz-detail-title');
+    const body = document.getElementById('biz-detail-body');
+    if (!panel || !body) return;
+
+    const cache = window.__bizDashboardCache || { invoices: [], bookings: [], revenueByStaff: {} };
+    let html = '';
+    let heading = 'Detail';
+
+    if (kind === 'revenue') {
+        heading = 'Paid Invoices';
+        const paid = cache.invoices.filter(i => i.status === 'paid');
+        html = paid.length ? paid.map(i => `
+            <div style="display:flex; justify-content:space-between; padding:0.5rem; border-bottom:1px solid var(--border);">
+                <span>${i.description || 'Invoice'}</span><span>$${Number(i.amount || 0).toFixed(2)} · ${i.due_date || ''}</span>
+            </div>`).join('') : '<div class="biz-empty">No paid invoices in this range.</div>';
+    } else if (kind === 'ltv' || kind === 'retention') {
+        heading = kind === 'ltv' ? 'Revenue by Household' : 'Bookings by Household';
+        const byHousehold = {};
+        (kind === 'ltv' ? cache.invoices : cache.bookings).forEach(item => {
+            const hid = item.household_id;
+            if (!hid) return;
+            byHousehold[hid] = (byHousehold[hid] || 0) + (kind === 'ltv' ? Number(item.amount || 0) : 1);
+        });
+        const entries = Object.entries(byHousehold);
+        html = entries.length ? entries.map(([hid, val]) => `
+            <div style="display:flex; justify-content:space-between; padding:0.5rem; border-bottom:1px solid var(--border); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('household', '${hid}')">
+                <span>Household ${hid.slice(0, 8)}…</span><span>${kind === 'ltv' ? '$' + val.toFixed(2) : val + ' booking(s)'}</span>
+            </div>`).join('') : '<div class="biz-empty">No data in this range.</div>';
+    } else if (kind === 'staff-revenue' || kind === 'staff-retention') {
+        heading = 'Revenue by Staff';
+        const entries = Object.entries(cache.revenueByStaff).sort((a, b) => b[1] - a[1]);
+        html = entries.length ? entries.map(([name, val]) => `
+            <div style="display:flex; justify-content:space-between; padding:0.5rem; border-bottom:1px solid var(--border);">
+                <span>${name}</span><span>$${val.toFixed(2)}</span>
+            </div>`).join('') : '<div class="biz-empty">No staff-linked bookings in this range.</div>';
+    } else if (kind === 'packages') {
+        heading = 'Scheduled Events';
+        html = cache.bookings.length ? cache.bookings.map(bk => `
+            <div style="display:flex; justify-content:space-between; padding:0.5rem; border-bottom:1px solid var(--border);">
+                <span>${bk.service_name || 'Event'}</span><span>${(bk.check_in || '').slice(0, 10)} · ${bk.status || 'scheduled'}</span>
+            </div>`).join('') : '<div class="biz-empty">No events in this range.</div>';
+    }
+
+    if (title) title.textContent = heading;
+    body.innerHTML = html;
+    panel.classList.remove('hidden');
+}
+
+function closeBizDetail() {
+    const panel = document.getElementById('biz-detail-panel');
+    if (panel) panel.classList.add('hidden');
+}
+
 function onBizPresetChange() {
     const presetSelect = document.getElementById('biz-date-preset');
     if (!presetSelect) return;
@@ -1214,27 +1530,30 @@ function onBizPresetChange() {
 
 let editingClosureId = null;
 
-function renderAvailabilityList() {
+async function renderAvailabilityList() {
     const el = document.getElementById('availability-list');
     if (!el) return;
 
-    if (typeof businessClosures === 'undefined' || !businessClosures.length) {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: closures } = await client.from('business_closures').select('*').order('start_date');
+
+    if (!closures || !closures.length) {
         el.innerHTML = '<div class="biz-empty">No business closures scheduled.</div>';
         return;
     }
 
-    const sorted = [...businessClosures].sort((a, b) => a.start.localeCompare(b.start));
-    
-    el.innerHTML = sorted.map(c => {
-        const span = c.start === c.end ? c.start : `${c.start} → ${c.end}`;
+    el.innerHTML = closures.map(c => {
+        const span = !c.end_date || c.end_date === c.start_date ? c.start_date : `${c.start_date} → ${c.end_date}`;
         return `
-            <div class="closure-item type-${c.type}" style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;border:1px solid var(--border);border-radius:0.375rem;">
+            <div class="closure-item type-${c.closure_type}" style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;border:1px solid var(--border);border-radius:0.375rem;">
                 <div class="closure-info">
-                    <h4 style="margin:0;">${c.label}</h4>
+                    <h4 style="margin:0;">${c.label || 'Closure'}</h4>
                     <p style="margin:0;font-size:0.8rem;color:var(--text-muted);">${span} ${c.notes ? '· ' + c.notes : ''}</p>
                 </div>
                 <div style="display:flex;gap:0.4rem;align-items:center;">
-                    <span class="closure-type-pill ${c.type}" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:9999px;font-weight:600;">${c.type === 'closure' ? 'Closed' : c.type === 'reduced' ? 'Reduced' : 'Holiday'}</span>
+                    <span class="closure-type-pill ${c.closure_type}" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:9999px;font-weight:600;">${c.closure_type === 'closure' ? 'Closed' : c.closure_type === 'reduced' ? 'Reduced' : 'Holiday'}</span>
                     <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openAvailabilityModal('${c.id}')">Edit</button>
                     <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteClosure('${c.id}')">Remove</button>
                 </div>
@@ -1242,11 +1561,14 @@ function renderAvailabilityList() {
     }).join('');
 }
 
-function openAvailabilityModal(id) {
+async function openAvailabilityModal(id) {
     editingClosureId = id;
-    const c = (id && typeof businessClosures !== 'undefined') 
-        ? businessClosures.find(x => x.id === id) 
-        : null;
+    let c = null;
+    if (id) {
+        const client = getSupabase();
+        const { data } = client ? await client.from('business_closures').select('*').eq('id', id).single() : { data: null };
+        c = data;
+    }
 
     const titleEl = document.getElementById('avail-modal-title');
     if (titleEl) titleEl.textContent = c ? 'Edit Closure' : 'Add Closure';
@@ -1257,11 +1579,11 @@ function openAvailabilityModal(id) {
     const endInput = document.getElementById('av-end');
     const notesInput = document.getElementById('av-notes');
 
-    if (labelInput) labelInput.value = c ? c.label : '';
-    if (typeSelect) typeSelect.value = c ? c.type : 'closure';
-    if (startInput) startInput.value = c ? c.start : '';
-    if (endInput) endInput.value = c ? c.end : '';
-    if (notesInput) notesInput.value = c ? c.notes : '';
+    if (labelInput) labelInput.value = c ? c.label || '' : '';
+    if (typeSelect) typeSelect.value = c ? c.closure_type : 'closure';
+    if (startInput) startInput.value = c ? c.start_date || '' : '';
+    if (endInput) endInput.value = c ? c.end_date || '' : '';
+    if (notesInput) notesInput.value = c ? c.notes || '' : '';
 
     const modal = document.getElementById('availability-modal');
     if (modal) modal.classList.remove('hidden');
@@ -1272,7 +1594,7 @@ function closeAvailabilityModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function saveAvailability() {
+async function saveAvailability() {
     const label = document.getElementById('av-label')?.value.trim();
     const start = document.getElementById('av-start')?.value;
     const end = document.getElementById('av-end')?.value || start;
@@ -1281,16 +1603,20 @@ function saveAvailability() {
 
     if (!label || !start) return alert('Please enter a label and start date.');
 
-    const data = { label, type, start, end, notes };
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
 
-    if (typeof businessClosures !== 'undefined') {
-        if (editingClosureId) {
-            const c = businessClosures.find(x => x.id === editingClosureId);
-            if (c) Object.assign(c, data);
-        } else {
-            const nextId = typeof nextClosureId !== 'undefined' ? nextClosureId++ : Date.now();
-            businessClosures.push({ id: 'cl' + nextId, ...data });
-        }
+    const payload = { label, closure_type: type, start_date: start, end_date: end, notes };
+    let response;
+    if (editingClosureId) {
+        response = await client.from('business_closures').update(payload).eq('id', editingClosureId);
+    } else {
+        response = await client.from('business_closures').insert([payload]);
+    }
+
+    if (response.error) {
+        alert('Failed to save closure: ' + response.error.message);
+        return;
     }
 
     editingClosureId = null;
@@ -1298,12 +1624,12 @@ function saveAvailability() {
     renderAvailabilityList();
 }
 
-function deleteClosure(id) {
+async function deleteClosure(id) {
     if (!confirm('Remove this business closure date?')) return;
 
-    if (typeof businessClosures !== 'undefined') {
-        businessClosures = businessClosures.filter(x => x.id !== id);
-    }
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('business_closures').delete().eq('id', id);
     renderAvailabilityList();
 }
 
@@ -1944,7 +2270,7 @@ async function renderAllDashboards() {
         if (pets) {
             pets.forEach(p => {
                 if (!query || p.name?.toLowerCase().includes(query)) {
-                    const speciesIcon = p.species === 'cat' ? 'cat' : 'dog';
+                    const speciesIcon = p.species === 'cat' ? 'cat' : p.species === 'other' ? 'rabbit' : 'dog';
                     html += `
                         <div class="crm-card" onclick="openFullWidthProfile('pet', '${p.id}')" style="cursor:pointer;">
                             <div class="crm-card-content">
@@ -2047,6 +2373,8 @@ async function openFullWidthProfile(type, id) {
         if (payload) {
             const { data: clientPets } = await client.from('pets').select('*, households(name, people(*))').or(`vet_id.eq.${id},emergency_vet_id.eq.${id}`);
             payload.clientPets = clientPets || [];
+            window.__vetClientPetsCache = window.__vetClientPetsCache || {};
+            window.__vetClientPetsCache[id] = payload.clientPets;
         }
     }
 
@@ -2086,14 +2414,22 @@ async function openFullWidthProfile(type, id) {
 function renderEntitySections(type, data, id) {
     if (type === 'household') {
         return `
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
-                
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:start;">
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 <!-- Household Details -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                        <i data-lucide="info"></i> Household Details
-                    </h3>
-                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="info"></i> Household Details
+                        </h3>
+                        <button class="btn-icon" onclick="toggleDetailsEdit('household-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
+                    </div>
+                    <div id="details-view-household-${id}" style="display:flex; flex-direction:column; gap:0.6rem;">
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Household Name</span><div style="font-size:0.92rem;">${data.name || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Address</span><div style="font-size:0.92rem;">${data.address || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Notes</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.note || '—'}</div></div>
+                    </div>
+                    <div id="details-edit-household-${id}" class="hidden" style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'name', this.value)">
@@ -2169,6 +2505,9 @@ function renderEntitySections(type, data, id) {
                     <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('pet', '${id}', 'household')">+ Add Pet</button>
                 </div>
 
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 ${renderEventsCard(data.bookings, id, { pets: data.pets || [], showPetName: true })}
 
                 <!-- Invoices -->
@@ -2209,6 +2548,7 @@ function renderEntitySections(type, data, id) {
                             `;
                         }).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No unpaid balances on file.</p>'}
                 </div>
+                </div>
 
             </div>
         `;
@@ -2217,8 +2557,18 @@ function renderEntitySections(type, data, id) {
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
                 <!-- Person Details -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user"></i> Contact Details</h3>
-                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user"></i> Contact Details</h3>
+                        <button class="btn-icon" onclick="toggleDetailsEdit('person-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
+                    </div>
+                    <div id="details-view-person-${id}" style="display:flex; flex-direction:column; gap:0.6rem;">
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Name</span><div style="font-size:0.92rem;">${personDisplayName(data) || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Role / Category</span><div style="font-size:0.92rem;">${data.role || 'Member'} · ${(data.category || 'member') === 'other' ? 'Other Contact' : 'Household Member'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Email</span><div style="font-size:0.92rem;">${data.email ? (data.preferred_contact === 'email' ? '★ ' : '') + data.email : '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Phone</span><div style="font-size:0.92rem;">${data.phone ? (data.preferred_contact === 'phone' ? '★ ' : '') + data.phone : '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Notes</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.notes || '—'}</div></div>
+                    </div>
+                    <div id="details-edit-person-${id}" class="hidden" style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.85rem;">
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">First Name</label>
@@ -2306,8 +2656,19 @@ function renderEntitySections(type, data, id) {
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
                 <!-- Pet Profile & Medical Details -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="dog"></i> Pet Profile & Medical Details</h3>
-                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="dog"></i> Pet Profile & Medical Details</h3>
+                        <button class="btn-icon" onclick="toggleDetailsEdit('pet-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
+                    </div>
+                    <div id="details-view-pet-${id}" style="display:flex; flex-direction:column; gap:0.6rem;">
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Pet Name</span><div style="font-size:0.92rem;">${data.name || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Species</span><div style="font-size:0.92rem;">${speciesLabel(data) || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Vaccine Status</span><div style="font-size:0.92rem; text-transform:capitalize;">${data.vaccine_status || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Allergies</span><div style="font-size:0.92rem;">${data.allergies || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Diet & Food Notes</span><div style="font-size:0.92rem;">${data.food || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Behavioral & General Details</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.details || '—'}</div></div>
+                    </div>
+                    <div id="details-edit-pet-${id}" class="hidden" style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Pet Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'name', this.value)">
@@ -2395,8 +2756,19 @@ function renderEntitySections(type, data, id) {
             <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 <!-- Vet Details -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 1rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Vet Details</h3>
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Vet Details</h3>
+                        <button class="btn-icon" onclick="toggleDetailsEdit('vet-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
+                    </div>
+                    <div id="details-view-vet-${id}" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.75rem;">
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Doctor / Vet Name</span><div style="font-size:0.92rem;">${data.name || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Clinic Name</span><div style="font-size:0.92rem;">${data.clinic || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Phone</span><div style="font-size:0.92rem;">${data.phone || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Email</span><div style="font-size:0.92rem;">${data.email || '—'}</div></div>
+                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Hours of Operation</span><div style="font-size:0.92rem;">${data.hours || '—'}</div></div>
+                        <div style="grid-column: 1 / -1;"><span style="font-size:0.75rem; color:var(--text-muted);">Notes</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.notes || '—'}</div></div>
+                    </div>
+                    <div id="details-edit-vet-${id}" class="hidden" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem;">
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Doctor / Vet Name</label>
                             <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'name', this.value)">
@@ -2429,10 +2801,10 @@ function renderEntitySections(type, data, id) {
                     <h3 style="margin:0 0 0.5rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="building"></i> Client Pets</h3>
                     <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.75rem;">Pets that use this vet as their regular or emergency vet.</p>
 
-                    <input type="text" placeholder="Search pets to link as regular or emergency vet..." class="biz-select" style="width:100%; padding:0.4rem; margin-bottom:0.5rem;" onkeyup="executeVetPetSearch('${id}', this.value)">
+                    <input type="text" placeholder="Search or filter clients (pet, species, household, owner)..." class="biz-select" style="width:100%; padding:0.4rem; margin-bottom:0.5rem;" onkeyup="executeVetPetSearch('${id}', this.value); filterVetClientGroups('${id}', this.value);">
                     <div id="vet-pet-search-results-${id}" style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.75rem;"></div>
 
-                    ${renderVetClientGroups(data.clientPets || [], id)}
+                    <div id="vet-client-groups-${id}">${renderVetClientGroups(data.clientPets || [], id)}</div>
                 </div>
             </div>
         `;
@@ -2505,6 +2877,13 @@ async function savePersonNameField(id, field, value) {
     }
 }
 
+function toggleDetailsEdit(key) {
+    const viewEl = document.getElementById(`details-view-${key}`);
+    const editEl = document.getElementById(`details-edit-${key}`);
+    if (viewEl) viewEl.classList.toggle('hidden');
+    if (editEl) editEl.classList.toggle('hidden');
+}
+
 function speciesLabel(p) {
     return p.species === 'other' && p.species_other ? p.species_other : p.species;
 }
@@ -2549,7 +2928,7 @@ function renderPetRow(p, opts) {
     return `
         <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); ${isCurrent ? '' : 'cursor:pointer;'}" ${isCurrent ? '' : `onclick="openFullWidthProfile('pet', '${p.id}')"`}>
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}</strong>
+                <strong><i data-lucide="${p.species === 'cat' ? 'cat' : p.species === 'other' ? 'rabbit' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}</strong>
                 <div style="display:flex; align-items:center; gap:0.5rem;">
                     <span style="font-size:0.75rem; color:var(--text-muted);">${speciesLabel(p)}</span>
                     ${!isCurrent ? `<button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', '${refreshType}', '${refreshId}')" title="Remove from household" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:14px;height:14px;"></i></button>` : ''}
@@ -2572,27 +2951,47 @@ function renderVetClientGroups(clientPets, vetId) {
     });
 
     return Object.values(groups).map(g => `
-        <div style="margin-top:0.5rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
-            <strong><i data-lucide="home" style="width:14px;height:14px;"></i> ${g.name}</strong>
-            ${g.people.length ? `
-                <div style="margin-top:0.4rem; padding-left:1.35rem;">
-                    ${g.people.map(person => `
-                        <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">
-                            <i data-lucide="user" style="width:11px;height:11px;"></i> ${personDisplayName(person)}${personDisplayContact(person) ? ' — ' + personDisplayContact(person) : ''}
-                        </div>
-                    `).join('')}
-                </div>
-            ` : ''}
-            <div style="margin-top:0.5rem; padding-left:1.35rem;">
+        <div style="margin-top:0.5rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+            <div>
+                <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Pets</div>
                 ${g.pets.map(p => `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.25rem; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                        <span style="font-size:0.85rem;"><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:13px;height:13px;"></i> ${p.name}</span>
+                        <span style="font-size:0.85rem;"><i data-lucide="${p.species === 'cat' ? 'cat' : p.species === 'other' ? 'rabbit' : 'dog'}" style="width:13px;height:13px;"></i> ${p.name}</span>
                         <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:var(--text-muted);">${p.vet_id === vetId ? 'Regular' : 'Emergency'}</span>
                     </div>
                 `).join('')}
             </div>
+            <div>
+                <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Household</div>
+                <strong style="font-size:0.85rem; cursor:pointer;" onclick="openFullWidthProfile('household', '${g.pets[0]?.household_id || ''}')"><i data-lucide="home" style="width:13px;height:13px;"></i> ${g.name}</strong>
+                ${g.people.length ? g.people.map(person => `
+                    <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.3rem;">
+                        <i data-lucide="user" style="width:11px;height:11px;"></i> ${personDisplayName(person)}${personDisplayContact(person) ? ' — ' + personDisplayContact(person) : ''}
+                    </div>
+                `).join('') : ''}
+            </div>
         </div>
     `).join('');
+}
+
+function filterVetClientGroups(vetId, query) {
+    const container = document.getElementById(`vet-client-groups-${vetId}`);
+    if (!container) return;
+    const all = (window.__vetClientPetsCache && window.__vetClientPetsCache[vetId]) || [];
+    const q = query.trim().toLowerCase();
+
+    const filtered = !q ? all : all.filter(p => {
+        const memberMatch = (p.households?.people || []).some(person =>
+            personDisplayName(person).toLowerCase().includes(q) || (personDisplayContact(person) || '').toLowerCase().includes(q)
+        );
+        return (p.name || '').toLowerCase().includes(q)
+            || (speciesLabel(p) || '').toLowerCase().includes(q)
+            || (p.households?.name || '').toLowerCase().includes(q)
+            || memberMatch;
+    });
+
+    container.innerHTML = renderVetClientGroups(filtered, vetId);
+    refreshIcons();
 }
 
 async function executeVetPetSearch(vetId, query) {
@@ -2953,426 +3352,6 @@ function selectHouseholdFromDropdown(id, name) {
     activeLinkingHouseholdId = id;
 
     if (dropdown) dropdown.classList.add('hidden');
-}
-
-/* ==========================================================================
-   PET ASSIGNMENT MODAL CONTROLLER
-   ========================================================================== */
-
-function renderStaffAssignments() {
-    const el = document.getElementById('staff-assignments-list');
-    if (!el) return;
-
-    if (typeof populateStaffSelects === 'function') populateStaffSelects();
-    if (typeof petAssignments === 'undefined' || !petAssignments.length) {
-        el.innerHTML = '<div class="biz-empty">No pet assignments yet.</div>';
-        return;
-    }
-
-    let html = '';
-    if (typeof staffMembers !== 'undefined') {
-        staffMembers.forEach(s => {
-            const aPets = typeof getStaffPets === 'function' ? getStaffPets(s.id) : [];
-            if (!aPets.length) return;
-            html += `<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);font-weight:700;margin:0.75rem 0 0.35rem;">${s.name} · ${s.role}</div>`;
-            aPets.forEach(p => {
-                html += `
-                    <div class="assignment-item" style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem;border-bottom:1px solid var(--border);">
-                        <span>${p.species === 'dog' ? '🐕' : '🐈'} <strong>${p.name}</strong> (${p.role})</span>
-                        <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.55rem;color:var(--danger-text);" onclick="removeAssignment('${p.assignId}')">Remove</button>
-                    </div>`;
-            });
-        });
-    }
-    el.innerHTML = html || '<div class="biz-empty">No assignments yet.</div>';
-}
-
-function openAssignmentModal() {
-    if (typeof populateStaffSelects === 'function') populateStaffSelects();
-    const petSel = document.getElementById('asgn-pet');
-    if (petSel && typeof pets !== 'undefined') {
-        petSel.innerHTML = pets.map(p => `<option value="${p.id}">${p.name} (${p.species})</option>`).join('');
-    }
-    const modal = document.getElementById('assignment-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-function closeAssignmentModal() {
-    const modal = document.getElementById('assignment-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-function saveAssignment() {
-    const staffId = document.getElementById('asgn-staff')?.value;
-    const petId = document.getElementById('asgn-pet')?.value;
-    const role = document.getElementById('asgn-role')?.value;
-
-    if (!staffId || !petId) return alert('Please select a staff member and pet.');
-
-    if (typeof petAssignments !== 'undefined') {
-        if (petAssignments.some(a => a.staffId === staffId && a.petId === petId)) {
-            return alert('Pet is already assigned to this staff member.');
-        }
-        const nextId = typeof nextAssignId !== 'undefined' ? nextAssignId++ : Date.now();
-        petAssignments.push({ id: 'pa' + nextId, staffId, petId, role });
-    }
-
-    closeAssignmentModal();
-    renderStaffAssignments();
-}
-
-function removeAssignment(id) {
-    if (typeof petAssignments !== 'undefined') {
-        petAssignments = petAssignments.filter(x => x.id !== id);
-    }
-    renderStaffAssignments();
-}
-
-/* ==========================================================================
-   STAFF TASK MODAL CONTROLLER
-   ========================================================================== */
-
-function renderStaffTasks() {
-    const el = document.getElementById('staff-tasks-list');
-    if (!el) return;
-
-    const filterStaff = document.getElementById('staff-task-filter')?.value || 'all';
-    const filterStatus = document.getElementById('staff-task-status-filter')?.value || 'all';
-
-    if (typeof staffTasks === 'undefined') return;
-
-    let tasks = [...staffTasks];
-    if (filterStaff !== 'all') tasks = tasks.filter(t => t.staffId === filterStaff);
-    if (filterStatus === 'pending') tasks = tasks.filter(t => !t.done);
-    if (filterStatus === 'done') tasks = tasks.filter(t => t.done);
-
-    if (!tasks.length) {
-        el.innerHTML = '<div class="biz-empty">No tasks match this filter.</div>';
-        return;
-    }
-
-    el.innerHTML = tasks.map(t => {
-        const s = typeof staffMembers !== 'undefined' ? staffMembers.find(x => x.id === t.staffId) : null;
-        return `
-            <div class="staff-task-item ${t.done ? 'done' : ''}" style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem;border-bottom:1px solid var(--border);">
-                <div>
-                    <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleStaffTask('${t.id}')">
-                    <strong style="${t.done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.text}</strong>
-                    <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;">👤 ${s ? s.name : 'Unassigned'} · Due ${t.due}</span>
-                </div>
-                <div>
-                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openStaffTaskModal('${t.id}')">Edit</button>
-                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteStaffTask('${t.id}')">✕</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function openStaffTaskModal(id) {
-    editingStaffTaskId = id;
-    if (typeof populateStaffSelects === 'function') populateStaffSelects();
-
-    const titleEl = document.getElementById('staff-task-modal-title');
-    if (titleEl) titleEl.textContent = id ? 'Edit Task' : 'Add Task';
-
-    const whoSel = document.getElementById('stsk-who');
-    const textInput = document.getElementById('stsk-text');
-    const dueInput = document.getElementById('stsk-due');
-    const prioritySel = document.getElementById('stsk-priority');
-
-    if (id && typeof staffTasks !== 'undefined') {
-        const t = staffTasks.find(x => x.id === id);
-        if (t) {
-            if (whoSel) whoSel.value = t.staffId;
-            if (textInput) textInput.value = t.text;
-            if (dueInput) dueInput.value = t.due;
-            if (prioritySel) prioritySel.value = t.priority;
-        }
-    } else {
-        if (textInput) textInput.value = '';
-        if (dueInput) dueInput.value = '';
-        if (prioritySel) prioritySel.value = 'normal';
-    }
-
-    const modal = document.getElementById('staff-task-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-function closeStaffTaskModal() {
-    const modal = document.getElementById('staff-task-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-function saveStaffTask() {
-    const staffId = document.getElementById('stsk-who')?.value;
-    const text = document.getElementById('stsk-text')?.value.trim();
-    const due = document.getElementById('stsk-due')?.value;
-    const priority = document.getElementById('stsk-priority')?.value || 'normal';
-
-    if (!text || !due) return alert('Please enter task description and due date.');
-
-    if (typeof staffTasks !== 'undefined') {
-        if (editingStaffTaskId) {
-            const t = staffTasks.find(x => x.id === editingStaffTaskId);
-            if (t) Object.assign(t, { staffId, text, due, priority });
-        } else {
-            const nextId = typeof nextStaffTaskId !== 'undefined' ? nextStaffTaskId++ : Date.now();
-            staffTasks.push({ id: 'stsk' + nextId, staffId, text, due, priority, done: false });
-        }
-    }
-
-    editingStaffTaskId = null;
-    closeStaffTaskModal();
-    renderStaffTasks();
-}
-
-function toggleStaffTask(id) {
-    if (typeof staffTasks !== 'undefined') {
-        const t = staffTasks.find(x => x.id === id);
-        if (t) t.done = !t.done;
-    }
-    renderStaffTasks();
-}
-
-function deleteStaffTask(id) {
-    if (typeof staffTasks !== 'undefined') {
-        staffTasks = staffTasks.filter(x => x.id !== id);
-    }
-    renderStaffTasks();
-}
-
-/* ==========================================================================
-   RESOURCE GRID & CALENDAR SUB-TAB CONTROLLER
-   ========================================================================== */
-
-function switchCalTab(tab) {
-    document.querySelectorAll('[id^="caltab-"]').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('[id^="calsec-"]').forEach(s => s.classList.remove('active'));
-    
-    const targetTab = document.getElementById('caltab-' + tab);
-    const targetSec = document.getElementById('calsec-' + tab);
-    
-    if (targetTab) targetTab.classList.add('active');
-    if (targetSec) targetSec.classList.add('active');
-    
-    if (tab === 'grid' && typeof renderCalendar === 'function') {
-        renderCalendar();
-    }
-    if (tab === 'resources' && typeof renderResourceList === 'function') {
-        renderResourceList();
-    }
-}
-
-function openResourceModal(id) {
-    editingResourceId = id;
-    const r = (id && typeof managedResources !== 'undefined') 
-        ? managedResources.find(x => x.id === id) 
-        : null;
-
-    const titleEl = document.getElementById('resource-modal-title');
-    if (titleEl) titleEl.textContent = r ? 'Edit Resource' : 'Add Resource';
-
-    const nameInput = document.getElementById('rm-name');
-    const typeSelect = document.getElementById('rm-type');
-    const blackoutsArea = document.getElementById('rm-blackouts');
-    const notesInput = document.getElementById('rm-notes');
-
-    if (nameInput) nameInput.value = r ? r.name : '';
-    if (typeSelect) typeSelect.value = r ? r.type : 'Dog Suite';
-    if (blackoutsArea) blackoutsArea.value = r && r.blackouts ? r.blackouts.join('\n') : '';
-    if (notesInput) notesInput.value = r ? r.notes : '';
-
-    const modal = document.getElementById('resource-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-function closeResourceModal() {
-    const modal = document.getElementById('resource-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-function saveResource() {
-    const name = document.getElementById('rm-name')?.value.trim();
-    if (!name) return alert('Please enter a resource name.');
-
-    const type = document.getElementById('rm-type')?.value || 'Dog Suite';
-    const notes = document.getElementById('rm-notes')?.value.trim() || '';
-    const blackoutsText = document.getElementById('rm-blackouts')?.value || '';
-    const blackouts = blackoutsText.split('\n').map(s => s.trim()).filter(Boolean);
-
-    const data = { name, type, notes, blackouts };
-
-    if (typeof managedResources !== 'undefined') {
-        if (editingResourceId) {
-            const r = managedResources.find(x => x.id === editingResourceId);
-            if (r) Object.assign(r, data);
-            if (typeof resources !== 'undefined') {
-                const cr = resources.find(x => x.id === editingResourceId);
-                if (cr) { cr.name = data.name; cr.type = data.type; }
-            }
-        } else {
-            const nextId = typeof nextResourceId !== 'undefined' ? nextResourceId++ : Date.now();
-            const newId = 'r' + nextId;
-            managedResources.push({ id: newId, ...data });
-            if (typeof resources !== 'undefined') {
-                resources.push({ id: newId, name: data.name, type: data.type });
-            }
-        }
-    }
-
-    editingResourceId = null;
-    closeResourceModal();
-    
-    if (typeof renderResourceList === 'function') renderResourceList();
-    if (typeof renderCalendar === 'function') renderCalendar();
-}
-
-function deleteResource(id) {
-    if (!confirm('Remove this resource space?')) return;
-
-    if (typeof managedResources !== 'undefined') {
-        managedResources = managedResources.filter(x => x.id !== id);
-    }
-    if (typeof resources !== 'undefined') {
-        resources = resources.filter(x => x.id !== id);
-    }
-
-    if (typeof renderResourceList === 'function') renderResourceList();
-    if (typeof renderCalendar === 'function') renderCalendar();
-}
-
-/* ==========================================================================
-   BUSINESS MANAGEMENT & CLOSURES CONTROLLER
-   ========================================================================== */
-
-function switchBizTab(tab) {
-    document.querySelectorAll('.biz-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.biz-section').forEach(s => s.classList.remove('active'));
-    
-    const targetTab = document.getElementById('biztab-' + tab);
-    const targetSec = document.getElementById('bizsec-' + tab);
-    
-    if (targetTab) targetTab.classList.add('active');
-    if (targetSec) targetSec.classList.add('active');
-    
-    if (tab === 'dashboard' && typeof renderBizDashboard === 'function') {
-        renderBizDashboard();
-    }
-    if (tab === 'availability' && typeof renderAvailabilityList === 'function') {
-        renderAvailabilityList();
-    }
-}
-
-function onBizPresetChange() {
-    const presetSelect = document.getElementById('biz-date-preset');
-    if (!presetSelect) return;
-
-    if (typeof bizDatePreset !== 'undefined') {
-        bizDatePreset = presetSelect.value;
-    }
-
-    const customDiv = document.getElementById('biz-custom-dates');
-    if (customDiv) {
-        customDiv.style.display = (presetSelect.value === 'custom') ? 'flex' : 'none';
-    }
-
-    if (typeof renderBizDashboard === 'function') {
-        renderBizDashboard();
-    }
-}
-
-function renderAvailabilityList() {
-    const el = document.getElementById('availability-list');
-    if (!el) return;
-
-    if (typeof businessClosures === 'undefined' || !businessClosures.length) {
-        el.innerHTML = '<div class="biz-empty">No business closures scheduled.</div>';
-        return;
-    }
-
-    const sorted = [...businessClosures].sort((a, b) => a.start.localeCompare(b.start));
-    
-    el.innerHTML = sorted.map(c => {
-        const span = c.start === c.end ? c.start : `${c.start} → ${c.end}`;
-        return `
-            <div class="closure-item type-${c.type}" style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;border:1px solid var(--border);border-radius:0.375rem;">
-                <div class="closure-info">
-                    <h4 style="margin:0;">${c.label}</h4>
-                    <p style="margin:0;font-size:0.8rem;color:var(--text-muted);">${span} ${c.notes ? '· ' + c.notes : ''}</p>
-                </div>
-                <div style="display:flex;gap:0.4rem;align-items:center;">
-                    <span class="closure-type-pill ${c.type}" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:9999px;font-weight:600;">${c.type === 'closure' ? 'Closed' : c.type === 'reduced' ? 'Reduced' : 'Holiday'}</span>
-                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openAvailabilityModal('${c.id}')">Edit</button>
-                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteClosure('${c.id}')">Remove</button>
-                </div>
-            </div>`;
-    }).join('');
-}
-
-function openAvailabilityModal(id) {
-    editingClosureId = id;
-    const c = (id && typeof businessClosures !== 'undefined') 
-        ? businessClosures.find(x => x.id === id) 
-        : null;
-
-    const titleEl = document.getElementById('avail-modal-title');
-    if (titleEl) titleEl.textContent = c ? 'Edit Closure' : 'Add Closure';
-
-    const labelInput = document.getElementById('av-label');
-    const typeSelect = document.getElementById('av-type');
-    const startInput = document.getElementById('av-start');
-    const endInput = document.getElementById('av-end');
-    const notesInput = document.getElementById('av-notes');
-
-    if (labelInput) labelInput.value = c ? c.label : '';
-    if (typeSelect) typeSelect.value = c ? c.type : 'closure';
-    if (startInput) startInput.value = c ? c.start : '';
-    if (endInput) endInput.value = c ? c.end : '';
-    if (notesInput) notesInput.value = c ? c.notes : '';
-
-    const modal = document.getElementById('availability-modal');
-    if (modal) modal.classList.remove('hidden');
-}
-
-function closeAvailabilityModal() {
-    const modal = document.getElementById('availability-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-function saveAvailability() {
-    const label = document.getElementById('av-label')?.value.trim();
-    const start = document.getElementById('av-start')?.value;
-    const end = document.getElementById('av-end')?.value || start;
-    const type = document.getElementById('av-type')?.value || 'closure';
-    const notes = document.getElementById('av-notes')?.value.trim() || '';
-
-    if (!label || !start) return alert('Please enter a label and start date.');
-
-    const data = { label, type, start, end, notes };
-
-    if (typeof businessClosures !== 'undefined') {
-        if (editingClosureId) {
-            const c = businessClosures.find(x => x.id === editingClosureId);
-            if (c) Object.assign(c, data);
-        } else {
-            const nextId = typeof nextClosureId !== 'undefined' ? nextClosureId++ : Date.now();
-            businessClosures.push({ id: 'cl' + nextId, ...data });
-        }
-    }
-
-    editingClosureId = null;
-    closeAvailabilityModal();
-    renderAvailabilityList();
-}
-
-function deleteClosure(id) {
-    if (!confirm('Remove this business closure date?')) return;
-
-    if (typeof businessClosures !== 'undefined') {
-        businessClosures = businessClosures.filter(x => x.id !== id);
-    }
-    renderAvailabilityList();
 }
 
 /* ==========================================================================
