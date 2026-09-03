@@ -133,14 +133,18 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.75rem;">
                     <h2 style="margin:0;">Registry Directory & Global Relations</h2>
                     
-                    <!-- Added Action Buttons -->
-                    <div class="action-bar-buttons" style="display: flex; gap: 0.5rem; align-items: center;">
-                        <button class="btn btn-primary" onclick="openHouseholdModal()">+ Add Household / Client</button>
-                        <button class="btn btn-primary" onclick="openPetModal()">+ Add Pet</button>
-                        <button class="btn btn-primary" onclick="openVetModal()">+ Add Vet / COI</button>
+                <!-- Added Action Buttons -->
+                <div class="dropdown-add-container" style="position: relative; display: inline-block;">
+                    <button class="btn btn-primary" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i data-lucide="plus"></i> Add <i data-lucide="chevron-down" style="width: 14px; height: 14px;"></i>
+                    </button>
+                    <div class="dropdown-add-menu">
+                        <button onclick="openHouseholdModal()"><i data-lucide="home"></i> Household / Client</button>
+                        <button onclick="openPetModal()"><i data-lucide="dog"></i> Pet</button>
+                        <button onclick="openVetModal()"><i data-lucide="stethoscope"></i> Vet / COI</button>
                     </div>
                 </div>
-        
+                    
                 <div class="controls-row" style="margin-top: 1rem;">
                     <input type="text" id="crm-search" placeholder="Search entries..." onkeyup="renderAllDashboards()">
                     <button class="btn toggle-layout-btn" onclick="toggleLayout()"><i data-lucide="layout-list"></i> Switch to List View</button>
