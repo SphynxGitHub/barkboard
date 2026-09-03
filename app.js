@@ -7,15 +7,20 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function switchView(viewId) {
-  document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  
-  const targetView = document.getElementById(viewId);
-  if (targetView) targetView.classList.remove('hidden');
+    document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('#admin-nav .nav-btn').forEach(b => b.classList.remove('active'));
+    
+    const targetView = document.getElementById(viewId);
+    if (targetView) targetView.classList.remove('hidden');
 
-  const activeBtn = Array.from(document.querySelectorAll('.nav-btn'))
-    .find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(viewId));
-  if (activeBtn) activeBtn.classList.add('active');
+    const activeBtn = Array.from(document.querySelectorAll('#admin-nav .nav-btn'))
+        .find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(viewId));
+    if (activeBtn) activeBtn.classList.add('active');
+
+    // Hooks for view-specific initializations
+    if (viewId === 'staff-mgmt-view') {
+        initStaffView();
+    }
 }
 
 function setEntityFilter(filterType) {
