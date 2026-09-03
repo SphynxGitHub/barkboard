@@ -310,6 +310,8 @@ body {
     max-width: 500px;
     z-index: 100000 !important;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+}
+
 .modal .form-group label {
   font-size: 0.85rem;
   font-weight: 600;
