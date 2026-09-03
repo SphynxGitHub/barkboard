@@ -334,3 +334,353 @@ async function deleteStaff(id) {
         await renderStaffRoster();
     }
 }
+
+/* ==========================================================================
+   CROSS-ENTITY RELATIONSHIP MODAL CONTROLLER
+   ========================================================================== */
+
+function openRelationshipModal() {
+    const selectA = document.getElementById('modal-entity-a');
+    if (selectA && typeof households !== 'undefined') {
+        selectA.innerHTML = households.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+    }
+    populateTargetDropdown();
+    const modal = document.getElementById('relationship-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeRelationshipModal() {
+    const modal = document.getElementById('relationship-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function toggleRelationshipFields() {
+    populateTargetDropdown();
+}
+
+function populateTargetDropdown() {
+    const typeEl = document.getElementById('modal-relation-type');
+    const selectB = document.getElementById('modal-entity-b');
+    if (!typeEl || !selectB) return;
+
+    const type = typeEl.value;
+    selectB.innerHTML = '';
+
+    if (type === 'vet' && typeof vets !== 'undefined') {
+        selectB.innerHTML = vets.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+    } else if (typeof households !== 'undefined') {
+        selectB.innerHTML = households.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+    }
+}
+
+function saveNewRelationship(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (typeof crossRelationships !== 'undefined') {
+        crossRelationships.push({
+            entityId: document.getElementById('modal-entity-a')?.value,
+            targetId: document.getElementById('modal-entity-b')?.value,
+            type: document.getElementById('modal-relation-type')?.value,
+            note: document.getElementById('modal-relation-note')?.value || 'Linked'
+        });
+    }
+    closeRelationshipModal();
+    if (typeof renderAllDashboards === 'function') renderAllDashboards();
+}
+
+
+/* ==========================================================================
+   PET ASSIGNMENT MODAL CONTROLLER
+   ========================================================================== */
+
+function renderStaffAssignments() {
+    const el = document.getElementById('staff-assignments-list');
+    if (!el) return;
+
+    if (typeof populateStaffSelects === 'function') populateStaffSelects();
+    if (typeof petAssignments === 'undefined' || !petAssignments.length) {
+        el.innerHTML = '<div class="biz-empty">No pet assignments yet.</div>';
+        return;
+    }
+
+    let html = '';
+    if (typeof staffMembers !== 'undefined') {
+        staffMembers.forEach(s => {
+            const aPets = typeof getStaffPets === 'function' ? getStaffPets(s.id) : [];
+            if (!aPets.length) return;
+            html += `<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);font-weight:700;margin:0.75rem 0 0.35rem;">${s.name} · ${s.role}</div>`;
+            aPets.forEach(p => {
+                html += `
+                    <div class="assignment-item" style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem;border-bottom:1px solid var(--border);">
+                        <span>${p.species === 'dog' ? '🐕' : '🐈'} <strong>${p.name}</strong> (${p.role})</span>
+                        <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.55rem;color:var(--danger-text);" onclick="removeAssignment('${p.assignId}')">Remove</button>
+                    </div>`;
+            });
+        });
+    }
+    el.innerHTML = html || '<div class="biz-empty">No assignments yet.</div>';
+}
+
+function openAssignmentModal() {
+    if (typeof populateStaffSelects === 'function') populateStaffSelects();
+    const petSel = document.getElementById('asgn-pet');
+    if (petSel && typeof pets !== 'undefined') {
+        petSel.innerHTML = pets.map(p => `<option value="${p.id}">${p.name} (${p.species})</option>`).join('');
+    }
+    const modal = document.getElementById('assignment-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeAssignmentModal() {
+    const modal = document.getElementById('assignment-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function saveAssignment() {
+    const staffId = document.getElementById('asgn-staff')?.value;
+    const petId = document.getElementById('asgn-pet')?.value;
+    const role = document.getElementById('asgn-role')?.value;
+
+    if (!staffId || !petId) return alert('Please select a staff member and pet.');
+
+    if (typeof petAssignments !== 'undefined') {
+        if (petAssignments.some(a => a.staffId === staffId && a.petId === petId)) {
+            return alert('Pet is already assigned to this staff member.');
+        }
+        const nextId = typeof nextAssignId !== 'undefined' ? nextAssignId++ : Date.now();
+        petAssignments.push({ id: 'pa' + nextId, staffId, petId, role });
+    }
+
+    closeAssignmentModal();
+    renderStaffAssignments();
+}
+
+function removeAssignment(id) {
+    if (typeof petAssignments !== 'undefined') {
+        petAssignments = petAssignments.filter(x => x.id !== id);
+    }
+    renderStaffAssignments();
+}
+
+
+/* ==========================================================================
+   STAFF TASK MODAL CONTROLLER
+   ========================================================================== */
+
+let editingStaffTaskId = null;
+
+function renderStaffTasks() {
+    const el = document.getElementById('staff-tasks-list');
+    if (!el) return;
+
+    const filterStaff = document.getElementById('staff-task-filter')?.value || 'all';
+    const filterStatus = document.getElementById('staff-task-status-filter')?.value || 'all';
+
+    if (typeof staffTasks === 'undefined') return;
+
+    let tasks = [...staffTasks];
+    if (filterStaff !== 'all') tasks = tasks.filter(t => t.staffId === filterStaff);
+    if (filterStatus === 'pending') tasks = tasks.filter(t => !t.done);
+    if (filterStatus === 'done') tasks = tasks.filter(t => t.done);
+
+    if (!tasks.length) {
+        el.innerHTML = '<div class="biz-empty">No tasks match this filter.</div>';
+        return;
+    }
+
+    el.innerHTML = tasks.map(t => {
+        const s = typeof staffMembers !== 'undefined' ? staffMembers.find(x => x.id === t.staffId) : null;
+        return `
+            <div class="staff-task-item ${t.done ? 'done' : ''}" style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem;border-bottom:1px solid var(--border);">
+                <div>
+                    <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleStaffTask('${t.id}')">
+                    <strong style="${t.done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.text}</strong>
+                    <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;">👤 ${s ? s.name : 'Unassigned'} · Due ${t.due}</span>
+                </div>
+                <div>
+                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openStaffTaskModal('${t.id}')">Edit</button>
+                    <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteStaffTask('${t.id}')">✕</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function openStaffTaskModal(id) {
+    editingStaffTaskId = id;
+    if (typeof populateStaffSelects === 'function') populateStaffSelects();
+
+    const titleEl = document.getElementById('staff-task-modal-title');
+    if (titleEl) titleEl.textContent = id ? 'Edit Task' : 'Add Task';
+
+    const whoSel = document.getElementById('stsk-who');
+    const textInput = document.getElementById('stsk-text');
+    const dueInput = document.getElementById('stsk-due');
+    const prioritySel = document.getElementById('stsk-priority');
+
+    if (id && typeof staffTasks !== 'undefined') {
+        const t = staffTasks.find(x => x.id === id);
+        if (t) {
+            if (whoSel) whoSel.value = t.staffId;
+            if (textInput) textInput.value = t.text;
+            if (dueInput) dueInput.value = t.due;
+            if (prioritySel) prioritySel.value = t.priority;
+        }
+    } else {
+        if (textInput) textInput.value = '';
+        if (dueInput) dueInput.value = '';
+        if (prioritySel) prioritySel.value = 'normal';
+    }
+
+    const modal = document.getElementById('staff-task-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeStaffTaskModal() {
+    const modal = document.getElementById('staff-task-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function saveStaffTask() {
+    const staffId = document.getElementById('stsk-who')?.value;
+    const text = document.getElementById('stsk-text')?.value.trim();
+    const due = document.getElementById('stsk-due')?.value;
+    const priority = document.getElementById('stsk-priority')?.value || 'normal';
+
+    if (!text || !due) return alert('Please enter task description and due date.');
+
+    if (typeof staffTasks !== 'undefined') {
+        if (editingStaffTaskId) {
+            const t = staffTasks.find(x => x.id === editingStaffTaskId);
+            if (t) Object.assign(t, { staffId, text, due, priority });
+        } else {
+            const nextId = typeof nextStaffTaskId !== 'undefined' ? nextStaffTaskId++ : Date.now();
+            staffTasks.push({ id: 'stsk' + nextId, staffId, text, due, priority, done: false });
+        }
+    }
+
+    editingStaffTaskId = null;
+    closeStaffTaskModal();
+    renderStaffTasks();
+}
+
+function toggleStaffTask(id) {
+    if (typeof staffTasks !== 'undefined') {
+        const t = staffTasks.find(x => x.id === id);
+        if (t) t.done = !t.done;
+    }
+    renderStaffTasks();
+}
+
+function deleteStaffTask(id) {
+    if (typeof staffTasks !== 'undefined') {
+        staffTasks = staffTasks.filter(x => x.id !== id);
+    }
+    renderStaffTasks();
+}
+
+/* ==========================================================================
+   RESOURCE GRID & CALENDAR SUB-TAB CONTROLLER
+   ========================================================================== */
+
+/**
+ * Switch active tab inside the Calendar / Resource Grid view
+ */
+function switchCalTab(tab) {
+    document.querySelectorAll('[id^="caltab-"]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('[id^="calsec-"]').forEach(s => s.classList.remove('active'));
+    
+    const targetTab = document.getElementById('caltab-' + tab);
+    const targetSec = document.getElementById('calsec-' + tab);
+    
+    if (targetTab) targetTab.classList.add('active');
+    if (targetSec) targetSec.classList.add('active');
+    
+    if (tab === 'grid' && typeof renderCalendar === 'function') {
+        renderCalendar();
+    }
+    if (tab === 'resources' && typeof renderResourceList === 'function') {
+        renderResourceList();
+    }
+}
+
+/* === RESOURCE MODAL CONTROLLERS === */
+
+let editingResourceId = null;
+
+function openResourceModal(id) {
+    editingResourceId = id;
+    const r = (id && typeof managedResources !== 'undefined') 
+        ? managedResources.find(x => x.id === id) 
+        : null;
+
+    const titleEl = document.getElementById('resource-modal-title');
+    if (titleEl) titleEl.textContent = r ? 'Edit Resource' : 'Add Resource';
+
+    const nameInput = document.getElementById('rm-name');
+    const typeSelect = document.getElementById('rm-type');
+    const blackoutsArea = document.getElementById('rm-blackouts');
+    const notesInput = document.getElementById('rm-notes');
+
+    if (nameInput) nameInput.value = r ? r.name : '';
+    if (typeSelect) typeSelect.value = r ? r.type : 'Dog Suite';
+    if (blackoutsArea) blackoutsArea.value = r && r.blackouts ? r.blackouts.join('\n') : '';
+    if (notesInput) notesInput.value = r ? r.notes : '';
+
+    const modal = document.getElementById('resource-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeResourceModal() {
+    const modal = document.getElementById('resource-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function saveResource() {
+    const name = document.getElementById('rm-name')?.value.trim();
+    if (!name) return alert('Please enter a resource name.');
+
+    const type = document.getElementById('rm-type')?.value || 'Dog Suite';
+    const notes = document.getElementById('rm-notes')?.value.trim() || '';
+    const blackoutsText = document.getElementById('rm-blackouts')?.value || '';
+    const blackouts = blackoutsText.split('\n').map(s => s.trim()).filter(Boolean);
+
+    const data = { name, type, notes, blackouts };
+
+    if (typeof managedResources !== 'undefined') {
+        if (editingResourceId) {
+            const r = managedResources.find(x => x.id === editingResourceId);
+            if (r) Object.assign(r, data);
+            if (typeof resources !== 'undefined') {
+                const cr = resources.find(x => x.id === editingResourceId);
+                if (cr) { cr.name = data.name; cr.type = data.type; }
+            }
+        } else {
+            const nextId = typeof nextResourceId !== 'undefined' ? nextResourceId++ : Date.now();
+            const newId = 'r' + nextId;
+            managedResources.push({ id: newId, ...data });
+            if (typeof resources !== 'undefined') {
+                resources.push({ id: newId, name: data.name, type: data.type });
+            }
+        }
+    }
+
+    editingResourceId = null;
+    closeResourceModal();
+    
+    if (typeof renderResourceList === 'function') renderResourceList();
+    if (typeof renderCalendar === 'function') renderCalendar();
+}
+
+function deleteResource(id) {
+    if (!confirm('Remove this resource space?')) return;
+
+    if (typeof managedResources !== 'undefined') {
+        managedResources = managedResources.filter(x => x.id !== id);
+    }
+    if (typeof resources !== 'undefined') {
+        resources = resources.filter(x => x.id !== id);
+    }
+
+    if (typeof renderResourceList === 'function') renderResourceList();
+    if (typeof renderCalendar === 'function') renderCalendar();
+}
