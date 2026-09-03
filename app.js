@@ -1640,12 +1640,13 @@ async function renderAllDashboards() {
    FULL-WIDTH EDITABLE ENTITY VIEW (INLINE BELOW FILTER BAR)
    ========================================================================== */
 
-async function openFullWidthProfile(type, id) {
-    const modal = document.getElementById('fullscreen-modal');
-    const titleEl = document.getElementById('fs-title');
-    const bodyEl = document.getElementById('fs-details-payload');
+/* ==========================================================================
+   INLINE FULL-WIDTH ENTITY VIEW (DIRECTLY BELOW FILTER BAR)
+   ========================================================================== */
 
-    if (!modal || !bodyEl) return;
+async function openFullWidthProfile(type, id) {
+    const container = document.getElementById('crm-list-container');
+    if (!container) return;
 
     const client = getSupabase();
     if (!client) return;
@@ -1656,10 +1657,10 @@ async function openFullWidthProfile(type, id) {
         const { data } = await client.from('households').select('*, people(*), pets(*)').eq('id', id).single();
         payload = data;
     } else if (type === 'person') {
-        const { data } = await client.from('people').select('*').eq('id', id).single();
+        const { data } = await client.from('people').select('*, households(*)').eq('id', id).single();
         payload = data;
     } else if (type === 'pet') {
-        const { data } = await client.from('pets').select('*').eq('id', id).single();
+        const { data } = await client.from('pets').select('*, households(*)').eq('id', id).single();
         payload = data;
     } else if (type === 'vet') {
         const { data } = await client.from('vets').select('*').eq('id', id).single();
@@ -1670,93 +1671,179 @@ async function openFullWidthProfile(type, id) {
 
     const iconName = type === 'household' ? 'home' : type === 'person' ? 'user' : type === 'pet' ? 'dog' : 'stethoscope';
 
-    if (titleEl) {
-        titleEl.innerHTML = `<i data-lucide="${iconName}"></i> ${payload.name}`;
-    }
-
-    bodyEl.innerHTML = `
-        <div class="auto-save-container" style="padding: 1rem 0;">
-            <div id="auto-save-status" style="font-size: 0.78rem; color: var(--text-muted); text-align: right; margin-bottom: 0.5rem; height: 1.2em;">
-                All changes saved
-            </div>
+    container.innerHTML = `
+        <div class="full-width-profile-view" style="width:100%; background:var(--bg-card, #ffffff); border:1px solid var(--border); border-radius:0.5rem; padding:1.5rem; margin-top:0.5rem;">
             
-            <form onsubmit="return false;" style="display: flex; flex-direction: column; gap: 1rem;">
-                ${renderAutoSaveFields(type, payload, id)}
-            </form>
+            <!-- HEADER BAR -->
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:1rem; margin-bottom:1.5rem;">
+                <div style="display:flex; align-items:center; gap:0.6rem;">
+                    <i data-lucide="${iconName}" style="width:24px; height:24px;"></i>
+                    <h2 style="margin:0; font-size:1.4rem;">${payload.name || 'Details'}</h2>
+                </div>
+                <div style="display:flex; align-items:center; gap:1rem;">
+                    <span id="auto-save-status" style="font-size:0.8rem; color:var(--text-muted);">All changes saved</span>
+                    <button class="btn-icon" onclick="renderAllDashboards()" style="background:none; border:none; cursor:pointer;" title="Close">
+                        <i data-lucide="x" style="width:20px; height:20px;"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- CONTENT SECTIONS -->
+            ${renderEntitySections(type, payload, id)}
         </div>
     `;
 
-    modal.classList.remove('hidden');
     refreshIcons();
 }
 
-function renderAutoSaveFields(type, data, id) {
+function renderEntitySections(type, data, id) {
     if (type === 'household') {
         return `
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Household Name</label>
-                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('households', '${id}', 'name', this.value)">
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Address</label>
-                <input type="text" value="${data.address || ''}" class="biz-select" onchange="autoSaveField('households', '${id}', 'address', this.value)">
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Notes</label>
-                <textarea class="biz-select" rows="3" onchange="autoSaveField('households', '${id}', 'note', this.value)">${data.note || ''}</textarea>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+                <!-- Main Info Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="info"></i> Household Details
+                    </h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household Name</label>
+                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'name', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
+                            <input type="text" value="${data.address || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'address', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
+                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="3" onchange="autoSaveField('households', '${id}', 'note', this.value)">${data.note || ''}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Household Members Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="users"></i> Household Members
+                    </h3>
+                    ${data.people && data.people.length ? data.people.map(p => `
+                        <div style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+                            <strong>${p.name}</strong> (${p.role || 'Member'})
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;">📞 ${p.contact || 'No phone/email set'}</div>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
+                </div>
+
+                <!-- Pets Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="dog"></i> Pets
+                    </h3>
+                    ${data.pets && data.pets.length ? data.pets.map(p => `
+                        <div style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+                            <strong>${p.name}</strong> (${p.species})
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;">Vaccines: ${p.vaccine_status || 'Current'}</div>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
+                </div>
+
+                <!-- Scheduled Events Card -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="calendar"></i> Scheduled Events
+                    </h3>
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>
+                </div>
+
+                <!-- Open Invoices Card -->
+                <div class="stat-card alert" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="credit-card"></i> Open Invoices
+                    </h3>
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No unpaid balances on file.</p>
+                </div>
             </div>
         `;
     } else if (type === 'person') {
         return `
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Full Name</label>
-                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('people', '${id}', 'name', this.value)">
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Contact Info (Phone / Email)</label>
-                <input type="text" value="${data.contact || ''}" class="biz-select" onchange="autoSaveField('people', '${id}', 'contact', this.value)">
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Role</label>
-                <input type="text" value="${data.role || 'Primary'}" class="biz-select" onchange="autoSaveField('people', '${id}', 'role', this.value)">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user"></i> Contact Details</h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Full Name</label>
+                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'name', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Info (Phone / Email)</label>
+                            <input type="text" value="${data.contact || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'contact', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Role</label>
+                            <input type="text" value="${data.role || 'Primary'}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'role', this.value)">
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
+                    <p style="margin-top:0.5rem; font-size:0.9rem;"><strong>Household:</strong> ${data.households?.name || 'Unassigned'}</p>
+                </div>
             </div>
         `;
     } else if (type === 'pet') {
         return `
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Pet Name</label>
-                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('pets', '${id}', 'name', this.value)">
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Species</label>
-                <select class="biz-select" onchange="autoSaveField('pets', '${id}', 'species', this.value)">
-                    <option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option>
-                    <option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option>
-                    <option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Vaccine Status</label>
-                <select class="biz-select" onchange="autoSaveField('pets', '${id}', 'vaccine_status', this.value)">
-                    <option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option>
-                    <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending Verification</option>
-                    <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
-                </select>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="dog"></i> Pet Profile</h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Pet Name</label>
+                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'name', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Species</label>
+                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'species', this.value)">
+                                <option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option>
+                                <option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option>
+                                <option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Vaccine Status</label>
+                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'vaccine_status', this.value)">
+                                <option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option>
+                                <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending</option>
+                                <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household Link</h3>
+                    <p style="margin-top:0.5rem; font-size:0.9rem;"><strong>Belongs to:</strong> ${data.households?.name || 'Unassigned'}</p>
+                </div>
             </div>
         `;
     } else if (type === 'vet') {
         return `
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Doctor / Vet Name</label>
-                <input type="text" value="${data.name || ''}" class="biz-select" onchange="autoSaveField('vets', '${id}', 'name', this.value)">
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Clinic Name</label>
-                <input type="text" value="${data.clinic || ''}" class="biz-select" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)">
-            </div>
-            <div class="form-group">
-                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Phone / Emergency</label>
-                <input type="text" value="${data.phone || ''}" class="biz-select" onchange="autoSaveField('vets', '${id}', 'phone', this.value)">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem;">
+                    <h3 style="margin-top:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Vet Info</h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem; margin-top:1rem;">
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Doctor / Vet Name</label>
+                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'name', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Clinic Name</label>
+                            <input type="text" value="${data.clinic || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone</label>
+                            <input type="text" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'phone', this.value)">
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
