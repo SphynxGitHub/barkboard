@@ -273,6 +273,7 @@ async function saveBooking() {
     // one row per pet. When editing, the edited row becomes the first selected
     // pet, and any additional newly-checked pets get their own new rows.
     let response;
+    let firstNewBookingId = null;
     if (editingBookingId) {
         const [firstPetId, ...extraPetIds] = petIds;
         response = await client.from('bookings').update({ ...basePayload, pet_id: firstPetId }).eq('id', editingBookingId);
@@ -283,13 +284,28 @@ async function saveBooking() {
         }
     } else {
         const rows = petIds.map(pid => ({ ...basePayload, pet_id: pid }));
-        response = await client.from('bookings').insert(rows);
+        response = await client.from('bookings').insert(rows).select();
+        if (!response.error && response.data && response.data[0]) {
+            firstNewBookingId = response.data[0].id;
+        }
     }
 
     if (response.error) {
         alert('Failed to save event: ' + response.error.message);
         console.error('Supabase booking error:', response.error);
     } else {
+        // If this is a brand-new priced event, automatically create the matching invoice.
+        if (firstNewBookingId && amount > 0) {
+            const when = type === 'stay' ? `${startDate} → ${endDate}` : startDate;
+            await client.from('invoices').insert([{
+                household_id: bookingHouseholdId,
+                booking_id: firstNewBookingId,
+                description: `${serviceName || 'Event'} — ${when}`,
+                amount: amount,
+                status: 'unpaid'
+            }]);
+        }
+
         const refreshId = bookingHouseholdId;
         closeBookingModal();
         openFullWidthProfile('household', refreshId);
@@ -337,10 +353,15 @@ async function openInvoiceModal(householdId, invoiceId = null) {
     if (!client) return alert('Database connection unavailable.');
 
     // Load this household's events for the optional link dropdown
-    const { data: bookings } = await client.from('bookings').select('id, service_type, booking_type, start_date').eq('household_id', householdId).order('start_date', { ascending: false });
+    const { data: bookings } = await client.from('bookings').select('id, service_name, check_in, check_out, amount').eq('household_id', householdId).order('check_in', { ascending: false });
 
     if (bookingSel) {
-        const options = (bookings || []).map(bk => `<option value="${bk.id}">${bk.service_type || (bk.booking_type === 'stay' ? 'Stay' : 'Appointment')} · ${bk.start_date}</option>`).join('');
+        const options = (bookings || []).map(bk => {
+            const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
+            const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
+            const when = outDate && outDate !== inDate ? `${inDate} → ${outDate}` : inDate;
+            return `<option value="${bk.id}">${bk.service_name || 'Event'} · ${when}</option>`;
+        }).join('');
         bookingSel.innerHTML = `<option value="">None</option>${options}`;
     }
 
@@ -1930,7 +1951,7 @@ async function renderAllDashboards() {
                                 <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem; font-size:1.1rem;">
                                     <i data-lucide="${speciesIcon}"></i> ${p.name}
                                 </h3>
-                                <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">${p.species} ${p.households?.name ? '· Household: ' + p.households.name : ''} · Vaccines: ${p.vaccine_status || 'Current'}</p>
+                                <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">${speciesLabel(p)} ${p.households?.name ? '· Household: ' + p.households.name : ''} · Vaccines: ${p.vaccine_status || 'Current'}</p>
                             </div>
                             <button class="delete-action-btn" onclick="event.stopPropagation(); deletePet('${p.id}')" title="Delete Pet">
                                 <i data-lucide="trash-2"></i>
@@ -2015,6 +2036,10 @@ async function openFullWidthProfile(type, id) {
         }
         if (payload && payload.households) {
             payload.households.vetsById = await fetchVetsForPets(client, payload.households.pets || []);
+        }
+        if (payload) {
+            const { data: bookings } = await client.from('bookings').select('*').eq('pet_id', id);
+            payload.bookings = bookings || [];
         }
     } else if (type === 'vet') {
         const { data } = await client.from('vets').select('*').eq('id', id).single();
@@ -2144,47 +2169,7 @@ function renderEntitySections(type, data, id) {
                     <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('pet', '${id}', 'household')">+ Add Pet</button>
                 </div>
 
-                <!-- Scheduled Events -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="calendar"></i> Scheduled Events</h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openBookingModal('${id}')">+ Add Event</button>
-                    </div>
-                    ${data.bookings && data.bookings.length ? data.bookings
-                        .slice()
-                        .sort((a, b) => (a.check_in || '').localeCompare(b.check_in || ''))
-                        .map(bk => {
-                            const petName = data.pets?.find(p => p.id === bk.pet_id)?.name || 'No pet linked';
-                            const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
-                            const inTime = bk.check_in ? bk.check_in.slice(11, 16) : '';
-                            const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
-                            const isStay = outDate && outDate !== inDate;
-                            const when = isStay ? `${inDate} → ${outDate}` : `${inDate}${inTime ? ' at ' + inTime : ''}`;
-                            const statusColor = bk.status === 'cancelled' ? 'var(--text-muted)' : bk.status === 'completed' ? 'var(--text-muted)' : 'var(--accent, #2563eb)';
-                            return `
-                                <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
-                                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                                        <div>
-                                            <strong>${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
-                                            <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${bk.status || 'scheduled'}</span>
-                                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
-                                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>
-                                            ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
-                                            ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
-                                        </div>
-                                        <div style="display:flex; gap:0.35rem;">
-                                            <button class="btn-icon" onclick="openBookingModal('${id}', '${bk.id}')" title="Edit event" style="background:none; border:none; cursor:pointer;">
-                                                <i data-lucide="pencil" style="width:14px;height:14px;"></i>
-                                            </button>
-                                            <button class="btn-icon" onclick="deleteBooking('${bk.id}', '${id}')" title="Remove event" style="background:none; border:none; cursor:pointer;">
-                                                <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>'}
-                </div>
+                ${renderEventsCard(data.bookings, id, { pets: data.pets || [], showPetName: true })}
 
                 <!-- Invoices -->
                 <div class="stat-card alert" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
@@ -2361,6 +2346,8 @@ function renderEntitySections(type, data, id) {
                         </div>
                     </div>
                 </div>
+
+                ${renderEventsCard(data.bookings, data.households?.id || data.household_id, { showPetName: false })}
 
                 <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
@@ -2542,7 +2529,7 @@ function renderPetRow(p, opts) {
     const vetLine = (label, vet, column) => `
         <div style="margin-top:0.3rem; padding-left:1.35rem; display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:0.78rem; color:var(--text-muted); ${vet ? 'cursor:pointer;' : ''}" ${vet ? `onclick="event.stopPropagation(); openFullWidthProfile('vet', '${vet.id}')"` : ''}>
-                <i data-lucide="stethoscope" style="width:11px;height:11px;"></i> ${label}: ${vet ? vet.name : 'None linked'}
+                <i data-lucide="stethoscope" style="width:11px;height:11px;"></i> ${label}: ${vet ? vet.name : 'None linked'}${vet && (vet.phone || vet.email) ? ' — ' + [vet.phone, vet.email].filter(Boolean).join(' · ') : ''}
             </span>
             ${isCurrent ? `
                 <span style="display:flex; gap:0.3rem;">
@@ -2611,14 +2598,25 @@ function renderVetClientGroups(clientPets, vetId) {
 async function executeVetPetSearch(vetId, query) {
     const container = document.getElementById(`vet-pet-search-results-${vetId}`);
     if (!container) return;
-    if (!query.trim()) { container.innerHTML = ''; return; }
+    const q = query.trim().toLowerCase();
+    if (!q) { container.innerHTML = ''; return; }
 
     const client = getSupabase();
     if (!client) return;
 
-    const { data: pets } = await client.from('pets').select('*, households(name)').ilike('name', `%${query.trim()}%`).limit(5);
+    const { data: allPets } = await client.from('pets').select('*, households(name, people(*))').limit(200);
 
-    container.innerHTML = (pets && pets.length) ? pets.map(p => `
+    const pets = (allPets || []).filter(p => {
+        const memberMatch = (p.households?.people || []).some(person =>
+            personDisplayName(person).toLowerCase().includes(q) || (personDisplayContact(person) || '').toLowerCase().includes(q)
+        );
+        return (p.name || '').toLowerCase().includes(q)
+            || (speciesLabel(p) || '').toLowerCase().includes(q)
+            || (p.households?.name || '').toLowerCase().includes(q)
+            || memberMatch;
+    }).slice(0, 8);
+
+    container.innerHTML = pets.length ? pets.map(p => `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem;">
             <span><strong>${p.name}</strong> ${p.households?.name ? '(' + p.households.name + ')' : ''}</span>
             <span style="display:flex; gap:0.3rem;">
@@ -2636,35 +2634,55 @@ async function linkPetToVet(petId, vetId, column) {
     openFullWidthProfile('vet', vetId);
 }
 
-function renderHouseholdVetsSummary(pets, vetsById) {
-    const groups = {}; // vetId -> { vet, entries: [{petName, role}] }
-    pets.forEach(p => {
-        if (p.vet_id && vetsById[p.vet_id]) {
-            const g = groups[p.vet_id] || (groups[p.vet_id] = { vet: vetsById[p.vet_id], entries: [] });
-            g.entries.push({ petName: p.name, role: 'Regular' });
-        }
-        if (p.emergency_vet_id && vetsById[p.emergency_vet_id]) {
-            const g = groups[p.emergency_vet_id] || (groups[p.emergency_vet_id] = { vet: vetsById[p.emergency_vet_id], entries: [] });
-            g.entries.push({ petName: p.name, role: 'Emergency' });
-        }
-    });
+function renderEventsCard(bookings, householdId, opts) {
+    const { pets = [], showPetName = true } = opts || {};
+    const addButton = householdId
+        ? `<button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openBookingModal('${householdId}')">+ Add Event</button>`
+        : '';
+    const list = bookings && bookings.length ? bookings
+        .slice()
+        .sort((a, b) => (a.check_in || '').localeCompare(b.check_in || ''))
+        .map(bk => {
+            const petName = showPetName ? (pets.find(p => p.id === bk.pet_id)?.name || 'No pet linked') : null;
+            const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
+            const inTime = bk.check_in ? bk.check_in.slice(11, 16) : '';
+            const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
+            const isStay = outDate && outDate !== inDate;
+            const when = isStay ? `${inDate} → ${outDate}` : `${inDate}${inTime ? ' at ' + inTime : ''}`;
+            const statusColor = bk.status === 'cancelled' ? 'var(--text-muted)' : bk.status === 'completed' ? 'var(--text-muted)' : 'var(--accent, #2563eb)';
+            return `
+                <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
+                        <div>
+                            <strong>${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
+                            <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${bk.status || 'scheduled'}</span>
+                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
+                            ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
+                            ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
+                            ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
+                        </div>
+                        <div style="display:flex; gap:0.35rem;">
+                            <button class="btn-icon" onclick="openBookingModal('${householdId}', '${bk.id}')" title="Edit event" style="background:none; border:none; cursor:pointer;">
+                                <i data-lucide="pencil" style="width:14px;height:14px;"></i>
+                            </button>
+                            <button class="btn-icon" onclick="deleteBooking('${bk.id}', '${householdId}')" title="Remove event" style="background:none; border:none; cursor:pointer;">
+                                <i data-lucide="x" style="width:14px;height:14px;"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>';
 
-    const vetIds = Object.keys(groups);
-    if (!vetIds.length) {
-        return '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No vets linked for this household\'s pets yet.</p>';
-    }
-
-    return vetIds.map(vid => {
-        const g = groups[vid];
-        return `
-            <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('vet', '${g.vet.id}')">
-                <strong><i data-lucide="stethoscope" style="width:16px;height:16px;"></i> ${g.vet.name}</strong>
-                ${g.vet.clinic ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${g.vet.clinic}</div>` : ''}
-                ${g.vet.phone ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="phone" style="width:12px;height:12px;"></i> ${g.vet.phone}</div>` : ''}
-                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.3rem;">${g.entries.map(e => `${e.petName} (${e.role})`).join(', ')}</div>
+    return `
+        <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="calendar"></i> Scheduled Events</h3>
+                ${addButton}
             </div>
-        `;
-    }).join('');
+            ${list}
+        </div>
+    `;
 }
 
 function renderPersonRow(p, refreshType, refreshId) {
@@ -2714,8 +2732,9 @@ async function executeLiveSearch(targetType, sourceId, query, sourceType) {
     const table = tableMap[targetType];
 
     let dbQuery = client.from(table).select('*').limit(5);
-    // A person/pet can only belong to one household, so only offer unlinked ones to link.
-    if (targetType === 'person' || targetType === 'person-other' || targetType === 'pet') {
+    // A person/pet can only belong to one household, so only offer unlinked ones to link
+    // as a Member/Pet. Other Contacts can reuse any existing contact regardless of household.
+    if (targetType === 'person' || targetType === 'pet') {
         dbQuery = dbQuery.is('household_id', null);
     }
     if (query.trim()) {
