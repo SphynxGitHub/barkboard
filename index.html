@@ -767,12 +767,24 @@
                             <input type="date" id="bk-end-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
                         </div>
                     </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+                        <div>
+                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Amount ($)</label>
+                            <input type="number" id="bk-amount" step="0.01" min="0" placeholder="0.00" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Status</label>
+                            <select id="bk-status" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
+                                <option value="scheduled">Scheduled</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
                     <div>
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Status</label>
-                        <select id="bk-status" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                            <option value="scheduled">Scheduled</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Assigned Staff</label>
+                        <select id="bk-staff-id" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
+                            <option value="">Unassigned</option>
                         </select>
                     </div>
                     <div>

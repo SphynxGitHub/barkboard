@@ -149,7 +149,9 @@ async function openBookingModal(householdId, bookingId = null) {
     const startDateInput = document.getElementById('bk-start-date');
     const startTimeInput = document.getElementById('bk-start-time');
     const endDateInput = document.getElementById('bk-end-date');
+    const amountInput = document.getElementById('bk-amount');
     const statusSel = document.getElementById('bk-status');
+    const staffSel = document.getElementById('bk-staff-id');
     const notesInput = document.getElementById('bk-notes');
     const petBox = document.getElementById('bk-pet-checkboxes');
 
@@ -161,6 +163,7 @@ async function openBookingModal(householdId, bookingId = null) {
     if (startDateInput) startDateInput.value = '';
     if (startTimeInput) startTimeInput.value = '';
     if (endDateInput) endDateInput.value = '';
+    if (amountInput) amountInput.value = '';
     if (statusSel) statusSel.value = 'scheduled';
     if (notesInput) notesInput.value = '';
     toggleBookingTypeFields();
@@ -170,13 +173,20 @@ async function openBookingModal(householdId, bookingId = null) {
 
     // Load this household's pets as checkboxes
     const { data: pets } = await client.from('pets').select('id, name, species').eq('household_id', householdId).order('name');
-    let selectedPetIds = [];
 
+    // Load staff for optional assignment
+    const { data: staff } = await client.from('staff').select('id, name, role').order('name');
+    if (staffSel) {
+        const staffOptions = (staff || []).map(s => `<option value="${s.id}">${s.name}${s.role ? ' · ' + s.role : ''}</option>`).join('');
+        staffSel.innerHTML = `<option value="">Unassigned</option>${staffOptions}`;
+    }
+
+    let selectedPetIds = [];
     let existingBooking = null;
     if (bookingId) {
         const { data: bk } = await client.from('bookings').select('*').eq('id', bookingId).single();
         existingBooking = bk;
-        selectedPetIds = bk?.pet_ids || [];
+        if (bk?.pet_id) selectedPetIds = [bk.pet_id];
     }
 
     if (petBox) {
@@ -191,12 +201,19 @@ async function openBookingModal(householdId, bookingId = null) {
     }
 
     if (existingBooking) {
-        if (typeSel) typeSel.value = existingBooking.booking_type || 'appointment';
-        if (serviceInput) serviceInput.value = existingBooking.service_type || '';
-        if (startDateInput) startDateInput.value = existingBooking.start_date || '';
-        if (startTimeInput) startTimeInput.value = existingBooking.start_time || '';
-        if (endDateInput) endDateInput.value = existingBooking.end_date || '';
+        const checkInDate = existingBooking.check_in ? existingBooking.check_in.slice(0, 10) : '';
+        const checkInTime = existingBooking.check_in ? existingBooking.check_in.slice(11, 16) : '';
+        const checkOutDate = existingBooking.check_out ? existingBooking.check_out.slice(0, 10) : '';
+        const isStay = checkOutDate && checkOutDate !== checkInDate;
+
+        if (typeSel) typeSel.value = isStay ? 'stay' : 'appointment';
+        if (serviceInput) serviceInput.value = existingBooking.service_name || '';
+        if (startDateInput) startDateInput.value = checkInDate;
+        if (startTimeInput) startTimeInput.value = checkInTime;
+        if (isStay && endDateInput) endDateInput.value = checkOutDate;
+        if (amountInput) amountInput.value = existingBooking.amount != null ? existingBooking.amount : '';
         if (statusSel) statusSel.value = existingBooking.status || 'scheduled';
+        if (staffSel) staffSel.value = existingBooking.assigned_staff_id || '';
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
     }
@@ -220,11 +237,13 @@ async function saveBooking() {
     if (!client) return alert('Database connection unavailable.');
 
     const type = document.getElementById('bk-type')?.value || 'appointment';
-    const serviceType = document.getElementById('bk-service-type')?.value.trim() || '';
+    const serviceName = document.getElementById('bk-service-type')?.value.trim() || '';
     const startDate = document.getElementById('bk-start-date')?.value || '';
-    const startTime = document.getElementById('bk-start-time')?.value || null;
-    const endDate = document.getElementById('bk-end-date')?.value || null;
+    const startTime = document.getElementById('bk-start-time')?.value || '00:00';
+    const endDate = document.getElementById('bk-end-date')?.value || '';
+    const amountRaw = document.getElementById('bk-amount')?.value;
     const status = document.getElementById('bk-status')?.value || 'scheduled';
+    const staffId = document.getElementById('bk-staff-id')?.value || null;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
 
@@ -232,23 +251,39 @@ async function saveBooking() {
     if (type === 'stay' && !endDate) return alert('Please choose an end date for a multi-day stay.');
     if (petIds.length === 0) return alert('Please select at least one pet.');
 
-    const payload = {
+    const amount = amountRaw ? parseFloat(amountRaw) : 0;
+
+    // check_in/check_out are timestamps: a single appointment has check_in === check_out,
+    // a multi-day stay spans start-of-day to start-of-day across the date range.
+    const checkIn = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
+    const checkOut = type === 'stay' ? `${endDate}T00:00:00` : checkIn;
+
+    const basePayload = {
         household_id: bookingHouseholdId,
-        pet_ids: petIds,
-        booking_type: type,
-        service_type: serviceType,
-        start_date: startDate,
-        start_time: type === 'appointment' ? startTime : null,
-        end_date: type === 'stay' ? endDate : startDate,
+        service_name: serviceName,
+        check_in: checkIn,
+        check_out: checkOut,
+        amount: amount,
         status: status,
+        assigned_staff_id: staffId || null,
         notes: notes
     };
 
+    // The bookings table has one pet_id per row, so linking multiple pets means
+    // one row per pet. When editing, the edited row becomes the first selected
+    // pet, and any additional newly-checked pets get their own new rows.
     let response;
     if (editingBookingId) {
-        response = await client.from('bookings').update(payload).eq('id', editingBookingId);
+        const [firstPetId, ...extraPetIds] = petIds;
+        response = await client.from('bookings').update({ ...basePayload, pet_id: firstPetId }).eq('id', editingBookingId);
+        if (!response.error && extraPetIds.length) {
+            const extraRows = extraPetIds.map(pid => ({ ...basePayload, pet_id: pid }));
+            const extraResponse = await client.from('bookings').insert(extraRows);
+            if (extraResponse.error) response = extraResponse;
+        }
     } else {
-        response = await client.from('bookings').insert([payload]);
+        const rows = petIds.map(pid => ({ ...basePayload, pet_id: pid }));
+        response = await client.from('bookings').insert(rows);
     }
 
     if (response.error) {
@@ -1256,6 +1291,7 @@ function deleteClosure(id) {
    ========================================================================== */
 
 let editingHouseholdId = null;
+let householdModalContext = 'household'; // 'household' | 'person' — controls whether the shared modal shows contact fields + household search
 
 async function openHouseholdFullView(id) {
     const client = getSupabase();
@@ -1341,10 +1377,22 @@ function openHouseholdModal(id = null) {
     const addressInput = document.getElementById('hh-address');
     const noteInput = document.getElementById('hh-notes');
     const hiddenIdInput = document.getElementById('selected-household-id');
+    const dropdown = document.getElementById('hh-search-dropdown');
+
+    householdModalContext = 'household';
 
     // Clear any leftover "attach person to household X" state from a
     // previous Link Member flow, so this always creates/edits a standalone household.
     if (hiddenIdInput) hiddenIdInput.value = '';
+
+    // No contact fields or household search when creating/editing a standalone
+    // household — only name, address, and notes are relevant here.
+    if (contactNameInput && contactNameInput.parentElement) contactNameInput.parentElement.style.display = 'none';
+    if (contactInfoInput && contactInfoInput.parentElement) contactInfoInput.parentElement.style.display = 'none';
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+    }
 
     if (titleEl) titleEl.textContent = id ? 'Edit Household' : 'Add Household';
 
@@ -1447,14 +1495,33 @@ async function saveHousehold() {
 
     if (!hhName) return alert('Please select or enter a Household name.');
 
+    let newHouseholdId = editingHouseholdId;
     if (editingHouseholdId) {
         await client.from('households').update({ name: hhName, address, note: role }).eq('id', editingHouseholdId);
     } else {
-        await client.from('households').insert([{ name: hhName, address, note: role }]);
+        const { data: inserted, error } = await client.from('households').insert([{ name: hhName, address, note: role }]).select();
+        if (error) {
+            alert('Error creating household: ' + error.message);
+            return;
+        }
+        newHouseholdId = inserted && inserted[0] ? inserted[0].id : null;
+    }
+
+    // If this household was created via a person's/pet's "Link Household → + Create New"
+    // flow, link that person/pet to it now instead of leaving it unattached.
+    if (returnToProfile && newHouseholdId && (returnToProfile.type === 'person' || returnToProfile.type === 'pet')) {
+        const table = returnToProfile.type === 'person' ? 'people' : 'pets';
+        await client.from(table).update({ household_id: newHouseholdId }).eq('id', returnToProfile.id);
     }
 
     closeHouseholdModal();
-    renderAllDashboards();
+    if (returnToProfile) {
+        const rt = returnToProfile;
+        returnToProfile = null;
+        openFullWidthProfile(rt.type, rt.id);
+    } else {
+        renderAllDashboards();
+    }
 }
 
 async function deleteHousehold(id) {
@@ -1585,7 +1652,11 @@ async function savePet() {
         alert('Failed to save pet: ' + response.error.message);
     } else {
         closePetModal();
-        if (typeof renderAllDashboards === 'function') {
+        if (returnToProfile) {
+            const rt = returnToProfile;
+            returnToProfile = null;
+            openFullWidthProfile(rt.type, rt.id);
+        } else if (typeof renderAllDashboards === 'function') {
             await renderAllDashboards();
         }
     }
@@ -1703,15 +1774,26 @@ async function saveVet() {
     if (editingVetId) {
         response = await client.from('vets').update(payload).eq('id', editingVetId);
     } else {
-        response = await client.from('vets').insert([payload]);
+        response = await client.from('vets').insert([payload]).select();
     }
 
     if (response.error) {
         alert('Failed to save vet: ' + response.error.message);
         console.error('Supabase vet error:', response.error);
     } else {
+        // If this vet was created via a household's "Link Vet → + Create New" flow,
+        // link it to that household now instead of leaving it unattached.
+        if (pendingVetLinkHouseholdId && response.data && response.data[0]) {
+            await client.from('households').update({ vet_id: response.data[0].id }).eq('id', pendingVetLinkHouseholdId);
+        }
+        pendingVetLinkHouseholdId = null;
+
         closeVetModal();
-        if (typeof renderAllDashboards === 'function') {
+        if (returnToProfile) {
+            const rt = returnToProfile;
+            returnToProfile = null;
+            openFullWidthProfile(rt.type, rt.id);
+        } else if (typeof renderAllDashboards === 'function') {
             await renderAllDashboards();
         }
     }
@@ -1899,14 +1981,26 @@ async function openFullWidthProfile(type, id) {
     let payload = null;
 
     if (type === 'household') {
-        const { data } = await client.from('households').select('*, people(*), pets(*), vets(*), bookings(*), invoices(*)').eq('id', id).single();
+        const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*), invoices(*)').eq('id', id).single();
         payload = data;
+        if (payload && payload.vet_id) {
+            const { data: vet } = await client.from('vets').select('*').eq('id', payload.vet_id).single();
+            payload.vets = vet || null;
+        }
     } else if (type === 'person') {
         const { data } = await client.from('people').select('*, households(*, people(*), pets(*))').eq('id', id).single();
         payload = data;
+        if (payload && payload.households && payload.households.vet_id) {
+            const { data: vet } = await client.from('vets').select('*').eq('id', payload.households.vet_id).single();
+            payload.households.vets = vet || null;
+        }
     } else if (type === 'pet') {
         const { data } = await client.from('pets').select('*, households(*, people(*), pets(*))').eq('id', id).single();
         payload = data;
+        if (payload && payload.households && payload.households.vet_id) {
+            const { data: vet } = await client.from('vets').select('*').eq('id', payload.households.vet_id).single();
+            payload.households.vets = vet || null;
+        }
     } else if (type === 'vet') {
         const { data } = await client.from('vets').select('*').eq('id', id).single();
         payload = data;
@@ -1977,30 +2071,27 @@ function renderEntitySections(type, data, id) {
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
                             <i data-lucide="users"></i> Household Members
                         </h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('person', '${id}')">
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('person', '${id}', 'household')">
                             <i data-lucide="search" style="width:14px;height:14px;"></i> Link Member
                         </button>
                     </div>
 
                     <div id="search-panel-person-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type member name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('person', '${id}', this.value)">
+                        <input type="text" placeholder="Type member name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('person', '${id}', this.value, 'household')">
                         <div id="search-results-person-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
-                    ${data.people && data.people.length ? data.people.map(p => `
-                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <strong>${personDisplayName(p)}</strong>
-                                <div style="display:flex; align-items:center; gap:0.5rem;">
-                                    <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
-                                    <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${p.id}', 'household', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
-                                        <i data-lucide="x" style="width:14px;height:14px;"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;"><i data-lucide="phone"></i> ${personDisplayContact(p) || 'No contact set'}</div>
-                        </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
+                    ${(data.people || []).filter(p => (p.category || 'member') !== 'other').length ? (data.people || []).filter(p => (p.category || 'member') !== 'other').map(p => renderPersonRow(p, id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No members attached.</p>'}
+                    <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('person', '${id}', 'household')">+ Add Member</button>
+                </div>
+
+                <!-- Other Contacts -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="user-round"></i> Other Contacts
+                    </h3>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:-0.5rem 0 0.75rem;">Emergency contacts, relatives, and other relationships. Add via Link Member above, then set Category to "Other Contact" on their profile.</p>
+                    ${(data.people || []).filter(p => p.category === 'other').length ? (data.people || []).filter(p => p.category === 'other').map(p => renderPersonRow(p, id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No other contacts.</p>'}
                 </div>
 
                 <!-- Pets -->
@@ -2009,13 +2100,13 @@ function renderEntitySections(type, data, id) {
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
                             <i data-lucide="dog"></i> Pets
                         </h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('pet', '${id}')">
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('pet', '${id}', 'household')">
                             <i data-lucide="search" style="width:14px;height:14px;"></i> Link Pet
                         </button>
                     </div>
 
                     <div id="search-panel-pet-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type pet name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('pet', '${id}', this.value)">
+                        <input type="text" placeholder="Type pet name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('pet', '${id}', this.value, 'household')">
                         <div id="search-results-pet-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
@@ -2024,7 +2115,7 @@ function renderEntitySections(type, data, id) {
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <strong><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:16px;height:16px;"></i> ${p.name}</strong>
                                 <div style="display:flex; align-items:center; gap:0.5rem;">
-                                    <span style="font-size:0.75rem; color:var(--text-muted);">${p.species}</span>
+                                    <span style="font-size:0.75rem; color:var(--text-muted);">${speciesLabel(p)}</span>
                                     <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', 'household', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
                                         <i data-lucide="x" style="width:14px;height:14px;"></i>
                                     </button>
@@ -2032,6 +2123,7 @@ function renderEntitySections(type, data, id) {
                             </div>
                         </div>
                     `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
+                    <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('pet', '${id}', 'household')">+ Add Pet</button>
                 </div>
 
                 <!-- Primary Vet -->
@@ -2040,13 +2132,13 @@ function renderEntitySections(type, data, id) {
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
                             <i data-lucide="stethoscope"></i> Veterinary Clinic
                         </h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('vet', '${id}')">
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('vet', '${id}', 'household')">
                             <i data-lucide="search" style="width:14px;height:14px;"></i> Link Vet
                         </button>
                     </div>
 
                     <div id="search-panel-vet-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type doctor or clinic..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('vet', '${id}', this.value)">
+                        <input type="text" placeholder="Type doctor or clinic..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('vet', '${id}', this.value, 'household')">
                         <div id="search-results-vet-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
@@ -2061,6 +2153,8 @@ function renderEntitySections(type, data, id) {
                                 </div>
                                 ${data.vets.clinic ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">${data.vets.clinic}</div>` : ''}
                                 ${data.vets.phone ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.15rem;"><i data-lucide="phone" style="width:12px;height:12px;"></i> ${data.vets.phone}</div>` : ''}
+                                ${data.vets.email ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.15rem;"><i data-lucide="mail" style="width:12px;height:12px;"></i> ${data.vets.email}</div>` : ''}
+                                ${data.vets.hours ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.15rem;"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${data.vets.hours}</div>` : ''}
                             </div>
                         ` : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No primary vet facility linked.</p>'}
                     </div>
@@ -2074,24 +2168,24 @@ function renderEntitySections(type, data, id) {
                     </div>
                     ${data.bookings && data.bookings.length ? data.bookings
                         .slice()
-                        .sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''))
+                        .sort((a, b) => (a.check_in || '').localeCompare(b.check_in || ''))
                         .map(bk => {
-                            const petNames = (bk.pet_ids || [])
-                                .map(pid => data.pets?.find(p => p.id === pid)?.name)
-                                .filter(Boolean)
-                                .join(', ') || 'No pets linked';
-                            const when = bk.booking_type === 'stay'
-                                ? `${bk.start_date}${bk.end_date ? ' → ' + bk.end_date : ''}`
-                                : `${bk.start_date}${bk.start_time ? ' at ' + bk.start_time : ''}`;
+                            const petName = data.pets?.find(p => p.id === bk.pet_id)?.name || 'No pet linked';
+                            const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
+                            const inTime = bk.check_in ? bk.check_in.slice(11, 16) : '';
+                            const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
+                            const isStay = outDate && outDate !== inDate;
+                            const when = isStay ? `${inDate} → ${outDate}` : `${inDate}${inTime ? ' at ' + inTime : ''}`;
                             const statusColor = bk.status === 'cancelled' ? 'var(--text-muted)' : bk.status === 'completed' ? 'var(--text-muted)' : 'var(--accent, #2563eb)';
                             return `
                                 <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
                                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
                                         <div>
-                                            <strong>${bk.service_type || (bk.booking_type === 'stay' ? 'Stay' : 'Appointment')}</strong>
+                                            <strong>${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
                                             <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${bk.status || 'scheduled'}</span>
                                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
-                                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petNames}</div>
+                                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>
+                                            ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
                                             ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
                                         </div>
                                         <div style="display:flex; gap:0.35rem;">
@@ -2166,13 +2260,38 @@ function renderEntitySections(type, data, id) {
                                 <input id="person-last-name" type="text" value="${data.last_name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePersonNameField('${id}', 'last_name', this.value)">
                             </div>
                         </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.85rem;">
+                            <div>
+                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Role</label>
+                                <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'role', this.value)">
+                                    ${['Primary', 'Backup', 'Member', 'Emergency Contact', 'Relative', 'Other'].map(r => `<option value="${r}" ${data.role === r ? 'selected' : ''}>${r}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Category</label>
+                                <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'category', this.value)">
+                                    <option value="member" ${(data.category || 'member') === 'member' ? 'selected' : ''}>Household Member</option>
+                                    <option value="other" ${data.category === 'other' ? 'selected' : ''}>Other Contact</option>
+                                </select>
+                            </div>
+                        </div>
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Email</label>
-                            <input type="email" value="${data.email || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'email', this.value)">
+                            <div style="display:flex; align-items:center; gap:0.4rem;">
+                                <input type="email" value="${data.email || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'email', this.value)">
+                                <button onclick="setPreferredContact('${id}', 'email', ${data.preferred_contact === 'email' ? 'true' : 'false'})" title="Preferred contact method" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:${data.preferred_contact === 'email' ? '#eab308' : 'var(--text-muted)'};">★</button>
+                            </div>
                         </div>
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone</label>
-                            <input type="tel" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'phone', this.value)">
+                            <div style="display:flex; align-items:center; gap:0.4rem;">
+                                <input type="tel" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'phone', this.value)">
+                                <button onclick="setPreferredContact('${id}', 'phone', ${data.preferred_contact === 'phone' ? 'true' : 'false'})" title="Preferred contact method" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:${data.preferred_contact === 'phone' ? '#eab308' : 'var(--text-muted)'};">★</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
+                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="2" onchange="autoSaveField('people', '${id}', 'notes', this.value)">${data.notes || ''}</textarea>
                         </div>
                     </div>
                 </div>
@@ -2181,19 +2300,24 @@ function renderEntitySections(type, data, id) {
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}')">
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}', 'person')">
                             <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
                         </button>
                     </div>
 
                     <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value)">
+                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value, 'person')">
                         <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
                     ${data.households ? `
-                        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                            <strong><i data-lucide="house"></i> ${data.households.name}</strong>
+                        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
+                                <strong><i data-lucide="house"></i> ${data.households.name}</strong>
+                                <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${id}', 'person', '${id}')" title="Unlink household" style="background:none; border:none; cursor:pointer;">
+                                    <i data-lucide="x" style="width:14px;height:14px;"></i>
+                                </button>
+                            </div>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                         <div style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.5rem;">
@@ -2212,7 +2336,7 @@ function renderEntitySections(type, data, id) {
                                 <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Pets</div>
                                 ${data.households.pets && data.households.pets.length ? data.households.pets.map(p => `
                                     <div style="padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); font-size:0.85rem; margin-bottom:0.35rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                                        <span><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:14px;height:14px;"></i> <strong>${p.name}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${p.species})</span></span>
+                                        <span><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:14px;height:14px;"></i> <strong>${p.name}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${speciesLabel(p)})</span></span>
                                         <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', 'person', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
                                             <i data-lucide="x" style="width:14px;height:14px;"></i>
                                         </button>
@@ -2237,11 +2361,15 @@ function renderEntitySections(type, data, id) {
                         </div>
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Species</label>
-                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'species', this.value)">
+                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'species', this.value); document.getElementById('pet-species-other-${id}').style.display = this.value === 'other' ? 'block' : 'none';">
                                 <option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option>
                                 <option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option>
                                 <option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option>
                             </select>
+                        </div>
+                        <div id="pet-species-other-${id}" style="display:${data.species === 'other' ? 'block' : 'none'};">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Specify Species</label>
+                            <input type="text" placeholder="e.g. Rabbit, Bird, Hamster" value="${data.species_other || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'species_other', this.value)">
                         </div>
                         <div>
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Vaccine Status</label>
@@ -2270,19 +2398,24 @@ function renderEntitySections(type, data, id) {
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household Link</h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}')">
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}', 'pet')">
                             <i data-lucide="search" style="width:14px;height:14px;"></i> Link Household
                         </button>
                     </div>
 
                     <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value)">
+                        <input type="text" placeholder="Type household name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value, 'pet')">
                         <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
                     ${data.households ? `
-                        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
-                            <strong><i data-lucide="house"></i> ${data.households.name}</strong>
+                        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('household', '${data.households.id}')">
+                                <strong><i data-lucide="house"></i> ${data.households.name}</strong>
+                                <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${id}', 'pet', '${id}')" title="Unlink household" style="background:none; border:none; cursor:pointer;">
+                                    <i data-lucide="x" style="width:14px;height:14px;"></i>
+                                </button>
+                            </div>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;">Click to jump to Household view</div>
                         </div>
                         <div style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.5rem;">
@@ -2301,7 +2434,7 @@ function renderEntitySections(type, data, id) {
                                 <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Pets</div>
                                 ${data.households.pets && data.households.pets.length ? data.households.pets.map(p => `
                                     <div style="padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); font-size:0.85rem; margin-bottom:0.35rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                                        <span><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:14px;height:14px;"></i> <strong>${p.name}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${p.species})</span></span>
+                                        <span><i data-lucide="${p.species === 'cat' ? 'cat' : 'dog'}" style="width:14px;height:14px;"></i> <strong>${p.name}</strong> <span style="color:var(--text-muted); font-size:0.78rem;">(${speciesLabel(p)})</span></span>
                                         <button class="btn-icon" onclick="event.stopPropagation(); removePetFromHousehold('${p.id}', 'pet', '${id}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
                                             <i data-lucide="x" style="width:14px;height:14px;"></i>
                                         </button>
@@ -2328,6 +2461,22 @@ function renderEntitySections(type, data, id) {
                             <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Clinic Name</label>
                             <input type="text" value="${data.clinic || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)">
                         </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone</label>
+                            <input type="tel" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'phone', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Email</label>
+                            <input type="email" value="${data.email || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'email', this.value)">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Hours of Operation</label>
+                            <input type="text" placeholder="e.g. Mon-Fri 8am-6pm" value="${data.hours || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'hours', this.value)">
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
+                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="2" onchange="autoSaveField('vets', '${id}', 'notes', this.value)">${data.notes || ''}</textarea>
+                        </div>
                     </div>
                 </div>
 
@@ -2335,13 +2484,13 @@ function renderEntitySections(type, data, id) {
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
                         <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="building"></i> Client Households & Pets</h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}')">
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('household', '${id}', 'vet')">
                             <i data-lucide="search" style="width:14px;height:14px;"></i> Link Client Household
                         </button>
                     </div>
 
                     <div id="search-panel-household-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Search household to link..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value)">
+                        <input type="text" placeholder="Search household to link..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('household', '${id}', this.value, 'vet')">
                         <div id="search-results-household-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
                     </div>
 
@@ -2373,10 +2522,22 @@ async function autoSaveField(table, id, field, value) {
         if (statusEl) statusEl.textContent = '⚠️ Save failed: ' + error.message;
     } else {
         if (statusEl) statusEl.textContent = '✓ Saved to database';
-        if (typeof renderAllDashboards === 'function') {
+        const typeMap = { households: 'household', people: 'person', pets: 'pet', vets: 'vet' };
+        const profileType = typeMap[table];
+        if (profileType) {
+            openFullWidthProfile(profileType, id);
+        } else if (typeof renderAllDashboards === 'function') {
             renderAllDashboards();
         }
     }
+}
+
+async function setPreferredContact(personId, method, isCurrentlyActive) {
+    const client = getSupabase();
+    if (!client) return;
+    const newValue = isCurrentlyActive ? null : method; // clicking the active star again clears it
+    await client.from('people').update({ preferred_contact: newValue }).eq('id', personId);
+    openFullWidthProfile('person', personId);
 }
 
 async function savePersonNameField(id, field, value) {
@@ -2408,30 +2569,54 @@ async function savePersonNameField(id, field, value) {
     }
 }
 
+function speciesLabel(p) {
+    return p.species === 'other' && p.species_other ? p.species_other : p.species;
+}
+
 function personDisplayName(p) {
     const combined = `${p.first_name || ''} ${p.last_name || ''}`.trim();
     return combined || p.name || '';
 }
 
 function personDisplayContact(p) {
-    return [p.email, p.phone].filter(Boolean).join(' · ') || p.contact || '';
+    const email = p.email ? (p.preferred_contact === 'email' ? '★ ' + p.email : p.email) : null;
+    const phone = p.phone ? (p.preferred_contact === 'phone' ? '★ ' + p.phone : p.phone) : null;
+    return [email, phone].filter(Boolean).join(' · ') || p.contact || '';
+}
+
+function renderPersonRow(p, householdId) {
+    return `
+        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('person', '${p.id}')">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>${personDisplayName(p)}</strong>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span style="font-size:0.75rem; padding:0.15rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); border-radius:9999px;">${p.role || 'Member'}</span>
+                    <button class="btn-icon" onclick="event.stopPropagation(); removePersonFromHousehold('${p.id}', 'household', '${householdId}')" title="Remove from household" style="background:none; border:none; cursor:pointer;">
+                        <i data-lucide="x" style="width:14px;height:14px;"></i>
+                    </button>
+                </div>
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.25rem;"><i data-lucide="phone"></i> ${personDisplayContact(p) || 'No contact set'}</div>
+            ${p.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem; font-style:italic;">${p.notes}</div>` : ''}
+        </div>
+    `;
 }
 
 /* ==========================================================================
    UNIVERSAL INLINE LIVE SEARCH & CROSS-ENTITY LINKING
    ========================================================================== */
 
-function toggleInlineSearchPanel(targetEntityType, sourceEntityId) {
+function toggleInlineSearchPanel(targetEntityType, sourceEntityId, sourceEntityType) {
     const panel = document.getElementById(`search-panel-${targetEntityType}-${sourceEntityId}`);
     if (panel) {
         panel.classList.toggle('hidden');
         if (!panel.classList.contains('hidden')) {
-            executeLiveSearch(targetEntityType, sourceEntityId, '');
+            executeLiveSearch(targetEntityType, sourceEntityId, '', sourceEntityType);
         }
     }
 }
 
-async function executeLiveSearch(targetType, sourceId, query) {
+async function executeLiveSearch(targetType, sourceId, query, sourceType) {
     const container = document.getElementById(`search-results-${targetType}-${sourceId}`);
     if (!container) return;
 
@@ -2454,7 +2639,7 @@ async function executeLiveSearch(targetType, sourceId, query) {
         html = results.map(r => `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem;">
                 <span><strong>${r.name}</strong> ${r.clinic ? '(' + r.clinic + ')' : (r.contact || r.email || r.phone) ? '(' + (r.contact || r.email || r.phone) + ')' : ''}</span>
-                <button class="btn btn-primary" style="font-size:0.72rem; padding:0.2rem 0.45rem;" onclick="linkEntities('${targetType}', '${r.id}', '${sourceId}')">Link</button>
+                <button class="btn btn-primary" style="font-size:0.72rem; padding:0.2rem 0.45rem;" onclick="linkEntities('${targetType}', '${r.id}', '${sourceId}', '${sourceType || ''}')">Link</button>
             </div>
         `).join('');
     } else {
@@ -2463,7 +2648,7 @@ async function executeLiveSearch(targetType, sourceId, query) {
 
     // Dynamic + Create New fallback button
     html += `
-        <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.25rem; border:1px dashed var(--border);" onclick="createNewEntityFallback('${targetType}', '${sourceId}')">
+        <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.25rem; border:1px dashed var(--border);" onclick="createNewEntityFallback('${targetType}', '${sourceId}', '${sourceType || ''}')">
             + Create New ${targetType.charAt(0).toUpperCase() + targetType.slice(1)}
         </button>
     `;
@@ -2471,7 +2656,7 @@ async function executeLiveSearch(targetType, sourceId, query) {
     container.innerHTML = html;
 }
 
-async function linkEntities(targetType, targetId, sourceId) {
+async function linkEntities(targetType, targetId, sourceId, sourceType) {
     const client = getSupabase();
     if (!client) return;
 
@@ -2484,7 +2669,13 @@ async function linkEntities(targetType, targetId, sourceId) {
         await client.from(targetType === 'person' ? 'people' : 'pets').update({ household_id: sourceId }).eq('id', targetId);
     }
 
-    renderAllDashboards();
+    // Refresh whichever profile we were viewing when the link happened, instead
+    // of dropping back to the list view.
+    if (sourceType) {
+        openFullWidthProfile(sourceType, sourceId);
+    } else if (typeof renderAllDashboards === 'function') {
+        renderAllDashboards();
+    }
 }
 
 async function unlinkVet(householdId) {
@@ -2512,7 +2703,14 @@ async function removePetFromHousehold(petId, refreshType, refreshId) {
 
 let activeLinkingHouseholdId = null;
 
-function createNewEntityFallback(targetType, sourceId) {
+// Where to return after a "+ Create New X" flow launched from inside another
+// profile's link-search panel, so saving doesn't dump the user back to the list view.
+let returnToProfile = null; // { type, id } | null
+let pendingVetLinkHouseholdId = null;
+
+function createNewEntityFallback(targetType, sourceId, sourceType) {
+    returnToProfile = sourceType ? { type: sourceType, id: sourceId } : null;
+
     if (targetType === 'person') {
         openPersonModal(null, sourceId);
     } else if (targetType === 'pet') {
@@ -2522,6 +2720,7 @@ function createNewEntityFallback(targetType, sourceId) {
             if (sel) sel.value = sourceId;
         }, 100);
     } else if (targetType === 'vet') {
+        pendingVetLinkHouseholdId = sourceType === 'household' ? sourceId : null;
         openVetModal();
     } else if (targetType === 'household') {
         openHouseholdModal();
@@ -2531,6 +2730,7 @@ function createNewEntityFallback(targetType, sourceId) {
 function openPersonModal(personId = null, householdId = null) {
     activeLinkingHouseholdId = householdId;
     editingHouseholdId = null;
+    householdModalContext = 'person';
 
     const titleEl = document.getElementById('household-modal-title');
     const nameInput = document.getElementById('hh-name');
@@ -2540,9 +2740,19 @@ function openPersonModal(personId = null, householdId = null) {
     const contactInfoInput = document.getElementById('hh-contact-info');
     const addressInput = document.getElementById('hh-address');
     const noteInput = document.getElementById('hh-notes');
+    const dropdown = document.getElementById('hh-search-dropdown');
 
     if (titleEl) titleEl.textContent = personId ? 'Edit Person Details' : 'Add New Person';
     if (labelEl) labelEl.textContent = 'Select Household *';
+
+    // Adding a person needs their contact details, and the search dropdown here
+    // searches households (to pick which one this person belongs to).
+    if (contactNameInput && contactNameInput.parentElement) contactNameInput.parentElement.style.display = 'block';
+    if (contactInfoInput && contactInfoInput.parentElement) contactInfoInput.parentElement.style.display = 'block';
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+    }
 
     // Hide physical address input (belongs to Household level)
     if (addressInput && addressInput.parentElement) {
@@ -2585,7 +2795,7 @@ function openPersonModal(personId = null, householdId = null) {
 
 async function searchHouseholdDropdown(query) {
     const dropdown = document.getElementById('hh-search-dropdown');
-    if (!dropdown || activeLinkingHouseholdId) return; // Skip if locked to household
+    if (!dropdown || activeLinkingHouseholdId || householdModalContext !== 'person') return; // Skip if locked to household, or not in Add Person mode
 
     const client = getSupabase();
     if (!client) return;
