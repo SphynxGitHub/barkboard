@@ -116,6 +116,40 @@ function populateStaffSelects() {
     }
 }
 
+async function renderStaffRoster() {
+    const el = document.getElementById('staff-roster-list');
+    if (!el) return;
+
+    // Fetch live rows from Supabase
+    const { data: staff, error } = await supabase
+        .from('resources')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Supabase fetch error:', error.message);
+        el.innerHTML = '<div class="biz-empty" style="color:var(--danger-text);">Failed to load staff from Supabase.</div>';
+        return;
+    }
+
+    if (!staff || staff.length === 0) {
+        el.innerHTML = '<div class="biz-empty">No staff members in Supabase database yet.</div>';
+        return;
+    }
+
+    el.innerHTML = staff.map(s => `
+        <div class="staff-card">
+            <div class="staff-avatar">${s.name.slice(0, 2).toUpperCase()}</div>
+            <div class="staff-info">
+                <h4>${s.name}</h4>
+                <p>${s.description || 'No role/contact details'}</p>
+            </div>
+            <div class="staff-actions">
+                <button class="btn" style="color:var(--danger-text);" onclick="deleteStaff('${s.id}')">Remove</button>
+            </div>
+        </div>
+    `).join('');
+}
 /**
  * Switch active tab inside the Staff Management section
  */
@@ -169,32 +203,40 @@ function closeStaffModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function saveStaffMember() {
+async function saveStaffMember() {
     const nameInput = document.getElementById('stf-name');
+    const roleSelect = document.getElementById('stf-role');
     const name = nameInput ? nameInput.value.trim() : '';
+    
     if (!name) return alert('Please enter a name.');
-    
-    const role = document.getElementById('stf-role').value;
-    const contact = document.getElementById('stf-contact').value.trim();
-    const notes = document.getElementById('stf-notes').value.trim();
-    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-    
-    const data = { name, role, contact, notes, initials };
-    const targetId = editingStaffId || ('s' + (nextStaffId++));
-    
-    if (editingStaffId) {
-        const existing = staffMembers.find(x => x.id === editingStaffId);
-        if (existing) Object.assign(existing, data);
-    } else {
-        staffMembers.push({ id: targetId, ...data });
-    }
 
-    closeStaffModal();
-    if (typeof renderStaffRoster === 'function') renderStaffRoster();
+    const role = roleSelect ? roleSelect.value : 'Staff';
+
+    // Insert record directly into Supabase
+    const { error } = await supabase
+        .from('resources')
+        .insert([{ name: name, description: role }]);
+
+    if (error) {
+        alert('Error saving to Supabase: ' + error.message);
+        console.error(error);
+    } else {
+        closeStaffModal();
+        await renderStaffRoster(); // Reload roster live from DB
+    }
 }
 
-function deleteStaff(id) {
-    if (!confirm('Remove this staff member?')) return;
-    staffMembers = staffMembers.filter(x => x.id !== id);
-    if (typeof renderStaffRoster === 'function') renderStaffRoster();
+async function deleteStaff(id) {
+    if (!confirm('Remove this staff member from Supabase?')) return;
+
+    const { error } = await supabase
+        .from('resources')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        alert('Error deleting row: ' + error.message);
+    } else {
+        await renderStaffRoster();
+    }
 }
