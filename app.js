@@ -1193,6 +1193,39 @@ async function deletePet(id) {
 }
 
 /* ==========================================================================
+   HOUSEHOLD DROPDOWN LOADER FOR PET MODAL
+   ========================================================================== */
+
+async function populateHouseholdSelects() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const selectEl = document.getElementById('pet-household-id');
+    if (!selectEl) return;
+
+    // Fetch live households sorted alphabetically
+    const { data: households, error } = await client
+        .from('households')
+        .select('id, name')
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error loading households for dropdown:', error);
+        selectEl.innerHTML = '<option value="">Failed to load households</option>';
+        return;
+    }
+
+    if (!households || households.length === 0) {
+        selectEl.innerHTML = '<option value="">No households found (Add one first)</option>';
+        return;
+    }
+
+    selectEl.innerHTML = households
+        .map(h => `<option value="${h.id}">${h.name}</option>`)
+        .join('');
+}
+    
+/* ==========================================================================
    CRM: LIVE SEARCH & ENTITY FILTERING (SUPABASE)
    ========================================================================== */
 
