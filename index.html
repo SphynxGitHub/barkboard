@@ -311,28 +311,44 @@
 
         <!-- Staff member modal -->
         <div id="staff-modal" class="modal hidden">
-            <div class="modal-content" style="max-width:520px;">
-                <h3 id="staff-modal-title" style="margin:0 0 1rem;">Add Staff Member</h3>
-                <div class="form-group"><label>Name</label><input type="text" id="stf-name" placeholder="Full name"></div>
-                <div class="form-group"><label>Role</label>
-                    <select id="stf-role">
-                        <option>Trainer</option><option>Boarding Staff</option><option>Veterinary Tech</option><option>Manager</option><option>Other</option>
-                    </select>
-                </div>
-                <div class="form-group"><label>Contact</label><input type="text" id="stf-contact" placeholder="Phone or email"></div>
-                <div class="form-group"><label>Notes</label><input type="text" id="stf-notes" placeholder="e.g. Specialises in agility"></div>
-                <div class="form-group">
-                    <label>Service qualifications & daily capacity</label>
-                    <div class="qual-editor" id="stf-qual-editor">
-                        <!-- populated by openStaffModal() -->
-                    </div>
-                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.35rem;">Check a service to qualify this staff member. Set their max sessions per day (use 99 for unlimited boarding).</div>
-                </div>
-                <div class="modal-actions">
-                    <button class="btn" onclick="closeStaffModal()">Cancel</button>
-                    <button class="btn-primary" onclick="saveStaffMember()">Save</button>
-                </div>
+          <div class="modal-content" style="max-width:520px;">
+            <h3 id="staff-modal-title" style="margin:0 0 1rem;">Add Staff Member</h3>
+            <div class="form-group">
+              <label>Name</label>
+              <input type="text" id="stf-name" placeholder="Full name">
             </div>
+            <div class="form-group">
+              <label>Role</label>
+              <select id="stf-role">
+                <option>Trainer</option>
+                <option>Boarding Staff</option>
+                <option>Veterinary Tech</option>
+                <option>Manager</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Contact</label>
+              <input type="text" id="stf-contact" placeholder="Phone or email">
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <input type="text" id="stf-notes" placeholder="e.g. Specialises in agility">
+            </div>
+            <div class="form-group">
+              <label>Service qualifications & daily capacity</label>
+              <div class="qual-editor" id="stf-qual-editor">
+                <!-- Populated dynamically by openStaffModal() -->
+              </div>
+              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.35rem;">
+                Check a service to qualify this staff member. Set their max sessions per day (use 99 for unlimited boarding).
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button class="btn" onclick="closeStaffModal()">Cancel</button>
+              <button class="btn-primary" onclick="saveStaffMember()">Save</button>
+            </div>
+          </div>
         </div>
 
         <!-- Staff availability modal -->
