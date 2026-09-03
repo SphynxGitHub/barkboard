@@ -2022,7 +2022,7 @@ function createNewEntityFallback(targetType, sourceId) {
     }
 }
 
-unction openPersonModal(personId = null, householdId = null) {
+function openPersonModal(personId = null, householdId = null) {
     activeLinkingHouseholdId = householdId;
     editingHouseholdId = null;
 
