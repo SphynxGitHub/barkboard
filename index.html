@@ -440,6 +440,14 @@
                 <h3 id="staff-task-modal-title" style="margin:0 0 1rem;">Add Task</h3>
                 <div class="form-group"><label>Assigned to</label><select id="stsk-who"></select></div>
                 <div class="form-group"><label>Task</label><input type="text" id="stsk-text" placeholder="Describe the task"></div>
+                <div class="form-group"><label>Related Pet (optional)</label>
+                    <div id="stsk-pet-selected" class="hidden" style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.85rem; margin-bottom:0.4rem;">
+                        <span id="stsk-pet-selected-label"></span>
+                        <button type="button" class="btn-icon" onclick="clearTaskPetSelection()" title="Remove" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+                    </div>
+                    <input type="text" id="stsk-pet-search" placeholder="Type a pet's name to link this task to them..." onkeyup="searchPetsForTask(this.value)" onfocus="searchPetsForTask(this.value)">
+                    <div id="stsk-pet-search-results" style="margin-top:0.3rem; display:flex; flex-direction:column; gap:0.25rem; max-height:160px; overflow-y:auto;"></div>
+                </div>
                 <div class="form-group"><label>Due date</label><input type="date" id="stsk-due"></div>
                 <div class="form-group"><label>Priority</label>
                     <select id="stsk-priority">
@@ -1039,8 +1047,16 @@
         
                         <!-- 11. Pets / Resources -->
                         <div style="padding:1rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
-                            <label style="display:block; font-weight:600; margin-bottom:0.5rem;">Pets & Resource Assignments *</label>
+                            <label style="display:block; font-weight:600; margin-bottom:0.5rem;">Pets *</label>
                             <div id="bk-pet-checkboxes"></div>
+                        </div>
+
+                        <!-- Event-level resource assignment — tied to the appointment itself, not to any one pet -->
+                        <div style="padding:1rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+                            <label style="display:block; font-weight:600; margin-bottom:0.5rem;">Resources / Spaces for this Event</label>
+                            <div id="bk-event-resources-list" style="display:flex; flex-direction:column; gap:0.4rem; margin-bottom:0.5rem;"></div>
+                            <input type="text" id="bk-resource-search" placeholder="Type to filter resources to add..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onkeyup="searchResourcesForBooking(this.value)" onfocus="searchResourcesForBooking(this.value)">
+                            <div id="bk-resource-search-results" style="margin-top:0.4rem; display:flex; flex-direction:column; gap:0.3rem; max-height:180px; overflow-y:auto;"></div>
                         </div>
         
                         <!-- 12. Notes -->

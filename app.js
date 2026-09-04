@@ -409,7 +409,7 @@ async function openBookingModal(householdId = null, bookingId = null) {
     if (amountInput) amountInput.value = '';
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
-    bkResourcesByPet = {};
+    bkEventResources = [];
     activeServicePerDayRate = null;
     if (staffTimeField) staffTimeField.classList.add('hidden');
     if (staffTimeMinutesInput) staffTimeMinutesInput.value = '';
@@ -480,12 +480,9 @@ async function openBookingModal(householdId = null, bookingId = null) {
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
 
-        // Load multi-resource assignments (keyed by pet id, matching how saveBooking reads them back)
-        if (existingBooking.pet_id) {
-            bkResourcesByPet[existingBooking.pet_id] = await loadExistingBookingResources(existingBooking.id);
-            document.getElementById(`bk-pet-resources-${existingBooking.pet_id}`)?.classList.remove('hidden');
-            if (typeof renderBkResourcesList === 'function') renderBkResourcesList(existingBooking.pet_id);
-        }
+        // Load this event's resource assignments (event-level, not tied to any one pet)
+        bkEventResources = await loadExistingBookingResources(existingBooking.id);
+        renderBkResourcesList();
 
         const needsStaffTime = existingBooking.requires_staff_time || false;
         if (needsStaffTime) {
@@ -531,18 +528,10 @@ function renderPetSelectionCheckboxes(pets, selectedIds = []) {
 
     petBox.innerHTML = (pets && pets.length)
         ? pets.map(p => `
-            <div>
-                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem;">
-                    <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" ${selectedIds.includes(p.id) ? 'checked' : ''} onchange="onBkPetToggle('${p.id}', this.checked)">
-                    ${p.name} (${p.species})
-                </label>
-                <div id="bk-pet-resources-${p.id}" class="${selectedIds.includes(p.id) ? '' : 'hidden'}" style="margin:0.4rem 0 0.5rem 1.4rem; padding:0.5rem; border:1px dashed var(--border); border-radius:0.25rem;">
-                    <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); margin-bottom:0.3rem;">Resources for ${p.name}</div>
-                    <div id="bk-pet-resources-list-${p.id}" style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.35rem;"></div>
-                    <input type="text" placeholder="Type to filter resources to add..." style="width:100%; padding:0.4rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.8rem;" onkeyup="searchResourcesForPet('${p.id}', this.value)" onfocus="searchResourcesForPet('${p.id}', this.value)">
-                    <div id="bk-pet-resource-search-results-${p.id}" style="margin-top:0.3rem; display:flex; flex-direction:column; gap:0.25rem;"></div>
-                </div>
-            </div>
+            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; margin-bottom:0.35rem;">
+                <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" ${selectedIds.includes(p.id) ? 'checked' : ''}>
+                ${p.name} (${p.species})
+            </label>
         `).join('')
         : '<span style="font-size:0.8rem; color:var(--text-muted);">No pets found.</span>';
 }
@@ -584,7 +573,6 @@ async function selectGlobalPetForBooking(petId, householdId) {
 
     const { data: pets } = await client.from('pets').select('id, name, species').eq('household_id', householdId).order('name');
     renderPetSelectionCheckboxes(pets || [], [petId]);
-    onBkPetToggle(petId, true);
 }
 
 /* Calculates Total Amount based on Service Per-Day / Per-Service Rate × Days */
@@ -660,12 +648,16 @@ async function searchResourcesForBooking(query) {
         });
     }
 
-    if (!allResources || !allResources.length) {
+    // Don't re-offer resources already added to this event
+    const selectedIds = new Set(bkEventResources.map(r => r.resourceId));
+    const list = (allResources || []).filter(r => !selectedIds.has(r.id));
+
+    if (!list.length) {
         container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); padding:0.4rem;">No matching resources found.</div>';
         return;
     }
 
-    container.innerHTML = allResources.map(r => {
+    container.innerHTML = list.map(r => {
         const seats = r.seats || 1;
         const used = usageCounts[r.id] || 0;
         const freeSeats = Math.max(0, seats - used);
@@ -686,41 +678,77 @@ async function searchResourcesForBooking(query) {
     }).join('');
 }
 
-/* Attaches a selected resource to all currently selected pets in the booking modal */
+// Resources of a given type are treated as interchangeable, and a resource's "seats" setting
+// controls how many bookings can use it at once (e.g. a "Kennels" resource with 10 seats).
+// This shows only resources with a free seat for the currently entered dates.
+// NOTE: availability checking here is date-range granularity only — a time-based resource
+// already assigned to another booking on an overlapping date counts against its seat total
+// even if the specific times wouldn't actually conflict. True time-slot-level conflict
+// resolution (the "matrix") is a bigger follow-up piece, not built yet.
+
+let bkEventResources = []; // [{ resourceId, name, type, defaultMode, allDay, startTime, endTime }]
+// Resources belong to the EVENT/appointment as a whole, not to any one pet — a multi-pet
+// event (e.g. two dogs sharing a training session) applies the same resource list to every
+// booking row generated for that event. See saveBooking()'s resource-save loop.
+
+/* Adds a resource to this event's resource list (not tied to any specific pet) */
 function addResourceToBooking(resourceId, name, type, defaultMode) {
-    const checkedPetBoxes = document.querySelectorAll('.bk-pet-checkbox:checked');
-    const petIds = Array.from(checkedPetBoxes).map(cb => cb.value);
+    if (bkEventResources.some(r => r.resourceId === resourceId)) return;
 
-    if (!petIds.length) {
-        alert('Please select or check at least one pet before adding a resource space.');
-        return;
-    }
-
-    petIds.forEach(petId => {
-        if (!bkResourcesByPet[petId]) bkResourcesByPet[petId] = [];
-        
-        // Prevent duplicate resource assignment on the same pet
-        if (!bkResourcesByPet[petId].some(r => r.resourceId === resourceId)) {
-            bkResourcesByPet[petId].push({
-                resourceId,
-                name,
-                type,
-                defaultMode,
-                allDay: defaultMode !== 'time_based',
-                startTime: '',
-                endTime: ''
-            });
-            if (typeof renderBkResourcesList === 'function') {
-                renderBkResourcesList(petId);
-            }
-        }
+    bkEventResources.push({
+        resourceId,
+        name,
+        type,
+        defaultMode,
+        allDay: defaultMode !== 'time_based',
+        startTime: '',
+        endTime: ''
     });
+    renderBkResourcesList();
 
     // Clear search input and results dropdown
     const searchInput = document.getElementById('bk-resource-search');
     if (searchInput) searchInput.value = '';
     const resultsContainer = document.getElementById('bk-resource-search-results');
     if (resultsContainer) resultsContainer.innerHTML = '';
+}
+
+function renderBkResourcesList() {
+    const el = document.getElementById('bk-event-resources-list');
+    if (!el) return;
+
+    el.innerHTML = bkEventResources.length ? bkEventResources.map((r, idx) => `
+        <div style="padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:0.8rem;">${r.name} <span style="color:var(--text-muted); font-weight:400;">(${r.type})</span></strong>
+                <button type="button" class="btn-icon" onclick="removeBkResource(${idx})" title="Remove" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
+            </div>
+            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; margin-top:0.3rem;">
+                <input type="checkbox" ${r.allDay ? 'checked' : ''} onchange="setBkResourceAllDay(${idx}, this.checked)"> All day
+            </label>
+            ${!r.allDay ? `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem; margin-top:0.3rem;">
+                    <input type="time" value="${r.startTime || ''}" onchange="setBkResourceTime(${idx}, 'startTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
+                    <input type="time" value="${r.endTime || ''}" onchange="setBkResourceTime(${idx}, 'endTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
+                </div>
+            ` : ''}
+        </div>
+    `).join('') : '<p style="font-size:0.78rem; color:var(--text-muted);">No resources assigned yet.</p>';
+    refreshIcons();
+}
+
+function setBkResourceAllDay(idx, checked) {
+    if (bkEventResources[idx]) bkEventResources[idx].allDay = checked;
+    renderBkResourcesList();
+}
+
+function setBkResourceTime(idx, field, value) {
+    if (bkEventResources[idx]) bkEventResources[idx][field] = value;
+}
+
+function removeBkResource(idx) {
+    bkEventResources.splice(idx, 1);
+    renderBkResourcesList();
 }
 
 async function searchServiceTypeForBooking(query) {
@@ -748,8 +776,6 @@ async function searchServiceTypeForBooking(query) {
     container.classList.remove('hidden');
 }
 
-let bkResourcesByPet = {}; // { [petId]: [{ resourceId, name, type, defaultMode, allDay, startTime, endTime }] }
-
 function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType, pricingUnit) {
     const serviceInput = document.getElementById('bk-service-type');
     const amountInput = document.getElementById('bk-amount');
@@ -773,150 +799,14 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
         if (amountInput && price != null) amountInput.value = price;
     }
 
-    // If a resource type is declared, prefill each currently-checked pet's resource search to nudge toward it.
-    if (resourceType) {
-        document.querySelectorAll('.bk-pet-checkbox:checked').forEach(cb => {
-            const petId = cb.value;
-            const searchInput = document.querySelector(`#bk-pet-resources-${petId} input[type="text"]`);
-            if (searchInput && !(bkResourcesByPet[petId] || []).length) {
-                searchInput.value = resourceType;
-                searchResourcesForPet(petId, resourceType);
-            }
-        });
+    // If a resource type is declared, prefill the event resource search to nudge toward it.
+    if (resourceType && !bkEventResources.length) {
+        const searchInput = document.getElementById('bk-resource-search');
+        if (searchInput) {
+            searchInput.value = resourceType;
+            searchResourcesForBooking(resourceType);
+        }
     }
-}
-
-function onBkPetToggle(petId, checked) {
-    const section = document.getElementById(`bk-pet-resources-${petId}`);
-    if (section) section.classList.toggle('hidden', !checked);
-    if (checked && !bkResourcesByPet[petId]) {
-        bkResourcesByPet[petId] = [];
-        renderBkResourcesList(petId);
-    }
-}
-
-// Resources of a given type are treated as interchangeable, and a resource's "seats" setting
-// controls how many bookings can use it at once (e.g. a "Kennels" resource with 10 seats).
-// This shows only resources with a free seat for the currently entered dates.
-// NOTE: availability checking here is date-range granularity only — a time-based resource
-// already assigned to another booking on an overlapping date counts against its seat total
-// even if the specific times wouldn't actually conflict. True time-slot-level conflict
-// resolution (the "matrix") is a bigger follow-up piece, not built yet.
-
-function renderBkResourcesList(petId) {
-    const el = document.getElementById(`bk-pet-resources-list-${petId}`);
-    if (!el) return;
-    const list = bkResourcesByPet[petId] || [];
-
-    el.innerHTML = list.length ? list.map((r, idx) => `
-        <div style="padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card);">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong style="font-size:0.8rem;">${r.name} <span style="color:var(--text-muted); font-weight:400;">(${r.type})</span></strong>
-                <button class="btn-icon" onclick="removeResourceFromPet('${petId}', ${idx})" title="Remove" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
-            </div>
-            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; margin-top:0.3rem;">
-                <input type="checkbox" ${r.allDay ? 'checked' : ''} onchange="setBkResourceAllDay('${petId}', ${idx}, this.checked)"> All day
-            </label>
-            ${!r.allDay ? `
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem; margin-top:0.3rem;">
-                    <input type="time" value="${r.startTime || ''}" onchange="setBkResourceTime('${petId}', ${idx}, 'startTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
-                    <input type="time" value="${r.endTime || ''}" onchange="setBkResourceTime('${petId}', ${idx}, 'endTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
-                </div>
-            ` : ''}
-        </div>
-    `).join('') : '<p style="font-size:0.78rem; color:var(--text-muted);">No resources assigned yet.</p>';
-    refreshIcons();
-}
-
-function setBkResourceAllDay(petId, idx, checked) {
-    if (bkResourcesByPet[petId]?.[idx]) bkResourcesByPet[petId][idx].allDay = checked;
-    renderBkResourcesList(petId);
-}
-
-function setBkResourceTime(petId, idx, field, value) {
-    if (bkResourcesByPet[petId]?.[idx]) bkResourcesByPet[petId][idx][field] = value;
-}
-
-function removeResourceFromPet(petId, idx) {
-    bkResourcesByPet[petId]?.splice(idx, 1);
-    renderBkResourcesList(petId);
-}
-
-function addResourceToPet(petId, resourceId, name, type, defaultMode) {
-    if (!bkResourcesByPet[petId]) bkResourcesByPet[petId] = [];
-    if (bkResourcesByPet[petId].some(r => r.resourceId === resourceId)) return;
-    
-    bkResourcesByPet[petId].push({
-        resourceId: resourceId, // Explicit key mapping
-        name: name,
-        type: type,
-        defaultMode: defaultMode,
-        allDay: defaultMode !== 'time_based',
-        startTime: '',
-        endTime: ''
-    });
-
-    const searchInput = document.querySelector(`#bk-pet-resources-${petId} input[type="text"]`);
-    if (searchInput) searchInput.value = '';
-    
-    const results = document.getElementById(`bk-pet-resource-search-results-${petId}`);
-    if (results) results.innerHTML = '';
-    
-    renderBkResourcesList(petId);
-}
-
-async function searchResourcesForPet(petId, query) {
-    const container = document.getElementById(`bk-pet-resource-search-results-${petId}`);
-    if (!container) return;
-
-    const client = getSupabase();
-    if (!client) return;
-
-    const q = query.trim();
-    let dbQuery = client.from('resources').select('*').order('name').limit(20);
-    if (q) dbQuery = dbQuery.or(`name.ilike.%${q}%,type.ilike.%${q}%`);
-    const { data: allResources } = await dbQuery;
-
-    const type = document.getElementById('bk-type')?.value || 'appointment';
-    const startDate = document.getElementById('bk-start-date')?.value;
-    const startTime = document.getElementById('bk-start-time')?.value || '00:00';
-    const endDate = document.getElementById('bk-end-date')?.value || startDate;
-
-    let usageCounts = {}; // resourceId -> count of overlapping bookings using it
-    if (startDate) {
-        const rangeStart = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
-        const rangeEnd = type === 'stay' ? `${endDate}T23:59:59` : `${startDate}T23:59:59`;
-
-        const { data: bookedRows } = await client.from('booking_resources').select('resource_id, bookings!inner(check_in, check_out, status, id)')
-            .neq('bookings.status', 'cancelled')
-            .lte('bookings.check_in', rangeEnd).gte('bookings.check_out', rangeStart);
-        (bookedRows || []).forEach(row => {
-            if (editingBookingId && row.bookings?.id === editingBookingId) return;
-            
-            const bkStart = (row.bookings?.check_in || '').slice(0, 10);
-            const bkEnd = (row.bookings?.check_out || bkStart).slice(0, 10);
-        
-            // If a guest checks out on the new stay's start date, the seat is available
-            if (bkStart !== bkEnd && bkEnd === startDate) return;
-        
-            usageCounts[row.resource_id] = (usageCounts[row.resource_id] || 0) + 1;
-        });
-    }
-
-    const selectedIds = new Set((bkResourcesByPet[petId] || []).map(r => r.resourceId));
-    const list = (allResources || []).filter(r => !selectedIds.has(r.id));
-
-    container.innerHTML = list.length ? list.map(r => {
-        const seats = r.seats || 1;
-        const used = usageCounts[r.id] || 0;
-        const full = used >= seats;
-        return `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.78rem;">
-            <span>${r.name} <span style="color:var(--text-muted);">(${r.type}${seats > 1 ? ' · ' + (seats - used) + '/' + seats + ' free' : ''})</span>${full ? ' <span style="color:#dc2626;">— full</span>' : ''}</span>
-            <button class="btn btn-primary" style="font-size:0.7rem; padding:0.18rem 0.4rem;" data-resource-id="${r.id}" data-resource-name="${r.name.replace(/"/g, '&quot;')}" data-resource-type="${(r.type || '').replace(/"/g, '&quot;')}" data-resource-mode="${r.default_mode || 'all_day'}" onclick="addResourceToPet('${petId}', this.dataset.resourceId, this.dataset.resourceName, this.dataset.resourceType, this.dataset.resourceMode)">Add</button>
-        </div>
-    `;
-    }).join('') : '<div style="font-size:0.78rem; color:var(--text-muted);">No matching resources.</div>';
 }
 
 async function loadExistingBookingResources(bookingId) {
@@ -1076,9 +966,10 @@ async function saveBooking() {
         alert('Failed to save event: ' + response.error.message);
         console.error('Supabase booking error:', response.error);
     } else {
-        // Save resource assignments
+        // Save resource assignments — same set applied to every booking row this event produced,
+        // since resources belong to the event/appointment as a whole, not to a specific pet.
         for (const pid of Object.keys(petIdToBookingId)) {
-            await saveBookingResources(client, petIdToBookingId[pid], bkResourcesByPet[pid] || []);
+            await saveBookingResources(client, petIdToBookingId[pid], bkEventResources);
         }
 
         // If editing an existing booking that's already linked to an invoice, keep the
@@ -2106,6 +1997,7 @@ async function removeAssignment(id) {
    ========================================================================== */
 
 let editingStaffTaskId = null;
+let editingStaffTaskPetId = null;
 
 async function renderStaffTasks() {
     const el = document.getElementById('staff-tasks-list');
@@ -2117,7 +2009,7 @@ async function renderStaffTasks() {
     const client = getSupabase();
     if (!client) return;
 
-    let query = client.from('staff_tasks').select('*, staff(name)').order('due_date', { ascending: true });
+    let query = client.from('staff_tasks').select('*, staff(name), pets(name)').order('due_date', { ascending: true });
     if (filterStaff !== 'all') query = query.eq('staff_id', filterStaff);
     if (filterStatus === 'pending') query = query.eq('is_done', false);
     if (filterStatus === 'done') query = query.eq('is_done', true);
@@ -2134,7 +2026,7 @@ async function renderStaffTasks() {
             <div>
                 <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleStaffTask('${t.id}', ${!t.is_done})">
                 <strong style="${t.is_done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.task_text}</strong>
-                <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;"><i data-lucide="user" style="width:11px;height:11px;"></i> ${t.staff?.name || 'Unassigned'} · Due ${t.due_date || 'no date'}</span>
+                <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;"><i data-lucide="user" style="width:11px;height:11px;"></i> ${t.staff?.name || 'Unassigned'} · Due ${t.due_date || 'no date'}${t.pets?.name ? ' · <i data-lucide="paw-print" style="width:11px;height:11px;"></i> ' + t.pets.name : ''}</span>
             </div>
             <div>
                 <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;" onclick="openStaffTaskModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
@@ -2170,6 +2062,7 @@ let returnToStaffProfile = null;
 
 async function openStaffTaskModal(id) {
     editingStaffTaskId = id;
+    editingStaffTaskPetId = null;
     if (typeof populateStaffSelects === 'function') await populateStaffSelects();
 
     const titleEl = document.getElementById('staff-task-modal-title');
@@ -2179,15 +2072,21 @@ async function openStaffTaskModal(id) {
     const textInput = document.getElementById('stsk-text');
     const dueInput = document.getElementById('stsk-due');
     const prioritySel = document.getElementById('stsk-priority');
+    const petSearchInput = document.getElementById('stsk-pet-search');
+
+    if (petSearchInput) petSearchInput.value = '';
+    document.getElementById('stsk-pet-search-results').innerHTML = '';
+    document.getElementById('stsk-pet-selected')?.classList.add('hidden');
 
     if (id) {
         const client = getSupabase();
-        const { data: t } = client ? await client.from('staff_tasks').select('*').eq('id', id).single() : { data: null };
+        const { data: t } = client ? await client.from('staff_tasks').select('*, pets(name)').eq('id', id).single() : { data: null };
         if (t) {
             if (whoSel) whoSel.value = t.staff_id || '';
             if (textInput) textInput.value = t.task_text || '';
             if (dueInput) dueInput.value = t.due_date || '';
             if (prioritySel) prioritySel.value = t.priority || 'normal';
+            if (t.pet_id) selectPetForTask(t.pet_id, t.pets?.name || 'Pet');
         }
     } else {
         if (textInput) textInput.value = '';
@@ -2199,8 +2098,49 @@ async function openStaffTaskModal(id) {
     if (modal) modal.classList.remove('hidden');
 }
 
+/* Task-to-pet linking — a task can optionally reference a specific pet (unlike resources, which
+   are event-level and never pet-specific). Search is global since staff tasks aren't scoped to
+   a single household. */
+async function searchPetsForTask(query) {
+    const container = document.getElementById('stsk-pet-search-results');
+    if (!container) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const q = (query || '').trim();
+    let dbQuery = client.from('pets').select('id, name, species, households(name)').order('name').limit(15);
+    if (q) dbQuery = dbQuery.or(`name.ilike.%${q}%,species.ilike.%${q}%`);
+    const { data: pets } = await dbQuery;
+
+    container.innerHTML = (pets && pets.length) ? pets.map(p => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem; cursor:pointer;" onclick="selectPetForTask('${p.id}', '${p.name.replace(/'/g, "\\'")}')">
+            <span><strong>${p.name}</strong> (${p.species}) ${p.households?.name ? '· ' + p.households.name : ''}</span>
+            <button type="button" class="btn btn-primary" style="font-size:0.7rem; padding:0.15rem 0.45rem;">Select</button>
+        </div>
+    `).join('') : '<div style="font-size:0.8rem; color:var(--text-muted); padding:0.3rem;">No matching pets found.</div>';
+}
+
+function selectPetForTask(petId, petName) {
+    editingStaffTaskPetId = petId;
+    const selected = document.getElementById('stsk-pet-selected');
+    const label = document.getElementById('stsk-pet-selected-label');
+    if (label) label.textContent = petName;
+    if (selected) selected.classList.remove('hidden');
+
+    const searchInput = document.getElementById('stsk-pet-search');
+    if (searchInput) searchInput.value = '';
+    document.getElementById('stsk-pet-search-results').innerHTML = '';
+}
+
+function clearTaskPetSelection() {
+    editingStaffTaskPetId = null;
+    document.getElementById('stsk-pet-selected')?.classList.add('hidden');
+}
+
 function closeStaffTaskModal() {
     returnToStaffProfile = null;
+    editingStaffTaskPetId = null;
     const modal = document.getElementById('staff-task-modal');
     if (modal) modal.classList.add('hidden');
 }
@@ -2216,7 +2156,7 @@ async function saveStaffTask() {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const payload = { staff_id: staffId, task_text: text, due_date: due, priority };
+    const payload = { staff_id: staffId, task_text: text, due_date: due, priority, pet_id: editingStaffTaskPetId };
     let response;
     if (editingStaffTaskId) {
         response = await client.from('staff_tasks').update(payload).eq('id', editingStaffTaskId);
@@ -2230,6 +2170,7 @@ async function saveStaffTask() {
     }
 
     editingStaffTaskId = null;
+    editingStaffTaskPetId = null;
     closeStaffTaskModal();
     if (returnToStaffProfile) {
         const sid = returnToStaffProfile;
