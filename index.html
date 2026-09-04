@@ -20,7 +20,6 @@
         <div class="logo">🐾 Barkboard</div>
         <nav id="admin-nav">
             <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
-            <button onclick="switchView('staff-mgmt-view')" class="nav-btn">Staff</button>
             <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
             <button onclick="switchView('activities-view')" class="nav-btn">Activities</button>
             <button onclick="switchView('templates-view')" class="nav-btn">Templates</button>
@@ -40,9 +39,6 @@
         <div id="mobile-admin-links">
             <button onclick="mobileNav('staff-view')" class="nav-btn">
                 <i data-lucide="layout-list"></i> Staff Feed
-            </button>
-            <button onclick="mobileNav('staff-mgmt-view')" class="nav-btn">
-                <i data-lucide="users"></i> Staff
             </button>
             <button onclick="mobileNav('crm-view')" class="nav-btn">
                 <i data-lucide="contact-2"></i> People & Pets
@@ -145,6 +141,7 @@
                         <button onclick="openPersonModal()"><i data-lucide="user"></i> Person</button>
                         <button onclick="openPetModal()"><i data-lucide="dog"></i> Pet</button>
                         <button onclick="openVetModal()"><i data-lucide="stethoscope"></i> Vet / COI</button>
+                        <button onclick="openStaffModal(null)"><i data-lucide="briefcase"></i> Staff</button>
                     </div>
                 </div>
                     
@@ -170,6 +167,7 @@
             <div class="biz-subnav">
                 <button class="biz-tab active" id="biztab-dashboard" onclick="switchBizTab('dashboard')"> <i data-lucide="gauge"></i> Dashboard</button>
                 <button class="biz-tab" id="biztab-invoices" onclick="switchBizTab('invoices')"><i data-lucide="receipt"></i> Invoices</button>
+                <button class="biz-tab" id="biztab-payments" onclick="switchBizTab('payments')"><i data-lucide="credit-card"></i> Payment Settings</button>
                 <button class="biz-tab" id="biztab-availability" onclick="switchBizTab('availability')"><i data-lucide="calendar-days"></i> Business Availability</button>
             </div>
 
@@ -262,6 +260,21 @@
                 <div id="biz-invoices-list" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
             </div>
 
+            <div id="bizsec-payments" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Payment methods</h3>
+                </div>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">These show up on payment notices and receipts. Square is listed as an accepted method for now — online payment processing isn't wired up yet.</p>
+                <div style="display:flex; flex-direction:column; gap:0.85rem; max-width:420px;">
+                    <div class="form-group"><label>Business Name</label><input type="text" id="pay-business-name"></div>
+                    <div class="form-group"><label>Venmo Handle</label><input type="text" id="pay-venmo" placeholder="@your-handle"></div>
+                    <div class="form-group"><label>Zelle Info</label><input type="text" id="pay-zelle" placeholder="email or phone"></div>
+                    <div class="form-group"><label>Cash Instructions</label><input type="text" id="pay-cash" placeholder="e.g. Cash accepted at pickup/drop-off"></div>
+                    <div class="form-group"><label>Square Link</label><input type="text" id="pay-square" placeholder="https://square.link/..."></div>
+                    <button class="btn-primary" style="align-self:flex-start;" onclick="saveBusinessPaymentSettings()">Save</button>
+                </div>
+            </div>
+
         </section>
 
         <!-- Resource edit modal -->
@@ -307,44 +320,6 @@
             </div>
         </div>
 
-
-        <!-- ═══ STAFF MANAGEMENT ═══ -->
-        <section id="staff-mgmt-view" class="view-panel hidden">
-
-            <div class="biz-subnav">
-                <button class="biz-tab active" id="stftab-roster" onclick="switchStaffTab('roster')"> <i data-lucide="users"></i> Roster</button>
-                <button class="biz-tab" id="stftab-tasks" onclick="switchStaffTab('tasks')"><i data-lucide="layout-list"></i> Task List</button>
-            </div>
-
-            <!-- ── ROSTER ── -->
-            <div id="stfsec-roster" class="biz-section active">
-                <div class="section-header-row" style="margin-bottom:1rem;">
-                    <h3 style="margin:0;">Staff members</h3>
-                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openStaffModal(null)">+ Add staff</button>
-                </div>
-                <div id="staff-roster-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
-            </div>
-
-            <!-- ── TASKS ── -->
-            <div id="stfsec-tasks" class="biz-section">
-                <div class="section-header-row" style="margin-bottom:1rem;">
-                    <h3 style="margin:0;">Staff task list</h3>
-                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openStaffTaskModal(null)">+ Add task</button>
-                </div>
-                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
-                    <select id="staff-task-filter" class="biz-select" onchange="renderStaffTasks()">
-                        <option value="all">All staff</option>
-                    </select>
-                    <select id="staff-task-status-filter" class="biz-select" onchange="renderStaffTasks()">
-                        <option value="all">All statuses</option>
-                        <option value="pending">Pending</option>
-                        <option value="done">Completed</option>
-                    </select>
-                </div>
-                <div id="staff-tasks-list" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
-            </div>
-
-        </section>
 
         <!-- Staff member modal -->
         <div id="staff-modal" class="modal hidden">

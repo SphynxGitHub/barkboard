@@ -514,6 +514,7 @@ async function markInvoicePaid(id, householdId) {
     const client = getSupabase();
     if (!client) return;
     await client.from('invoices').update({ status: 'paid' }).eq('id', id);
+    if (typeof showReceipt === 'function') showReceipt(id);
     openFullWidthProfile('household', householdId);
 }
 
@@ -778,7 +779,7 @@ async function saveStaffMember() {
 
         editingStaffId = null;
         closeStaffModal();
-        await renderStaffRoster();
+        if (typeof renderAllDashboards === 'function') await renderAllDashboards();
     }
 }
 
@@ -797,7 +798,7 @@ async function deleteStaff(id) {
         alert('Error deleting row from Supabase: ' + error.message);
         console.error('Supabase delete error:', error);
     } else {
-        await renderStaffRoster();
+        if (typeof renderAllDashboards === 'function') await renderAllDashboards();
     }
 }
 
@@ -903,23 +904,6 @@ function closeStaffAvailModal() {
     if (startInput) startInput.value = '';
     if (endInput) endInput.value = '';
     if (notesInput) notesInput.value = '';
-}
-
-async function saveStaffAvail() {
-    const staffId = document.getElementById('sav-who')?.value;
-    const type = document.getElementById('sav-type')?.value || 'vacation';
-    const start = document.getElementById('sav-start')?.value;
-    const end = document.getElementById('sav-end')?.value || start;
-    const notes = document.getElementById('sav-notes')?.value.trim() || '';
-
-    if (!staffId || !start) {
-        return alert('Please select a staff member and start date.');
-    }
-
-    closeStaffAvailModal();
-    if (typeof renderStaffAvailability === 'function') {
-        renderStaffAvailability();
-    }
 }
 
 /* ==========================================================================
@@ -1476,6 +1460,9 @@ function switchBizTab(tab) {
     if (tab === 'invoices' && typeof renderInvoicesList === 'function') {
         renderInvoicesList();
     }
+    if (tab === 'payments' && typeof loadBusinessPaymentSettings === 'function') {
+        loadBusinessPaymentSettings();
+    }
 }
 
 function bizDateRange() {
@@ -1648,19 +1635,29 @@ async function renderInvoicesList() {
     }
 
     el.innerHTML = list.map(i => {
-        const statusColor = i.status === 'paid' ? 'var(--text-muted)' : i.status === 'void' ? 'var(--text-muted)' : '#dc2626';
         return `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('household', '${i.household_id}')">
-                <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+                <div style="cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('household', '${i.household_id}')">
                     <strong>${i.description || 'Invoice'}</strong>
-                    <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${i.status || 'unpaid'}</span>
+                    <span style="margin-left:0.4rem;">${renderStatusTag('invoice', i.id, i.status || 'unpaid', 'setBizInvoiceStatus')}</span>
                     <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.2rem;">${i.households?.name || 'Unknown household'} ${i.due_date ? '· Due ' + i.due_date : ''}</div>
                 </div>
-                <div style="font-weight:600;">$${Number(i.amount || 0).toFixed(2)}</div>
+                <div style="display:flex; align-items:center; gap:0.6rem;">
+                    <button class="btn-icon" style="background:none; border:none; cursor:pointer;" onclick="event.stopPropagation(); ${i.status === 'paid' ? `showReceipt('${i.id}')` : `showPaymentNotice('${i.id}')`}" title="${i.status === 'paid' ? 'View receipt' : 'View payment notice'}"><i data-lucide="file-text" style="width:15px;height:15px;"></i></button>
+                    <div style="font-weight:600;">$${Number(i.amount || 0).toFixed(2)}</div>
+                </div>
             </div>
         `;
     }).join('');
     refreshIcons();
+}
+
+async function setBizInvoiceStatus(kind, id, newStatus) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('invoices').update({ status: newStatus }).eq('id', id);
+    if (newStatus === 'paid') showReceipt(id);
+    renderInvoicesList();
 }
 
 async function renderAvailabilityList() {
@@ -2748,6 +2745,9 @@ function renderEntitySections(type, data, id) {
                                         </div>
                                         <div style="display:flex; gap:0.35rem;">
                                             ${inv.status !== 'paid' ? `
+                                                <button class="btn-icon" onclick="showPaymentNotice('${inv.id}')" title="View payment notice" style="background:none; border:none; cursor:pointer;">
+                                                    <i data-lucide="file-text" style="width:14px;height:14px;"></i>
+                                                </button>
                                                 <button class="btn-icon" onclick="markInvoicePaid('${inv.id}', '${id}')" title="Mark as paid" style="background:none; border:none; cursor:pointer;">
                                                     <i data-lucide="check" style="width:14px;height:14px;"></i>
                                                 </button>
@@ -3660,29 +3660,32 @@ function filterActivityItems(items, f) {
     });
 }
 
-const ACTIVITY_STATUS_CYCLE = { pending: 'confirmed', confirmed: 'completed', completed: 'cancelled', cancelled: 'no-show', 'no-show': 'pending' };
-const TASK_STATUS_CYCLE = { pending: 'completed', completed: 'pending' };
+const ACTIVITY_STATUS_OPTIONS = {
+    appointment: ['pending', 'confirmed', 'completed', 'cancelled', 'no-show'],
+    task: ['pending', 'completed'],
+    invoice: ['unpaid', 'paid', 'void']
+};
 
-function activityStatusColor(status) {
-    if (status === 'completed') return 'var(--text-muted)';
-    if (status === 'cancelled' || status === 'no-show') return '#dc2626';
-    if (status === 'confirmed') return '#16a34a';
-    return 'var(--accent, #2563eb)';
+function renderStatusTag(kind, id, currentStatus, onChangeFn) {
+    const options = ACTIVITY_STATUS_OPTIONS[kind] || ['pending'];
+    return `
+        <select onclick="event.stopPropagation();" onchange="event.stopPropagation(); ${onChangeFn}('${kind}', '${id}', this.value)" style="font-size:0.72rem; padding:0.2rem 0.5rem; border-radius:9999px; border:1px solid var(--border); background:var(--bg-card); cursor:pointer; color:${activityStatusColor(currentStatus)}; text-transform:capitalize;">
+            ${options.map(o => `<option value="${o}" ${o === currentStatus ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+    `;
 }
 
-async function cycleActivityStatus(kind, id, currentStatus) {
+async function setActivityStatus(kind, id, newStatus) {
     const client = getSupabase();
     if (!client) return;
 
     if (kind === 'appointment') {
-        const next = ACTIVITY_STATUS_CYCLE[currentStatus] || 'pending';
-        await client.from('bookings').update({ status: next }).eq('id', id);
+        await client.from('bookings').update({ status: newStatus }).eq('id', id);
     } else if (kind === 'task') {
-        const next = TASK_STATUS_CYCLE[currentStatus] || 'pending';
-        await client.from('staff_tasks').update({ is_done: next === 'completed' }).eq('id', id);
-    } else {
-        // Invoice status changes go through the invoice modal / mark-paid flow, not the cycle tag.
-        return;
+        await client.from('staff_tasks').update({ is_done: newStatus === 'completed' }).eq('id', id);
+    } else if (kind === 'invoice') {
+        await client.from('invoices').update({ status: newStatus }).eq('id', id);
+        if (newStatus === 'paid') showReceipt(id);
     }
 
     if (document.getElementById('activities-calendar-view')?.classList.contains('hidden')) {
@@ -3690,6 +3693,13 @@ async function cycleActivityStatus(kind, id, currentStatus) {
     } else {
         renderActivitiesCalendar();
     }
+}
+
+function activityStatusColor(status) {
+    if (status === 'completed') return 'var(--text-muted)';
+    if (status === 'cancelled' || status === 'no-show') return '#dc2626';
+    if (status === 'confirmed') return '#16a34a';
+    return 'var(--accent, #2563eb)';
 }
 
 function openActivityItem(kind, id, householdId) {
@@ -3728,7 +3738,7 @@ async function renderActivities() {
                     <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${it.subtitle}${it.staffName ? ' · ' + it.staffName : ''} ${it.date ? '· ' + it.date : ''}</div>
                 </div>
             </div>
-            <button onclick="event.stopPropagation(); cycleActivityStatus('${it.kind}', '${it.id}', '${it.status}')" title="Click to change status" style="font-size:0.72rem; padding:0.2rem 0.55rem; border-radius:9999px; border:1px solid var(--border); background:none; cursor:${it.kind === 'invoice' ? 'default' : 'pointer'}; color:${activityStatusColor(it.status)}; text-transform:capitalize;">${it.status}</button>
+            ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
         </div>
     `).join('');
     refreshIcons();
@@ -3784,7 +3794,7 @@ async function renderActivitiesCalendar() {
                             <span><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
                         </div>
                         <div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div>
-                        <button onclick="event.stopPropagation(); cycleActivityStatus('${it.kind}', '${it.id}', '${it.status}')" style="margin-top:0.2rem; font-size:0.68rem; padding:0.1rem 0.4rem; border-radius:9999px; border:1px solid var(--border); background:none; cursor:${it.kind === 'invoice' ? 'default' : 'pointer'}; color:${activityStatusColor(it.status)}; text-transform:capitalize;">${it.status}</button>
+                        ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
                     </div>
                 `).join('')}
             </td>
@@ -4096,4 +4106,118 @@ async function deleteAssessmentTemplate(id) {
     if (!client) return;
     await client.from('assessment_templates').delete().eq('id', id);
     renderAssessmentTemplateList();
+}
+
+/* ==========================================================================
+   BUSINESS PAYMENT SETTINGS + PAYMENT NOTICE / RECEIPT GENERATION
+   ========================================================================== */
+
+async function getBusinessSettings() {
+    const client = getSupabase();
+    if (!client) return null;
+    const { data } = await client.from('business_settings').select('*').limit(1).single();
+    return data;
+}
+
+async function loadBusinessPaymentSettings() {
+    const s = await getBusinessSettings();
+    if (!s) return;
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    setVal('pay-business-name', s.business_name);
+    setVal('pay-venmo', s.venmo_handle);
+    setVal('pay-zelle', s.zelle_info);
+    setVal('pay-cash', s.cash_note);
+    setVal('pay-square', s.square_link);
+}
+
+async function saveBusinessPaymentSettings() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const payload = {
+        business_name: document.getElementById('pay-business-name')?.value.trim() || '',
+        venmo_handle: document.getElementById('pay-venmo')?.value.trim() || '',
+        zelle_info: document.getElementById('pay-zelle')?.value.trim() || '',
+        cash_note: document.getElementById('pay-cash')?.value.trim() || '',
+        square_link: document.getElementById('pay-square')?.value.trim() || ''
+    };
+
+    const existing = await getBusinessSettings();
+    let response;
+    if (existing) {
+        response = await client.from('business_settings').update(payload).eq('id', existing.id);
+    } else {
+        response = await client.from('business_settings').insert([payload]);
+    }
+
+    if (response.error) return alert('Failed to save: ' + response.error.message);
+    alert('Payment settings saved.');
+}
+
+function closeDocumentOverlay() {
+    const el = document.getElementById('doc-overlay');
+    if (el) el.remove();
+}
+
+function renderDocumentOverlay(html) {
+    closeDocumentOverlay();
+    const overlay = document.createElement('div');
+    overlay.id = 'doc-overlay';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center; padding:1rem;';
+    overlay.innerHTML = `
+        <div style="background:#fff; border-radius:0.5rem; max-width:480px; width:100%; padding:1.5rem; position:relative;">
+            <button onclick="closeDocumentOverlay()" style="position:absolute; top:0.75rem; right:0.75rem; background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+            ${html}
+            <div style="margin-top:1.25rem; display:flex; gap:0.5rem;">
+                <button class="btn" onclick="closeDocumentOverlay()">Close</button>
+                <button class="btn-primary" onclick="window.print()">Print</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    refreshIcons();
+}
+
+async function showPaymentNotice(invoiceId) {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: inv } = await client.from('invoices').select('*, households(name)').eq('id', invoiceId).single();
+    if (!inv) return;
+    const settings = await getBusinessSettings();
+
+    const paymentOptions = [];
+    if (settings?.venmo_handle) paymentOptions.push(`<li><strong>Venmo:</strong> ${settings.venmo_handle}</li>`);
+    if (settings?.zelle_info) paymentOptions.push(`<li><strong>Zelle:</strong> ${settings.zelle_info}</li>`);
+    if (settings?.cash_note) paymentOptions.push(`<li><strong>Cash:</strong> ${settings.cash_note}</li>`);
+    if (settings?.square_link) paymentOptions.push(`<li><strong>Square:</strong> <a href="${settings.square_link}" target="_blank">${settings.square_link}</a></li>`);
+
+    renderDocumentOverlay(`
+        <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Payment Notice'}</h2>
+        <p style="color:var(--text-muted); margin:0 0 1rem;">Amount Due</p>
+        <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
+        <p><strong>${inv.description || 'Invoice'}</strong></p>
+        <p style="color:var(--text-muted);">${inv.households?.name || ''} ${inv.due_date ? '· Due ' + inv.due_date : ''}</p>
+        <h4 style="margin:1rem 0 0.5rem;">Ways to Pay</h4>
+        <ul style="margin:0; padding-left:1.2rem;">${paymentOptions.join('') || '<li>No payment methods configured yet.</li>'}</ul>
+    `);
+}
+
+async function showReceipt(invoiceId) {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: inv } = await client.from('invoices').select('*, households(name)').eq('id', invoiceId).single();
+    if (!inv) return;
+    const settings = await getBusinessSettings();
+
+    renderDocumentOverlay(`
+        <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Receipt'}</h2>
+        <p style="color:var(--text-muted); margin:0 0 1rem;">Payment Received</p>
+        <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
+        <p><strong>${inv.description || 'Invoice'}</strong></p>
+        <p style="color:var(--text-muted);">${inv.households?.name || ''}</p>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem;">Paid in full. Thank you!</p>
+        <p style="color:var(--text-muted); font-size:0.78rem; margin-top:0.75rem; font-style:italic;">Note: email delivery isn't set up yet — this receipt is view/print only for now.</p>
+    `);
 }
