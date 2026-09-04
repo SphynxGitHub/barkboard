@@ -211,6 +211,8 @@ async function openBookingModal(householdId, bookingId = null) {
     const staffSel = document.getElementById('bk-staff-id');
     const notesInput = document.getElementById('bk-notes');
     const petBox = document.getElementById('bk-pet-checkboxes');
+    const resourceField = document.getElementById('bk-resource-field');
+    const resourceSel = document.getElementById('bk-resource-id');
 
     if (titleEl) titleEl.textContent = bookingId ? 'Edit Event' : 'Add Event';
 
@@ -223,6 +225,9 @@ async function openBookingModal(householdId, bookingId = null) {
     if (amountInput) amountInput.value = '';
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
+    if (resourceField) resourceField.classList.add('hidden');
+    if (resourceSel) resourceSel.innerHTML = '<option value="">Unassigned</option>';
+    document.getElementById('bk-service-type-results')?.classList.add('hidden');
     if (!bookingId && pendingCalendarDate && startDateInput) {
         startDateInput.value = pendingCalendarDate;
     }
@@ -277,6 +282,13 @@ async function openBookingModal(householdId, bookingId = null) {
         if (staffSel) staffSel.value = existingBooking.assigned_staff_id || '';
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
+
+        // Restore resource field: look up whether this service type needs a resource
+        const { data: matchedTemplate } = await client.from('appointment_type_templates').select('resource_type').eq('name', existingBooking.service_name || '').maybeSingle();
+        const resourceType = matchedTemplate?.resource_type || null;
+        if (resourceType || existingBooking.space_id) {
+            await loadResourceOptions(resourceType, existingBooking.space_id);
+        }
     }
 
     const modal = document.getElementById('booking-modal');
@@ -284,6 +296,69 @@ async function openBookingModal(householdId, bookingId = null) {
         modal.classList.remove('hidden');
         refreshIcons();
     }
+}
+
+async function searchServiceTypeForBooking(query) {
+    const container = document.getElementById('bk-service-type-results');
+    if (!container) return;
+    const q = query.trim();
+
+    const client = getSupabase();
+    if (!client) return;
+
+    let dbQuery = client.from('appointment_type_templates').select('*').order('name').limit(8);
+    if (q) dbQuery = dbQuery.ilike('name', `%${q}%`);
+    const { data: matches } = await dbQuery;
+
+    const rows = (matches || []).map(t => `
+        <div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; border-bottom:1px solid var(--border);" onmousedown="selectServiceTypeTemplate('${t.name.replace(/'/g, "\\'")}', ${t.resource_type ? `'${t.resource_type}'` : 'null'}, ${t.default_price != null ? t.default_price : 'null'})">
+            <strong>${t.name}</strong>
+            <span style="color:var(--text-muted); font-size:0.78rem;">${t.default_price != null ? ' · $' + Number(t.default_price).toFixed(2) : ''}${t.resource_type ? ' · needs ' + t.resource_type : ''}</span>
+        </div>
+    `).join('');
+
+    const customRow = q ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown="selectServiceTypeTemplate('${q.replace(/'/g, "\\'")}', null, null)">Use custom: "${q}"</div>` : '';
+
+    container.innerHTML = rows + customRow || '<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching appointment types — start typing to enter a custom one.</div>';
+    container.classList.remove('hidden');
+}
+
+function selectServiceTypeTemplate(name, resourceType, price) {
+    const serviceInput = document.getElementById('bk-service-type');
+    const amountInput = document.getElementById('bk-amount');
+    if (serviceInput) serviceInput.value = name;
+    if (amountInput && price != null && !amountInput.value) amountInput.value = price;
+    document.getElementById('bk-service-type-results')?.classList.add('hidden');
+    loadResourceOptions(resourceType, null);
+}
+
+async function loadResourceOptions(resourceType, selectedResourceId) {
+    const field = document.getElementById('bk-resource-field');
+    const sel = document.getElementById('bk-resource-id');
+    if (!field || !sel) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    if (!resourceType) {
+        // No declared requirement, but still let staff manually assign a resource if editing one that already has one.
+        if (!selectedResourceId) {
+            field.classList.add('hidden');
+            sel.innerHTML = '<option value="">Unassigned</option>';
+            return;
+        }
+        const { data: allResources } = await client.from('resources').select('*').order('name');
+        sel.innerHTML = '<option value="">Unassigned</option>' + (allResources || []).map(r => `<option value="${r.id}" ${r.id === selectedResourceId ? 'selected' : ''}>${r.name} (${r.type})</option>`).join('');
+        field.classList.remove('hidden');
+        return;
+    }
+
+    const { data: resources } = await client.from('resources').select('*').eq('type', resourceType).order('name');
+    sel.innerHTML = '<option value="">Unassigned</option>' + (resources || []).map(r => `<option value="${r.id}" ${r.id === selectedResourceId ? 'selected' : ''}>${r.name}</option>`).join('');
+    if (!resources || !resources.length) {
+        sel.innerHTML = '<option value="">No matching resources set up yet</option>';
+    }
+    field.classList.remove('hidden');
 }
 
 function closeBookingModal() {
@@ -305,6 +380,7 @@ async function saveBooking() {
     const amountRaw = document.getElementById('bk-amount')?.value;
     const status = document.getElementById('bk-status')?.value || 'pending';
     const staffId = document.getElementById('bk-staff-id')?.value || null;
+    const resourceId = document.getElementById('bk-resource-id')?.value || null;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
 
@@ -327,6 +403,7 @@ async function saveBooking() {
         amount: amount,
         status: status,
         assigned_staff_id: staffId || null,
+        space_id: resourceId || null,
         notes: notes
     };
 
@@ -2480,7 +2557,7 @@ async function openFullWidthProfile(type, id) {
     let payload = null;
 
     if (type === 'household') {
-        const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*), invoices(*)').eq('id', id).single();
+        const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*, resources(name)), invoices(*)').eq('id', id).single();
         payload = data;
         if (payload) {
             payload.vetsById = await fetchVetsForPets(client, payload.pets || []);
@@ -2503,7 +2580,7 @@ async function openFullWidthProfile(type, id) {
             payload.households.vetsById = await fetchVetsForPets(client, payload.households.pets || []);
         }
         if (payload) {
-            const { data: bookings } = await client.from('bookings').select('*').eq('pet_id', id);
+            const { data: bookings } = await client.from('bookings').select('*, resources(name)').eq('pet_id', id);
             payload.bookings = bookings || [];
             const { data: staffAssignments } = await client.from('staff_assignments').select('*, staff(name, role)').eq('pet_id', id);
             payload.assignedStaff = staffAssignments || [];
@@ -2523,7 +2600,7 @@ async function openFullWidthProfile(type, id) {
         if (payload) {
             const { data: assignments } = await client.from('staff_assignments').select('*, pets(name, species, household_id, households(name))').eq('staff_id', id);
             payload.assignments = assignments || [];
-            const { data: events } = await client.from('bookings').select('*, pets(name), households(name)').eq('assigned_staff_id', id).order('check_in');
+            const { data: events } = await client.from('bookings').select('*, pets(name), households(name), resources(name)').eq('assigned_staff_id', id).order('check_in');
             payload.bookings = events || [];
             const { data: tasks } = await client.from('staff_tasks').select('*').eq('staff_id', id).order('due_date');
             payload.tasks = tasks || [];
@@ -3193,6 +3270,7 @@ function renderEventsCard(bookings, householdId, opts) {
                             <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${bk.status || 'pending'}</span>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
                             ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
+                            ${bk.resources?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${bk.resources.name}</div>` : ''}
                             ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
                             ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
                         </div>
@@ -3590,13 +3668,13 @@ async function fetchActivityItems() {
 
     const items = [];
 
-    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name)');
+    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name), resources(name)');
     (bookings || []).forEach(bk => {
         items.push({
             kind: 'appointment',
             id: bk.id,
             title: bk.service_name || 'Appointment',
-            subtitle: `${bk.pets?.name || ''}${bk.pets?.name && bk.households?.name ? ' · ' : ''}${bk.households?.name || ''}`,
+            subtitle: [bk.pets?.name, bk.households?.name, bk.resources?.name].filter(Boolean).join(' · '),
             date: (bk.check_in || '').slice(0, 10),
             status: bk.status || 'pending',
             staffName: bk.staff?.name || '',
@@ -3959,7 +4037,7 @@ async function renderApptTypeList() {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
             <div>
                 <strong>${t.name}</strong>
-                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''}</span>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Needs: ' + t.resource_type : ''}</span>
                 ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
@@ -3979,6 +4057,7 @@ async function openApptTypeModal(id) {
     const nameInput = document.getElementById('att-name');
     const priceInput = document.getElementById('att-price');
     const durationInput = document.getElementById('att-duration');
+    const resourceTypeSel = document.getElementById('att-resource-type');
     const notesInput = document.getElementById('att-notes');
 
     let t = null;
@@ -3991,6 +4070,7 @@ async function openApptTypeModal(id) {
     if (nameInput) nameInput.value = t?.name || '';
     if (priceInput) priceInput.value = t?.default_price != null ? t.default_price : '';
     if (durationInput) durationInput.value = t?.default_duration_minutes || '';
+    if (resourceTypeSel) resourceTypeSel.value = t?.resource_type || '';
     if (notesInput) notesInput.value = t?.notes || '';
 
     document.getElementById('appt-type-modal')?.classList.remove('hidden');
@@ -4006,6 +4086,7 @@ async function saveApptType() {
 
     const price = document.getElementById('att-price')?.value;
     const duration = document.getElementById('att-duration')?.value;
+    const resourceType = document.getElementById('att-resource-type')?.value || null;
     const notes = document.getElementById('att-notes')?.value.trim() || '';
 
     const client = getSupabase();
@@ -4015,6 +4096,7 @@ async function saveApptType() {
         name,
         default_price: price ? parseFloat(price) : null,
         default_duration_minutes: duration ? parseInt(duration, 10) : null,
+        resource_type: resourceType,
         notes
     };
 
