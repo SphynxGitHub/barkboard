@@ -2002,8 +2002,6 @@ function switchCalTab(tab) {
     }
 }
 
-let editingResourceId = null;
-
 async function renderResourceList() {
     const el = document.getElementById('resource-list');
     if (!el) return;
