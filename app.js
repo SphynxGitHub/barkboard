@@ -365,7 +365,6 @@ function toggleBookingTypeFields() {
     const timeField = document.getElementById('bk-time-field');
     const endDateField = document.getElementById('bk-end-date-field');
     const endTimeField = document.getElementById('bk-end-time-field');
-    const ratePerDayField = document.getElementById('bk-rate-per-day-field');
 
     if (type === 'stay') {
         if (startLabel) startLabel.textContent = 'Start Date *';
@@ -373,14 +372,12 @@ function toggleBookingTypeFields() {
         if (timeField) timeField.classList.remove('hidden');
         if (endDateField) endDateField.classList.remove('hidden');
         if (endTimeField) endTimeField.classList.remove('hidden');
-        if (ratePerDayField) ratePerDayField.classList.remove('hidden');
     } else {
         if (startLabel) startLabel.textContent = 'Date *';
         if (startTimeLabel) startTimeLabel.textContent = 'Time';
         if (timeField) timeField.classList.remove('hidden');
         if (endDateField) endDateField.classList.add('hidden');
         if (endTimeField) endTimeField.classList.add('hidden');
-        if (ratePerDayField) ratePerDayField.classList.add('hidden');
     }
 }
 
@@ -415,6 +412,8 @@ async function openBookingModal(householdId = null, bookingId = null) {
     if (amountInput) amountInput.value = '';
     if (document.getElementById('bk-rate-per-day')) document.getElementById('bk-rate-per-day').value = '';
     if (document.getElementById('bk-discount')) document.getElementById('bk-discount').value = '';
+    if (document.getElementById('bk-days-display')) document.getElementById('bk-days-display').textContent = '1';
+    if (document.getElementById('bk-subtotal-display')) document.getElementById('bk-subtotal-display').textContent = '$0.00';
     if (document.getElementById('bk-final-total')) document.getElementById('bk-final-total').textContent = '$0.00';
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
@@ -494,14 +493,23 @@ async function openBookingModal(householdId = null, bookingId = null) {
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
 
-        // Restore the per-day rate directly from the booking itself (set whenever it was
-        // saved with a per-day template selected), so editing dates/type recalculates the
-        // total immediately and automatically — no re-selecting the template required.
-        // Older bookings saved before this existed simply won't have a rate_per_day and
-        // will behave as flat (unchanged) until a per-day template is explicitly reselected.
-        activeServicePerDayRate = existingBooking.rate_per_day != null ? parseFloat(existingBooking.rate_per_day) : null;
-        if (document.getElementById('bk-rate-per-day')) document.getElementById('bk-rate-per-day').value = activeServicePerDayRate != null ? activeServicePerDayRate : '';
-        calculateBookingTotalAmount(); // reflects the correct subtotal + discounted total immediately
+        // Restore the per-day rate directly from the booking itself (set whenever it was last
+        // saved), so editing recalculates the total immediately and automatically — no
+        // re-selecting the template required. Older bookings saved before this existed won't
+        // have a stored rate_per_day, so fall back to deriving one from subtotal ÷ days.
+        const subtotalForRate = existingBooking.amount != null ? (parseFloat(existingBooking.amount) + discountAmount) : 0;
+        let restoredRate = existingBooking.rate_per_day != null ? parseFloat(existingBooking.rate_per_day) : null;
+        if (restoredRate == null) {
+            let fallbackDays = 1;
+            if (isStay && checkInDate && checkOutDate) {
+                const diffDays = Math.ceil((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24));
+                fallbackDays = diffDays > 0 ? diffDays : 1;
+            }
+            restoredRate = fallbackDays > 0 ? subtotalForRate / fallbackDays : subtotalForRate;
+        }
+        activeServicePerDayRate = restoredRate;
+        if (document.getElementById('bk-rate-per-day')) document.getElementById('bk-rate-per-day').value = restoredRate != null ? restoredRate : '';
+        calculateBookingTotalAmount(); // reflects the correct days, subtotal, and discounted total immediately
 
         // Load this event's resource assignments (event-level, not tied to any one pet)
         bkEventResources = await loadExistingBookingResources(existingBooking.id);
@@ -601,35 +609,38 @@ async function selectGlobalPetForBooking(petId, householdId) {
 /* Calculates Total Amount based on Service Per-Day / Per-Service Rate × Days */
 let activeServicePerDayRate = null;
 
-/* Recomputes the Subtotal from the Rate/Day field × nights (stay bookings only), then
-   refreshes the final discounted total. The Rate/Day input is now the source of truth for
-   the rate — editing it directly overrides whatever a template originally set. */
+/* Unified pricing model: Rate/day × days = Subtotal, always — a single-day appointment is
+   just days=1. Rate/day is always the editable source of truth (pre-filled from a template
+   when one's picked, but freely overridable). Subtotal (bk-amount) is a hidden field that
+   just carries the computed value through to save/discount math. */
 function calculateBookingTotalAmount() {
     const type = document.getElementById('bk-type')?.value || 'appointment';
     const startDateStr = document.getElementById('bk-start-date')?.value;
     const endDateStr = document.getElementById('bk-end-date')?.value;
     const amountInput = document.getElementById('bk-amount');
     const rateInput = document.getElementById('bk-rate-per-day');
+    const daysDisplay = document.getElementById('bk-days-display');
+    const subtotalDisplay = document.getElementById('bk-subtotal-display');
 
     if (!amountInput) return;
 
-    const rateRaw = rateInput?.value;
-    const rate = rateRaw !== '' && rateRaw != null ? parseFloat(rateRaw) : null;
-    activeServicePerDayRate = (type === 'stay' && rate != null && !isNaN(rate)) ? rate : null;
-
-    if (activeServicePerDayRate != null) {
-        let days = 1;
-        if (startDateStr && endDateStr) {
-            const start = new Date(startDateStr);
-            const end = new Date(endDateStr);
-            const diffTime = end.getTime() - start.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            days = diffDays > 0 ? diffDays : 1;
-        }
-        amountInput.value = (activeServicePerDayRate * days).toFixed(2);
+    let days = 1;
+    if (type === 'stay' && startDateStr && endDateStr) {
+        const start = new Date(startDateStr);
+        const end = new Date(endDateStr);
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        days = diffDays > 0 ? diffDays : 1;
     }
-    // If there's no per-day rate set (flat pricing, or non-stay), the Subtotal field is
-    // left exactly as the person typed it — nothing here overwrites a manual entry.
+
+    const rateRaw = rateInput?.value;
+    const rate = rateRaw !== '' && rateRaw != null ? parseFloat(rateRaw) : 0;
+    activeServicePerDayRate = rateRaw !== '' && rateRaw != null && !isNaN(rate) ? rate : null;
+
+    const subtotal = (isNaN(rate) ? 0 : rate) * days;
+    amountInput.value = subtotal.toFixed(2);
+    if (daysDisplay) daysDisplay.textContent = days;
+    if (subtotalDisplay) subtotalDisplay.textContent = '$' + subtotal.toFixed(2);
 
     updateDiscountedTotalDisplay();
 }
@@ -821,7 +832,6 @@ async function searchServiceTypeForBooking(query) {
 
 function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType, pricingUnit) {
     const serviceInput = document.getElementById('bk-service-type');
-    const amountInput = document.getElementById('bk-amount');
     if (serviceInput) serviceInput.value = name;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
 
@@ -831,20 +841,13 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
     if (staffTimeField) staffTimeField.classList.toggle('hidden', !requiresStaffTime);
     if (staffTimeMinutesInput && requiresStaffTime) staffTimeMinutesInput.value = staffTimeMinutes || '';
 
-    // Apply the template's price according to how it's meant to be charged:
-    // "per_day" rates populate the Rate/Day field (which gets multiplied by the stay length,
-    // and recalculates as dates change), while "flat" rates are a one-time Subtotal amount
-    // regardless of how many days the stay covers.
+    // Pre-fill the Rate/Day field from the template's price — for a single-day appointment
+    // this just becomes "rate × 1 day", so it works as a flat amount there automatically.
+    // Note: for a multi-day stay, this now always multiplies by nights regardless of whether
+    // the template was marked "flat" or "per day" — see note in chat about this tradeoff.
     const rateInput = document.getElementById('bk-rate-per-day');
-    if (pricingUnit === 'per_day') {
-        if (rateInput) rateInput.value = price != null ? price : '';
-        calculateBookingTotalAmount();
-    } else {
-        if (rateInput) rateInput.value = '';
-        activeServicePerDayRate = null;
-        if (amountInput && price != null) amountInput.value = price;
-        updateDiscountedTotalDisplay();
-    }
+    if (rateInput) rateInput.value = price != null ? price : '';
+    calculateBookingTotalAmount();
 
     // If a resource type is declared, prefill the event resource search to nudge toward it.
     if (resourceType && !bkEventResources.length) {
@@ -1005,7 +1008,7 @@ async function saveBooking() {
     const subtotal = amountRaw ? parseFloat(amountRaw) : 0;
     const discount = discountRaw ? parseFloat(discountRaw) : 0;
     const amount = Math.max(0, subtotal - discount);
-    const ratePerDay = (type === 'stay' && rateRaw !== '' && rateRaw != null) ? parseFloat(rateRaw) : null;
+    const ratePerDay = (rateRaw !== '' && rateRaw != null) ? parseFloat(rateRaw) : null;
 
     const checkIn = `${startDate}T${startTime}:00`;
     const checkOut = type === 'stay' ? `${endDate}T${endTime}:00` : checkIn;
