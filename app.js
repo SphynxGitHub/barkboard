@@ -227,6 +227,7 @@ async function openBookingModal(householdId, bookingId = null) {
     if (notesInput) notesInput.value = '';
     if (resourceField) resourceField.classList.add('hidden');
     if (resourceSel) resourceSel.innerHTML = '<option value="">Unassigned</option>';
+    currentBookingResourceType = null;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
     if (!bookingId && pendingCalendarDate && startDateInput) {
         startDateInput.value = pendingCalendarDate;
@@ -332,7 +333,10 @@ function selectServiceTypeTemplate(name, resourceType, price) {
     loadResourceOptions(resourceType, null);
 }
 
+let currentBookingResourceType = null;
+
 async function loadResourceOptions(resourceType, selectedResourceId) {
+    currentBookingResourceType = resourceType;
     const field = document.getElementById('bk-resource-field');
     const sel = document.getElementById('bk-resource-id');
     if (!field || !sel) return;
@@ -341,7 +345,6 @@ async function loadResourceOptions(resourceType, selectedResourceId) {
     if (!client) return;
 
     if (!resourceType) {
-        // No declared requirement, but still let staff manually assign a resource if editing one that already has one.
         if (!selectedResourceId) {
             field.classList.add('hidden');
             sel.innerHTML = '<option value="">Unassigned</option>';
@@ -353,12 +356,57 @@ async function loadResourceOptions(resourceType, selectedResourceId) {
         return;
     }
 
-    const { data: resources } = await client.from('resources').select('*').eq('type', resourceType).order('name');
-    sel.innerHTML = '<option value="">Unassigned</option>' + (resources || []).map(r => `<option value="${r.id}" ${r.id === selectedResourceId ? 'selected' : ''}>${r.name}</option>`).join('');
-    if (!resources || !resources.length) {
-        sel.innerHTML = '<option value="">No matching resources set up yet</option>';
-    }
     field.classList.remove('hidden');
+    await refreshResourceAvailability(selectedResourceId);
+}
+
+// Resources of a given type are treated as interchangeable: this shows only
+// the ones actually free for the currently entered dates, so picking "the
+// next available one" is automatic rather than something staff have to check by hand.
+async function refreshResourceAvailability(preserveSelectedId) {
+    const sel = document.getElementById('bk-resource-id');
+    if (!sel || !currentBookingResourceType) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const type = document.getElementById('bk-type')?.value || 'appointment';
+    const startDate = document.getElementById('bk-start-date')?.value;
+    const startTime = document.getElementById('bk-start-time')?.value || '00:00';
+    const endDate = document.getElementById('bk-end-date')?.value || startDate;
+
+    const { data: allOfType } = await client.from('resources').select('*').eq('type', currentBookingResourceType).order('name');
+
+    if (!allOfType || !allOfType.length) {
+        sel.innerHTML = '<option value="">No resources of this type set up yet</option>';
+        return;
+    }
+
+    if (!startDate) {
+        sel.innerHTML = '<option value="">Select a date to check availability</option>' + allOfType.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+        return;
+    }
+
+    const rangeStart = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
+    const rangeEnd = type === 'stay' ? `${endDate}T23:59:59` : `${startDate}T23:59:59`;
+
+    let bookedQuery = client.from('bookings').select('space_id')
+        .neq('status', 'cancelled')
+        .not('space_id', 'is', null)
+        .lte('check_in', rangeEnd).gte('check_out', rangeStart);
+    if (editingBookingId) bookedQuery = bookedQuery.neq('id', editingBookingId);
+
+    const { data: bookedRows } = await bookedQuery;
+    const bookedIds = new Set((bookedRows || []).map(b => b.space_id));
+
+    const available = allOfType.filter(r => !bookedIds.has(r.id) || r.id === preserveSelectedId);
+
+    if (!available.length) {
+        sel.innerHTML = `<option value="">Fully booked — no ${currentBookingResourceType} available these dates</option>`;
+        return;
+    }
+
+    sel.innerHTML = available.map((r, i) => `<option value="${r.id}" ${r.id === preserveSelectedId || (!preserveSelectedId && i === 0) ? 'selected' : ''}>${r.name}</option>`).join('');
 }
 
 function closeBookingModal() {
@@ -387,6 +435,9 @@ async function saveBooking() {
     if (!startDate) return alert('Please choose a date.');
     if (type === 'stay' && !endDate) return alert('Please choose an end date for a multi-day stay.');
     if (petIds.length === 0) return alert('Please select at least one pet.');
+    if (currentBookingResourceType && !resourceId) {
+        return alert(`No ${currentBookingResourceType} is available for these dates. Try different dates or choose a different service type.`);
+    }
 
     const amount = amountRaw ? parseFloat(amountRaw) : 0;
 
@@ -1340,27 +1391,37 @@ async function renderCalendar() {
 
     if (weekLabel) weekLabel.textContent = `${start} — ${end}`;
 
-    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name)')
-        .gte('check_in', start + 'T00:00:00').lte('check_in', end + 'T23:59:59');
+    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name), resources(name)')
+        .neq('status', 'cancelled')
+        .lte('check_in', end + 'T23:59:59').gte('check_out', start + 'T00:00:00');
 
     thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
 
     const byDay = {};
     dates.forEach(d => { byDay[fmt(d)] = []; });
     (bookings || []).forEach(bk => {
-        const day = (bk.check_in || '').slice(0, 10);
-        if (byDay[day]) byDay[day].push(bk);
+        const bkStart = (bk.check_in || '').slice(0, 10);
+        const bkEnd = (bk.check_out || bk.check_in || '').slice(0, 10);
+        Object.keys(byDay).forEach(key => {
+            if (key >= bkStart && key <= bkEnd) byDay[key].push(bk);
+        });
     });
+
+    const dayStatus = await computeCalendarDayStatuses(dates);
+    const statusBg = { closed: '#e5e7eb', 'staff-full': '#fecaca', 'resource-full': '#fef08a' };
 
     tbody.innerHTML = `<tr>${dates.map(d => {
         const key = fmt(d);
         const dayBookings = byDay[key].slice().sort((a, b) => (a.check_in || '').localeCompare(b.check_in || ''));
+        const s = dayStatus[key];
+        const bg = s?.level ? statusBg[s.level] : '';
+        const title = s?.level === 'closed' ? 'Business closed' : s?.level === 'staff-full' ? 'All staff booked' : s?.level === 'resource-full' ? `Closed to: ${s.fullTypes.join(', ')}` : '';
         return `
-            <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px;">
+            <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px; ${bg ? 'background:' + bg + ';' : ''}" title="${title}">
                 ${dayBookings.map(bk => `
                     <div style="padding:0.4rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer;" onclick="openBookingModal('${bk.household_id}', '${bk.id}')">
                         <strong>${bk.check_in ? bk.check_in.slice(11, 16) : ''}</strong> ${bk.service_name || 'Event'}<br>
-                        <span style="color:var(--text-muted);">${bk.pets?.name || ''}${bk.pets?.name && bk.households?.name ? ' · ' : ''}${bk.households?.name || ''}</span>
+                        <span style="color:var(--text-muted);">${bk.pets?.name || ''}${bk.pets?.name && bk.households?.name ? ' · ' : ''}${bk.households?.name || ''}${bk.resources?.name ? ' · ' + bk.resources.name : ''}</span>
                     </div>
                 `).join('')}
                 <button class="btn" style="width:100%; font-size:0.72rem; padding:0.3rem; border:1px dashed var(--border);" onclick="scheduleFromCalendar('${key}')">+ Schedule</button>
@@ -3676,6 +3737,7 @@ async function fetchActivityItems() {
             title: bk.service_name || 'Appointment',
             subtitle: [bk.pets?.name, bk.households?.name, bk.resources?.name].filter(Boolean).join(' · '),
             date: (bk.check_in || '').slice(0, 10),
+            endDate: (bk.check_out || bk.check_in || '').slice(0, 10),
             status: bk.status || 'pending',
             staffName: bk.staff?.name || '',
             staffId: bk.assigned_staff_id || '',
@@ -3867,6 +3929,67 @@ function getActPeriodDates() {
     return { dates, label: `${fmt(dates[0])} — ${fmt(dates[6])}` };
 }
 
+async function computeCalendarDayStatuses(dates) {
+    const client = getSupabase();
+    if (!client) return {};
+
+    const fmt = d => d.toISOString().slice(0, 10);
+    const rangeStart = fmt(dates[0]);
+    const rangeEnd = fmt(dates[dates.length - 1]);
+
+    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }] = await Promise.all([
+        client.from('resources').select('id, type'),
+        client.from('staff').select('id'),
+        client.from('business_closures').select('start_date, end_date'),
+        client.from('bookings').select('check_in, check_out, assigned_staff_id, space_id, status')
+            .neq('status', 'cancelled')
+            .lte('check_in', rangeEnd + 'T23:59:59')
+            .gte('check_out', rangeStart + 'T00:00:00')
+    ]);
+
+    const resourceTypeCounts = {}; // type -> total count
+    const resourceTypeById = {};
+    (resources || []).forEach(r => {
+        resourceTypeById[r.id] = r.type;
+        resourceTypeCounts[r.type] = (resourceTypeCounts[r.type] || 0) + 1;
+    });
+    const totalStaff = (staffList || []).length;
+
+    const result = {};
+    dates.forEach(d => {
+        const key = fmt(d);
+
+        const closed = (closures || []).some(c => key >= c.start_date && key <= (c.end_date || c.start_date));
+
+        const dayBookings = (bookings || []).filter(bk => {
+            const start = (bk.check_in || '').slice(0, 10);
+            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
+            return key >= start && key <= end;
+        });
+
+        const staffBusy = new Set(dayBookings.filter(bk => bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
+        const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
+
+        const bookedByType = {};
+        dayBookings.forEach(bk => {
+            if (!bk.space_id) return;
+            const type = resourceTypeById[bk.space_id];
+            if (!type) return;
+            bookedByType[type] = (bookedByType[type] || 0) + 1;
+        });
+        const fullTypes = Object.keys(resourceTypeCounts).filter(type => bookedByType[type] >= resourceTypeCounts[type]);
+
+        let level = null;
+        if (closed) level = 'closed';
+        else if (staffFull) level = 'staff-full';
+        else if (fullTypes.length) level = 'resource-full';
+
+        result[key] = { level, fullTypes };
+    });
+
+    return result;
+}
+
 async function renderActivitiesCalendar() {
     const thead = document.getElementById('act-cal-thead');
     const tbody = document.getElementById('act-cal-body');
@@ -3881,10 +4004,21 @@ async function renderActivitiesCalendar() {
     let items = await fetchActivityItems();
     items = filterActivityItems(items, f);
 
+    // Bucket items by day, spanning multi-day appointments across every day they cover.
     const byDay = {};
-    items.forEach(it => { if (!byDay[it.date]) byDay[it.date] = []; byDay[it.date].push(it); });
+    dates.forEach(d => { byDay[fmt(d)] = []; });
+    items.forEach(it => {
+        const start = it.date;
+        const end = it.endDate || it.date;
+        Object.keys(byDay).forEach(key => {
+            if (key >= start && key <= end) byDay[key].push(it);
+        });
+    });
+
+    const dayStatus = await computeCalendarDayStatuses(dates);
 
     const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
+    const statusBg = { closed: '#e5e7eb', 'staff-full': '#fecaca', 'resource-full': '#fef08a' };
 
     const renderCellItems = (key, compact) => (byDay[key] || []).map(it => `
         <div style="padding:${compact ? '0.2rem 0.3rem' : '0.4rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer;" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
@@ -3895,10 +4029,17 @@ async function renderActivitiesCalendar() {
         </div>
     `).join('');
 
+    const cellStyle = (key, extra) => {
+        const s = dayStatus[key];
+        const bg = s ? statusBg[s.level] : '';
+        const label = s ? (s.level === 'closed' ? 'Business closed' : s.level === 'staff-full' ? 'All staff booked' : `Closed to: ${s.fullTypes.join(', ')}`) : '';
+        return `style="cursor:pointer; ${bg ? 'background:' + bg + ';' : ''} ${extra || ''}" title="${label}"`;
+    };
+
     if (actCalendarMode === 'day') {
         thead.innerHTML = `<tr><th>${dates[0].toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</th></tr>`;
         const key = fmt(dates[0]);
-        tbody.innerHTML = `<tr><td style="cursor:pointer; min-height:300px;" onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false) || '<span style="color:var(--text-muted); font-size:0.85rem;">Click to schedule something on this day.</span>'}</td></tr>`;
+        tbody.innerHTML = `<tr><td ${cellStyle(key, 'min-height:300px;')} onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false) || '<span style="color:var(--text-muted); font-size:0.85rem;">Click to schedule something on this day.</span>'}</td></tr>`;
     } else if (actCalendarMode === 'month') {
         thead.innerHTML = `<tr>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<th>${d}</th>`).join('')}</tr>`;
         let rows = '';
@@ -3908,7 +4049,7 @@ async function renderActivitiesCalendar() {
                 const date = dates[w * 7 + d];
                 const key = fmt(date);
                 const inMonth = date.getMonth() === monthAnchor;
-                rows += `<td style="cursor:pointer; opacity:${inMonth ? '1' : '0.4'};" onclick="quickScheduleOnDate('${key}')">
+                rows += `<td ${cellStyle(key, `opacity:${inMonth ? '1' : '0.4'};`)} onclick="quickScheduleOnDate('${key}')">
                     <div style="font-size:0.78rem; font-weight:600; margin-bottom:0.2rem;">${date.getDate()}</div>
                     ${renderCellItems(key, true)}
                 </td>`;
@@ -3920,7 +4061,7 @@ async function renderActivitiesCalendar() {
         thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
         tbody.innerHTML = `<tr>${dates.map(d => {
             const key = fmt(d);
-            return `<td style="cursor:pointer;" onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false)}</td>`;
+            return `<td ${cellStyle(key)} onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false)}</td>`;
         }).join('')}</tr>`;
     }
 
