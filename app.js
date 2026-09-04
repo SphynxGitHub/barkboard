@@ -698,6 +698,63 @@ async function searchResourcesForBooking(query) {
     }).join('');
 }
 
+/* Attaches a selected resource to all currently selected pets in the booking modal */
+function addResourceToBooking(resourceId, name, type, defaultMode) {
+    const checkedPetBoxes = document.querySelectorAll('.bk-pet-checkbox:checked');
+    const petIds = Array.from(checkedPetBoxes).map(cb => cb.value);
+
+    if (!petIds.length) {
+        alert('Please select or check at least one pet before adding a resource space.');
+        return;
+    }
+
+    petIds.forEach(petId => {
+        if (!bkResourcesByPet[petId]) bkResourcesByPet[petId] = [];
+        
+        // Prevent duplicate resource assignment on the same pet
+        if (!bkResourcesByPet[petId].some(r => r.resourceId === resourceId)) {
+            bkResourcesByPet[petId].push({
+                resourceId,
+                name,
+                type,
+                defaultMode,
+                allDay: defaultMode !== 'time_based',
+                startTime: '',
+                endTime: ''
+            });
+            if (typeof renderBkResourcesList === 'function') {
+                renderBkResourcesList(petId);
+            }
+        }
+    });
+
+    // Clear search input and results dropdown
+    const searchInput = document.getElementById('bk-resource-search');
+    if (searchInput) searchInput.value = '';
+    const resultsContainer = document.getElementById('bk-resource-search-results');
+    if (resultsContainer) resultsContainer.innerHTML = '';
+}
+
+async function saveBookingResources(client, bookingId, resourceList) {
+    if (!client || !bookingId) return;
+
+    // Clear old assignments for this booking
+    await client.from('booking_resources').delete().eq('booking_id', bookingId);
+    
+    if (!resourceList || !resourceList.length) return;
+
+    // Format rows for Supabase insertion
+    const rows = resourceList.map(r => ({
+        booking_id: bookingId,
+        resource_id: r.resourceId,
+        all_day: r.allDay !== false,
+        start_time: r.allDay ? null : (r.startTime || null),
+        end_time: r.allDay ? null : (r.endTime || null)
+    }));
+
+    await client.from('booking_resources').insert(rows);
+}
+
 async function searchServiceTypeForBooking(query) {
     const container = document.getElementById('bk-service-type-results');
     if (!container) return;
@@ -888,19 +945,6 @@ async function loadExistingBookingResources(bookingId) {
         startTime: row.start_time || '',
         endTime: row.end_time || ''
     }));
-}
-
-async function saveBookingResources(client, bookingId, resourceList) {
-    await client.from('booking_resources').delete().eq('booking_id', bookingId);
-    if (!resourceList || !resourceList.length) return;
-    const rows = resourceList.map(r => ({
-        booking_id: bookingId,
-        resource_id: r.resourceId,
-        all_day: r.allDay,
-        start_time: r.allDay ? null : (r.startTime || null),
-        end_time: r.allDay ? null : (r.endTime || null)
-    }));
-    await client.from('booking_resources').insert(rows);
 }
 
 async function searchInvoicesForBooking(query, bookingId) {
