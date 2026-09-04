@@ -4602,6 +4602,14 @@ function openActivityItem(kind, id, householdId) {
 }
 
 async function renderActivities() {
+    
+    // If user is currently on Calendar tab, route to calendar renderer instead
+    const calendarView = document.getElementById('activities-calendar-view');
+    if (calendarView && !calendarView.classList.contains('hidden')) {
+        renderActivitiesCalendar();
+        return;
+    }
+    
     const el = document.getElementById('activities-list');
     if (!el) return;
 
@@ -4892,11 +4900,29 @@ async function renderActivitiesCalendar() {
     const fmt = d => d.toISOString().slice(0, 10);
     if (weekLabel) weekLabel.textContent = label;
 
-    const f = activitiesFilters();
+    // 1. Fetch raw items
     let items = await fetchActivityItems();
+
+    // 2. Map resource IDs and names onto items for resource-based filtering
+    items.forEach(it => {
+        const assigned = it.resourceAssignments || [];
+        if (assigned.length) {
+            it.resourceNames = assigned.map(r => r.name).join(', ');
+            it.resourceIds = assigned.map(r => r.resourceId).filter(Boolean);
+        } else if (it.resources?.name) {
+            it.resourceNames = it.resources.name;
+            it.resourceIds = [it.resources.id].filter(Boolean);
+        } else {
+            it.resourceNames = 'No Resource Assigned';
+            it.resourceIds = [];
+        }
+    });
+
+    // 3. Get active filter state and apply to items
+    const f = activitiesFilters();
     items = filterActivityItems(items, f);
 
-    // Bucket items by date
+    // 4. Bucket filtered items into the calendar dates
     const byDay = {};
     dates.forEach(d => { byDay[fmt(d)] = []; });
     items.forEach(it => {
@@ -4911,16 +4937,12 @@ async function renderActivitiesCalendar() {
         ? await computeCalendarDayStatuses(dates) 
         : {};
 
-    const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
     const statusBg = { closed: '#e5e7eb', 'staff-full': '#fecaca', 'resource-full': '#fef08a' };
-
     const isDayMode = actCalendarMode === 'day';
 
-    // Inside renderActivitiesCalendar():
     const renderCellItems = (key, compact) => (byDay[key] || []).map(it => {
         const icons = getServiceIcons(it);
         
-        // Determine label display: Invoices -> Household Name, Tasks -> Task Text, Appointments -> Pet/Event
         let displayLabel = it.title || 'Event';
         if (it.kind === 'invoice') {
             displayLabel = it.householdName || (it.subtitle ? it.subtitle.split('·')[0].trim() : 'Unpaid Invoice');
@@ -4929,11 +4951,11 @@ async function renderActivitiesCalendar() {
         } else if (it.subtitle) {
             displayLabel = it.subtitle.split('·')[0].trim();
         }
-    
+
         const iconHtml = icons
             .map(icon => `<i data-lucide="${icon}" style="width:13px; height:13px; color:var(--primary,#2563eb); flex-shrink:0;"></i>`)
             .join('');
-    
+
         return `
             <div style="padding:${compact ? '0.2rem 0.3rem' : '0.35rem 0.45rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer; border:1px solid var(--border);" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
                 <div style="display:flex; align-items:center; gap:0.35rem; font-weight:600; color:var(--text-main,#0f172a);">
@@ -4943,7 +4965,6 @@ async function renderActivitiesCalendar() {
                 ${!compact ? `
                     <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem; display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
                         ${it.kind === 'task' ? `<span>${it.staffName ? '👤 ' + it.staffName : 'Task'}</span>` : ''}
-                        ${it.kind === 'invoice' ? `<span>$${it.subtitle ? (it.subtitle.split('·')[1] || '').trim() : ''}</span>` : ''}
                         ${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? `<span>${it.resourceNames}</span>` : ''}
                         ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();" style="margin-left:auto;">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
                     </div>
