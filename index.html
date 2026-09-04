@@ -443,6 +443,32 @@
         </div>
 
         <!-- ═══ CALENDAR ═══ -->
+        <!-- Quick Schedule modal (appointment/task chooser + household picker) -->
+        <div id="quick-schedule-modal" class="modal-overlay hidden">
+            <div class="modal-card" style="max-width:480px;">
+                <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <h3 style="margin:0;">Schedule Something</h3>
+                    <button onclick="closeQuickScheduleModal()" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+                </div>
+
+                <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+                    <button class="cal-nav-btn" id="qs-type-appointment" style="flex:1;" onclick="setQuickScheduleType('appointment')"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Appointment</button>
+                    <button class="cal-nav-btn" id="qs-type-task" style="flex:1;" onclick="setQuickScheduleType('task')"><i data-lucide="list-checks" style="width:14px;height:14px;"></i> Task</button>
+                </div>
+
+                <div id="qs-appointment-section" class="hidden">
+                    <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household</label>
+                    <input type="text" id="qs-household-search" class="biz-select" style="width:100%;" placeholder="Type a household name..." onkeyup="searchHouseholdForSchedule(this.value)">
+                    <div id="qs-household-results" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem; max-height:220px; overflow-y:auto;"></div>
+                </div>
+
+                <div id="qs-task-section" class="hidden">
+                    <p style="font-size:0.85rem; color:var(--text-muted);">Opens the task form with this date pre-filled.</p>
+                    <button class="btn-primary" onclick="proceedQuickScheduleTask()">Continue</button>
+                </div>
+            </div>
+        </div>
+
         <!-- ═══ ACTIVITIES ═══ -->
         <section id="activities-view" class="view-panel hidden">
             <div class="section-header-row" style="margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem;">

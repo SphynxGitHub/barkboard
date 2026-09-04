@@ -1294,24 +1294,9 @@ async function renderCalendar() {
     refreshIcons();
 }
 
-async function scheduleFromCalendar(dateStr) {
-    const client = getSupabase();
-    if (!client) return;
-    const name = prompt('Which household is this for? (type a name to search)');
-    if (!name || !name.trim()) return;
-
-    const { data: matches } = await client.from('households').select('id, name').ilike('name', `%${name.trim()}%`).limit(5);
-    if (!matches || !matches.length) return alert('No matching household found.');
-
-    let target = matches[0];
-    if (matches.length > 1) {
-        const pick = prompt(`Multiple matches found:\n${matches.map((m, i) => `${i + 1}. ${m.name}`).join('\n')}\n\nEnter a number:`);
-        const idx = parseInt(pick, 10) - 1;
-        if (matches[idx]) target = matches[idx];
-    }
-
-    pendingCalendarDate = dateStr;
-    openBookingModal(target.id);
+function scheduleFromCalendar(dateStr) {
+    openQuickScheduleModal(dateStr);
+    setQuickScheduleType('appointment');
 }
 
 function switchCalTab(tab) {
@@ -3864,34 +3849,72 @@ async function renderActivitiesCalendar() {
     refreshIcons();
 }
 
-async function quickScheduleOnDate(dateStr) {
-    const choice = confirm('Schedule an Appointment? Click Cancel for a Task instead.');
-    if (choice) {
-        await quickNewAppointment(dateStr);
-    } else {
-        openStaffTaskModal(null);
+let quickScheduleDate = null;
+
+function openQuickScheduleModal(presetDate) {
+    quickScheduleDate = presetDate || null;
+    document.getElementById('qs-household-search').value = '';
+    document.getElementById('qs-household-results').innerHTML = '';
+    setQuickScheduleType(null);
+    document.getElementById('quick-schedule-modal')?.classList.remove('hidden');
+    refreshIcons();
+}
+
+function closeQuickScheduleModal() {
+    document.getElementById('quick-schedule-modal')?.classList.add('hidden');
+    quickScheduleDate = null;
+}
+
+function setQuickScheduleType(type) {
+    document.getElementById('qs-type-appointment')?.classList.toggle('today', type === 'appointment');
+    document.getElementById('qs-type-task')?.classList.toggle('today', type === 'task');
+    document.getElementById('qs-appointment-section')?.classList.toggle('hidden', type !== 'appointment');
+    document.getElementById('qs-task-section')?.classList.toggle('hidden', type !== 'task');
+    if (type === 'appointment') document.getElementById('qs-household-search')?.focus();
+}
+
+async function searchHouseholdForSchedule(query) {
+    const container = document.getElementById('qs-household-results');
+    if (!container) return;
+    const q = query.trim();
+    if (!q) { container.innerHTML = ''; return; }
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: matches } = await client.from('households').select('id, name').ilike('name', `%${q}%`).limit(8);
+
+    container.innerHTML = (matches && matches.length) ? matches.map(m => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); cursor:pointer;" onclick="selectHouseholdForSchedule('${m.id}')">
+            <span><i data-lucide="home" style="width:13px;height:13px;"></i> ${m.name}</span>
+            <span style="font-size:0.75rem; color:var(--primary, #2563eb);">Select</span>
+        </div>
+    `).join('') : '<div style="font-size:0.8rem; color:var(--text-muted);">No matching households.</div>';
+    refreshIcons();
+}
+
+function selectHouseholdForSchedule(householdId) {
+    if (quickScheduleDate) pendingCalendarDate = quickScheduleDate;
+    closeQuickScheduleModal();
+    openBookingModal(householdId);
+}
+
+function proceedQuickScheduleTask() {
+    const dateStr = quickScheduleDate;
+    closeQuickScheduleModal();
+    openStaffTaskModal(null);
+    if (dateStr) {
         setTimeout(() => { const el = document.getElementById('stsk-due'); if (el) el.value = dateStr; }, 0);
     }
 }
 
-async function quickNewAppointment(presetDate) {
-    const client = getSupabase();
-    if (!client) return;
-    const name = prompt('Which household is this appointment for? (type a name to search)');
-    if (!name || !name.trim()) return;
+function quickScheduleOnDate(dateStr) {
+    openQuickScheduleModal(dateStr);
+}
 
-    const { data: matches } = await client.from('households').select('id, name').ilike('name', `%${name.trim()}%`).limit(5);
-    if (!matches || !matches.length) return alert('No matching household found.');
-
-    let target = matches[0];
-    if (matches.length > 1) {
-        const pick = prompt(`Multiple matches found:\n${matches.map((m, i) => `${i + 1}. ${m.name}`).join('\n')}\n\nEnter a number:`);
-        const idx = parseInt(pick, 10) - 1;
-        if (matches[idx]) target = matches[idx];
-    }
-
-    if (presetDate) pendingCalendarDate = presetDate;
-    openBookingModal(target.id);
+function quickNewAppointment() {
+    openQuickScheduleModal(null);
+    setQuickScheduleType('appointment');
 }
 
 function quickNewTask() {
