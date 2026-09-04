@@ -505,9 +505,10 @@
             <!-- Controls Row: Grouping + All Filters -->
             <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
                 <!-- Group By Control -->
-                <div>
+                <div id="act-group-by-container">
                     <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Group By:</label>
                     <select id="act-group-by" class="biz-select" onchange="renderActivities()">
+                        <option value="none">Ungrouped (Flat List)</option>
                         <option value="date">Date</option>
                         <option value="kind">Type (Appointment, Task, Invoice)</option>
                         <option value="staff">Team Member</option>
