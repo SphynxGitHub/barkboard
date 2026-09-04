@@ -4755,3 +4755,98 @@ async function showReceipt(invoiceId) {
         <p style="color:var(--text-muted); font-size:0.78rem; margin-top:0.75rem; font-style:italic;">Note: email delivery isn't set up yet — this receipt is view/print only for now.</p>
     `);
 }
+
+/* ==========================================================================
+   FINANCIAL REPORTING EXPORTS (CSV)
+   ========================================================================== */
+
+function downloadCSV(filename, headers, rows) {
+    const escapeCell = (val) => {
+        const s = val == null ? '' : String(val);
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [headers.map(escapeCell).join(',')];
+    rows.forEach(row => lines.push(row.map(escapeCell).join(',')));
+    const csv = lines.join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function exportInvoicesCSV() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const statusFilter = document.getElementById('biz-invoice-status-filter')?.value || 'all';
+    const query = document.getElementById('biz-invoice-search')?.value.trim().toLowerCase() || '';
+
+    let dbQuery = client.from('invoices').select('*, households(name)').order('due_date', { ascending: true });
+    if (statusFilter !== 'all') dbQuery = dbQuery.eq('status', statusFilter);
+
+    const { data: invoices } = await dbQuery;
+    let list = invoices || [];
+    if (query) {
+        list = list.filter(i =>
+            (i.description || '').toLowerCase().includes(query) ||
+            (i.households?.name || '').toLowerCase().includes(query)
+        );
+    }
+
+    if (!list.length) return alert('No invoices to export for the current filter.');
+
+    const rows = list.map(i => [
+        i.due_date || '',
+        i.households?.name || '',
+        i.description || '',
+        Number(i.amount || 0).toFixed(2),
+        i.status || 'unpaid'
+    ]);
+
+    const totalAmount = list.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    rows.push(['', '', 'TOTAL', totalAmount.toFixed(2), '']);
+
+    downloadCSV(`invoices-${statusFilter}-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Due Date', 'Household', 'Description', 'Amount', 'Status'], rows);
+}
+
+async function exportFinancialSummaryCSV() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const { from, to } = bizDateRange();
+
+    const { data: invoices } = await client.from('invoices').select('*, households(name)')
+        .gte('due_date', from || '1970-01-01').lte('due_date', to);
+    const { data: bookings } = await client.from('bookings').select('*, staff:assigned_staff_id(name), households(name)')
+        .gte('check_in', from ? from + 'T00:00:00' : '1970-01-01').lte('check_in', to + 'T23:59:59');
+
+    const invoiceRows = (invoices || []).map(i => [
+        'Invoice', i.due_date || '', i.households?.name || '', i.description || '', Number(i.amount || 0).toFixed(2), i.status || 'unpaid'
+    ]);
+    const bookingRows = (bookings || []).map(bk => [
+        'Appointment', (bk.check_in || '').slice(0, 10), bk.households?.name || '', bk.service_name || '', Number(bk.amount || 0).toFixed(2), bk.status || 'pending'
+    ]);
+
+    const grossRevenue = (invoices || []).filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    const totalBookingRevenue = (bookings || []).reduce((sum, bk) => sum + Number(bk.amount || 0), 0);
+
+    const rows = [
+        ['Summary', '', '', `Range: ${from} to ${to}`, '', ''],
+        ['Summary', '', '', 'Gross Revenue (Paid Invoices)', grossRevenue.toFixed(2), ''],
+        ['Summary', '', '', 'Total Booked Value (All Appointments)', totalBookingRevenue.toFixed(2), ''],
+        ['Summary', '', '', 'Invoice Count', String((invoices || []).length), ''],
+        ['Summary', '', '', 'Appointment Count', String((bookings || []).length), ''],
+        ...invoiceRows,
+        ...bookingRows
+    ];
+
+    downloadCSV(`financial-summary-${from}-to-${to}.csv`,
+        ['Type', 'Date', 'Household', 'Description', 'Amount', 'Status'], rows);
+}

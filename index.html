@@ -189,6 +189,7 @@
                         <span style="font-size:0.82rem;color:var(--text-muted);">to</span>
                         <input type="date" id="biz-date-to" onchange="renderBizDashboard()" class="biz-date-input">
                     </div>
+                    <button class="btn" style="font-size:0.85rem;padding:0.5rem 1rem; display:flex; align-items:center; gap:0.4rem; margin-left:auto;" onclick="exportFinancialSummaryCSV()"><i data-lucide="download"></i> Export Summary CSV</button>
                 </div>
 
                 <!-- Clickable stat cards -->
@@ -247,6 +248,7 @@
             <div id="bizsec-invoices" class="biz-section">
                 <div class="section-header-row" style="margin-bottom:1rem;">
                     <h3 style="margin:0;">All invoices</h3>
+                    <button class="btn" style="font-size:0.85rem;padding:0.5rem 1rem; display:flex; align-items:center; gap:0.4rem;" onclick="exportInvoicesCSV()"><i data-lucide="download"></i> Export CSV</button>
                 </div>
                 <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
                     <select id="biz-invoice-status-filter" class="biz-select" onchange="renderInvoicesList()">
