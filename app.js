@@ -812,7 +812,11 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
 async function loadExistingBookingResources(bookingId) {
     const client = getSupabase();
     if (!client) return [];
-    const { data } = await client.from('booking_resources').select('*, resources(name, type, default_mode)').eq('booking_id', bookingId);
+    const { data, error } = await client.from('booking_resources').select('*, resources(name, type, default_mode)').eq('booking_id', bookingId);
+    if (error) {
+        console.error('Failed to load resource assignments:', error);
+        return [];
+    }
     return (data || []).map(row => ({
         resourceId: row.resource_id,
         name: row.resources?.name || 'Resource',
@@ -866,8 +870,13 @@ async function saveBookingResources(client, bookingId, resourceList) {
     if (!client || !bookingId) return;
 
     // Clear old assignments for this booking
-    await client.from('booking_resources').delete().eq('booking_id', bookingId);
-    
+    const { error: deleteError } = await client.from('booking_resources').delete().eq('booking_id', bookingId);
+    if (deleteError) {
+        console.error('Failed to clear old resource assignments:', deleteError);
+        alert('Could not update resource assignments: ' + deleteError.message);
+        return;
+    }
+
     if (!resourceList || !resourceList.length) return;
 
     // Format rows for Supabase insertion
@@ -879,7 +888,14 @@ async function saveBookingResources(client, bookingId, resourceList) {
         end_time: r.allDay ? null : (r.endTime || null)
     }));
 
-    await client.from('booking_resources').insert(rows);
+    const { error: insertError } = await client.from('booking_resources').insert(rows);
+    if (insertError) {
+        // Previously failed silently here — this is almost certainly why resource
+        // assignments looked like they "weren't sticking": the insert was failing
+        // (e.g. an RLS policy or constraint on booking_resources) with no feedback.
+        console.error('Failed to save resource assignments:', insertError);
+        alert('Could not save resource assignments: ' + insertError.message);
+    }
 }
 
 async function saveBooking() {
