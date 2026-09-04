@@ -583,11 +583,23 @@
                 <div class="form-group"><label>Name</label><input type="text" id="att-name" placeholder="e.g. Agility Training"></div>
                 <div class="form-group"><label>Default Price ($)</label><input type="number" step="0.01" id="att-price" placeholder="50.00"></div>
                 <div class="form-group"><label>Default Duration (minutes)</label><input type="number" id="att-duration" placeholder="60"></div>
-                <div class="form-group"><label>Requires Resource Type</label>
+                <div class="form-group"><label>Requires Resource Type (for the full stay/visit)</label>
                     <select id="att-resource-type">
                         <option value="">None</option>
                         <option>Dog Suite</option><option>Dog Run</option><option>Cat Suite</option><option>Training Room</option><option>Other</option>
                     </select>
+                </div>
+                <div class="form-group" style="border-top:1px solid var(--border); padding-top:0.85rem;">
+                    <label style="display:flex; align-items:center; gap:0.5rem;"><input type="checkbox" id="att-requires-staff-time" onchange="document.getElementById('att-staff-time-fields').style.display = this.checked ? 'flex' : 'none';"> Requires dedicated staff/trainer time</label>
+                </div>
+                <div id="att-staff-time-fields" style="display:none; flex-direction:column; gap:0.85rem; padding-left:1.5rem;">
+                    <div class="form-group"><label>Staff Time per Day (minutes)</label><input type="number" id="att-staff-time-minutes" placeholder="60"></div>
+                    <div class="form-group"><label>Staff Time Also Needs a Resource</label>
+                        <select id="att-staff-time-resource-type">
+                            <option value="">No — just staff time</option>
+                            <option>Dog Suite</option><option>Dog Run</option><option>Cat Suite</option><option>Training Room</option><option>Other</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-group"><label>Notes</label><textarea id="att-notes" rows="2"></textarea></div>
                 <div class="modal-actions">
@@ -908,7 +920,7 @@
                 <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Event Type *</label>
-                        <select id="bk-type" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="toggleBookingTypeFields(); refreshResourceAvailability(document.getElementById('bk-resource-id')?.value);">
+                        <select id="bk-type" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="toggleBookingTypeFields(); refreshAllResourceAvailability();">
                             <option value="appointment">Single Appointment</option>
                             <option value="stay">Multi-Day Stay</option>
                         </select>
@@ -919,10 +931,20 @@
                         <div id="bk-service-type-results" class="hidden" style="position:absolute; z-index:10; width:100%; margin-top:0.25rem; background:#fff; border:1px solid var(--border); border-radius:0.25rem; max-height:180px; overflow-y:auto; box-shadow:0 4px 10px rgba(0,0,0,0.08);"></div>
                     </div>
                     <div id="bk-resource-field" class="hidden">
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Resource (e.g. Kennel)</label>
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Resource (full stay/visit, e.g. Kennel)</label>
                         <select id="bk-resource-id" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
                             <option value="">Unassigned</option>
                         </select>
+                    </div>
+                    <div id="bk-staff-time-field" class="hidden" style="padding:0.6rem; border:1px dashed var(--border); border-radius:0.25rem;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Staff/Trainer Time (minutes per day)</label>
+                        <input type="number" id="bk-staff-time-minutes" placeholder="60" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
+                        <div id="bk-staff-time-resource-field" class="hidden" style="margin-top:0.6rem;">
+                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Resource for this Time (e.g. Training Room)</label>
+                            <select id="bk-staff-time-resource-id" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
+                                <option value="">Unassigned</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Pet(s) *</label>
@@ -933,15 +955,15 @@
                     <div id="bk-date-fields" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
                         <div>
                             <label id="bk-start-label" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Date *</label>
-                            <input type="date" id="bk-start-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshResourceAvailability(document.getElementById('bk-resource-id')?.value)">
+                            <input type="date" id="bk-start-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
                         </div>
                         <div id="bk-time-field">
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Time</label>
-                            <input type="time" id="bk-start-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshResourceAvailability(document.getElementById('bk-resource-id')?.value)">
+                            <input type="time" id="bk-start-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
                         </div>
                         <div id="bk-end-date-field" class="hidden">
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">End Date *</label>
-                            <input type="date" id="bk-end-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshResourceAvailability(document.getElementById('bk-resource-id')?.value)">
+                            <input type="date" id="bk-end-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
                         </div>
                     </div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">

@@ -213,6 +213,10 @@ async function openBookingModal(householdId, bookingId = null) {
     const petBox = document.getElementById('bk-pet-checkboxes');
     const resourceField = document.getElementById('bk-resource-field');
     const resourceSel = document.getElementById('bk-resource-id');
+    const staffTimeField = document.getElementById('bk-staff-time-field');
+    const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
+    const staffTimeResourceField = document.getElementById('bk-staff-time-resource-field');
+    const staffTimeResourceSel = document.getElementById('bk-staff-time-resource-id');
 
     if (titleEl) titleEl.textContent = bookingId ? 'Edit Event' : 'Add Event';
 
@@ -227,7 +231,12 @@ async function openBookingModal(householdId, bookingId = null) {
     if (notesInput) notesInput.value = '';
     if (resourceField) resourceField.classList.add('hidden');
     if (resourceSel) resourceSel.innerHTML = '<option value="">Unassigned</option>';
+    if (staffTimeField) staffTimeField.classList.add('hidden');
+    if (staffTimeMinutesInput) staffTimeMinutesInput.value = '';
+    if (staffTimeResourceField) staffTimeResourceField.classList.add('hidden');
+    if (staffTimeResourceSel) staffTimeResourceSel.innerHTML = '<option value="">Unassigned</option>';
     currentBookingResourceType = null;
+    currentStaffTimeResourceType = null;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
     if (!bookingId && pendingCalendarDate && startDateInput) {
         startDateInput.value = pendingCalendarDate;
@@ -284,11 +293,32 @@ async function openBookingModal(householdId, bookingId = null) {
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
 
-        // Restore resource field: look up whether this service type needs a resource
-        const { data: matchedTemplate } = await client.from('appointment_type_templates').select('resource_type').eq('name', existingBooking.service_name || '').maybeSingle();
-        const resourceType = matchedTemplate?.resource_type || null;
-        if (resourceType || existingBooking.space_id) {
-            await loadResourceOptions(resourceType, existingBooking.space_id);
+        // Restore resource / staff-time fields by looking up the matching template
+        const { data: matchedTemplate } = await client.from('appointment_type_templates').select('*').eq('name', existingBooking.service_name || '').maybeSingle();
+        let resourceType = matchedTemplate?.resource_type || null;
+        if (!resourceType && existingBooking.space_id) {
+            const { data: existingResource } = await client.from('resources').select('type').eq('id', existingBooking.space_id).maybeSingle();
+            resourceType = existingResource?.type || null;
+        }
+        currentBookingResourceType = resourceType;
+        if (resourceType) {
+            if (resourceField) resourceField.classList.remove('hidden');
+            await populateResourceSelect('bk-resource-id', resourceType, existingBooking.space_id);
+        }
+
+        const needsStaffTime = existingBooking.requires_staff_time || matchedTemplate?.requires_staff_time || false;
+        currentStaffTimeResourceType = needsStaffTime ? (matchedTemplate?.staff_time_resource_type || null) : null;
+        if (!currentStaffTimeResourceType && existingBooking.staff_time_resource_id) {
+            const { data: existingStaffResource } = await client.from('resources').select('type').eq('id', existingBooking.staff_time_resource_id).maybeSingle();
+            currentStaffTimeResourceType = existingStaffResource?.type || null;
+        }
+        if (needsStaffTime || existingBooking.staff_time_resource_id) {
+            if (staffTimeField) staffTimeField.classList.remove('hidden');
+            if (staffTimeMinutesInput) staffTimeMinutesInput.value = existingBooking.staff_time_minutes || matchedTemplate?.staff_time_minutes || '';
+            if (currentStaffTimeResourceType) {
+                if (staffTimeResourceField) staffTimeResourceField.classList.remove('hidden');
+                await populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, existingBooking.staff_time_resource_id);
+            }
         }
     }
 
@@ -312,75 +342,71 @@ async function searchServiceTypeForBooking(query) {
     const { data: matches } = await dbQuery;
 
     const rows = (matches || []).map(t => `
-        <div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; border-bottom:1px solid var(--border);" onmousedown="selectServiceTypeTemplate('${t.name.replace(/'/g, "\\'")}', ${t.resource_type ? `'${t.resource_type}'` : 'null'}, ${t.default_price != null ? t.default_price : 'null'})">
+        <div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; border-bottom:1px solid var(--border);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(t.name)}, ${JSON.stringify(t.resource_type || null)}, ${t.default_price != null ? t.default_price : 'null'}, ${!!t.requires_staff_time}, ${t.staff_time_minutes || 'null'}, ${JSON.stringify(t.staff_time_resource_type || null)})'>
             <strong>${t.name}</strong>
-            <span style="color:var(--text-muted); font-size:0.78rem;">${t.default_price != null ? ' · $' + Number(t.default_price).toFixed(2) : ''}${t.resource_type ? ' · needs ' + t.resource_type : ''}</span>
+            <span style="color:var(--text-muted); font-size:0.78rem;">${t.default_price != null ? ' · $' + Number(t.default_price).toFixed(2) : ''}${t.resource_type ? ' · needs ' + t.resource_type : ''}${t.requires_staff_time ? ' · staff time' : ''}</span>
         </div>
     `).join('');
 
-    const customRow = q ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown="selectServiceTypeTemplate('${q.replace(/'/g, "\\'")}', null, null)">Use custom: "${q}"</div>` : '';
+    const customRow = q ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(q)}, null, null, false, null, null)'>Use custom: "${q}"</div>` : '';
 
     container.innerHTML = rows + customRow || '<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching appointment types — start typing to enter a custom one.</div>';
     container.classList.remove('hidden');
 }
 
-function selectServiceTypeTemplate(name, resourceType, price) {
+let currentBookingResourceType = null;
+let currentStaffTimeResourceType = null;
+
+function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType) {
     const serviceInput = document.getElementById('bk-service-type');
     const amountInput = document.getElementById('bk-amount');
     if (serviceInput) serviceInput.value = name;
     if (amountInput && price != null && !amountInput.value) amountInput.value = price;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
-    loadResourceOptions(resourceType, null);
-}
 
-let currentBookingResourceType = null;
-
-async function loadResourceOptions(resourceType, selectedResourceId) {
     currentBookingResourceType = resourceType;
-    const field = document.getElementById('bk-resource-field');
-    const sel = document.getElementById('bk-resource-id');
-    if (!field || !sel) return;
+    const resourceField = document.getElementById('bk-resource-field');
+    if (resourceField) resourceField.classList.toggle('hidden', !resourceType);
+    if (resourceType) populateResourceSelect('bk-resource-id', resourceType, null);
 
-    const client = getSupabase();
-    if (!client) return;
+    const staffTimeField = document.getElementById('bk-staff-time-field');
+    const staffTimeResourceField = document.getElementById('bk-staff-time-resource-field');
+    const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
+    currentStaffTimeResourceType = requiresStaffTime ? staffTimeResourceType : null;
 
-    if (!resourceType) {
-        if (!selectedResourceId) {
-            field.classList.add('hidden');
-            sel.innerHTML = '<option value="">Unassigned</option>';
-            return;
-        }
-        const { data: allResources } = await client.from('resources').select('*').order('name');
-        sel.innerHTML = '<option value="">Unassigned</option>' + (allResources || []).map(r => `<option value="${r.id}" ${r.id === selectedResourceId ? 'selected' : ''}>${r.name} (${r.type})</option>`).join('');
-        field.classList.remove('hidden');
-        return;
-    }
-
-    field.classList.remove('hidden');
-    await refreshResourceAvailability(selectedResourceId);
+    if (staffTimeField) staffTimeField.classList.toggle('hidden', !requiresStaffTime);
+    if (staffTimeMinutesInput && requiresStaffTime) staffTimeMinutesInput.value = staffTimeMinutes || '';
+    if (staffTimeResourceField) staffTimeResourceField.classList.toggle('hidden', !currentStaffTimeResourceType);
+    if (currentStaffTimeResourceType) populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, null);
 }
 
 // Resources of a given type are treated as interchangeable: this shows only
 // the ones actually free for the currently entered dates, so picking "the
 // next available one" is automatic rather than something staff have to check by hand.
-async function refreshResourceAvailability(preserveSelectedId) {
-    const sel = document.getElementById('bk-resource-id');
-    if (!sel || !currentBookingResourceType) return;
+// A resource counts as "used" if it's assigned as either the main resource OR the
+// staff-time resource on any other (non-cancelled) booking that overlaps the same window.
+async function populateResourceSelect(selectId, resourceType, preserveSelectedId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+
+    if (!resourceType) {
+        sel.innerHTML = '<option value="">Unassigned</option>';
+        return;
+    }
 
     const client = getSupabase();
     if (!client) return;
+
+    const { data: allOfType } = await client.from('resources').select('*').eq('type', resourceType).order('name');
+    if (!allOfType || !allOfType.length) {
+        sel.innerHTML = '<option value="">No resources of this type set up yet</option>';
+        return;
+    }
 
     const type = document.getElementById('bk-type')?.value || 'appointment';
     const startDate = document.getElementById('bk-start-date')?.value;
     const startTime = document.getElementById('bk-start-time')?.value || '00:00';
     const endDate = document.getElementById('bk-end-date')?.value || startDate;
-
-    const { data: allOfType } = await client.from('resources').select('*').eq('type', currentBookingResourceType).order('name');
-
-    if (!allOfType || !allOfType.length) {
-        sel.innerHTML = '<option value="">No resources of this type set up yet</option>';
-        return;
-    }
 
     if (!startDate) {
         sel.innerHTML = '<option value="">Select a date to check availability</option>' + allOfType.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
@@ -390,23 +416,31 @@ async function refreshResourceAvailability(preserveSelectedId) {
     const rangeStart = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
     const rangeEnd = type === 'stay' ? `${endDate}T23:59:59` : `${startDate}T23:59:59`;
 
-    let bookedQuery = client.from('bookings').select('space_id')
+    let bookedQuery = client.from('bookings').select('space_id, staff_time_resource_id')
         .neq('status', 'cancelled')
-        .not('space_id', 'is', null)
         .lte('check_in', rangeEnd).gte('check_out', rangeStart);
     if (editingBookingId) bookedQuery = bookedQuery.neq('id', editingBookingId);
 
     const { data: bookedRows } = await bookedQuery;
-    const bookedIds = new Set((bookedRows || []).map(b => b.space_id));
+    const bookedIds = new Set();
+    (bookedRows || []).forEach(r => {
+        if (r.space_id) bookedIds.add(r.space_id);
+        if (r.staff_time_resource_id) bookedIds.add(r.staff_time_resource_id);
+    });
 
     const available = allOfType.filter(r => !bookedIds.has(r.id) || r.id === preserveSelectedId);
 
     if (!available.length) {
-        sel.innerHTML = `<option value="">Fully booked — no ${currentBookingResourceType} available these dates</option>`;
+        sel.innerHTML = `<option value="">Fully booked — no ${resourceType} available these dates</option>`;
         return;
     }
 
     sel.innerHTML = available.map((r, i) => `<option value="${r.id}" ${r.id === preserveSelectedId || (!preserveSelectedId && i === 0) ? 'selected' : ''}>${r.name}</option>`).join('');
+}
+
+function refreshAllResourceAvailability() {
+    if (currentBookingResourceType) populateResourceSelect('bk-resource-id', currentBookingResourceType, document.getElementById('bk-resource-id')?.value || null);
+    if (currentStaffTimeResourceType) populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, document.getElementById('bk-staff-time-resource-id')?.value || null);
 }
 
 function closeBookingModal() {
@@ -429,6 +463,9 @@ async function saveBooking() {
     const status = document.getElementById('bk-status')?.value || 'pending';
     const staffId = document.getElementById('bk-staff-id')?.value || null;
     const resourceId = document.getElementById('bk-resource-id')?.value || null;
+    const requiresStaffTime = !document.getElementById('bk-staff-time-field')?.classList.contains('hidden');
+    const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
+    const staffTimeResourceId = document.getElementById('bk-staff-time-resource-id')?.value || null;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
 
@@ -437,6 +474,9 @@ async function saveBooking() {
     if (petIds.length === 0) return alert('Please select at least one pet.');
     if (currentBookingResourceType && !resourceId) {
         return alert(`No ${currentBookingResourceType} is available for these dates. Try different dates or choose a different service type.`);
+    }
+    if (currentStaffTimeResourceType && !staffTimeResourceId) {
+        return alert(`No ${currentStaffTimeResourceType} is available for the staff time on these dates. Try different dates or choose a different service type.`);
     }
 
     const amount = amountRaw ? parseFloat(amountRaw) : 0;
@@ -455,6 +495,9 @@ async function saveBooking() {
         status: status,
         assigned_staff_id: staffId || null,
         space_id: resourceId || null,
+        requires_staff_time: requiresStaffTime,
+        staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
+        staff_time_resource_id: staffTimeResourceId || null,
         notes: notes
     };
 
@@ -2618,7 +2661,7 @@ async function openFullWidthProfile(type, id) {
     let payload = null;
 
     if (type === 'household') {
-        const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*, resources(name)), invoices(*)').eq('id', id).single();
+        const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*, resources(name), staff_time_resource:staff_time_resource_id(name)), invoices(*)').eq('id', id).single();
         payload = data;
         if (payload) {
             payload.vetsById = await fetchVetsForPets(client, payload.pets || []);
@@ -2641,7 +2684,7 @@ async function openFullWidthProfile(type, id) {
             payload.households.vetsById = await fetchVetsForPets(client, payload.households.pets || []);
         }
         if (payload) {
-            const { data: bookings } = await client.from('bookings').select('*, resources(name)').eq('pet_id', id);
+            const { data: bookings } = await client.from('bookings').select('*, resources(name), staff_time_resource:staff_time_resource_id(name)').eq('pet_id', id);
             payload.bookings = bookings || [];
             const { data: staffAssignments } = await client.from('staff_assignments').select('*, staff(name, role)').eq('pet_id', id);
             payload.assignedStaff = staffAssignments || [];
@@ -2661,7 +2704,7 @@ async function openFullWidthProfile(type, id) {
         if (payload) {
             const { data: assignments } = await client.from('staff_assignments').select('*, pets(name, species, household_id, households(name))').eq('staff_id', id);
             payload.assignments = assignments || [];
-            const { data: events } = await client.from('bookings').select('*, pets(name), households(name), resources(name)').eq('assigned_staff_id', id).order('check_in');
+            const { data: events } = await client.from('bookings').select('*, pets(name), households(name), resources(name), staff_time_resource:staff_time_resource_id(name)').eq('assigned_staff_id', id).order('check_in');
             payload.bookings = events || [];
             const { data: tasks } = await client.from('staff_tasks').select('*').eq('staff_id', id).order('due_date');
             payload.tasks = tasks || [];
@@ -3332,6 +3375,7 @@ function renderEventsCard(bookings, householdId, opts) {
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
                             ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
                             ${bk.resources?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${bk.resources.name}</div>` : ''}
+                            ${bk.requires_staff_time ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${bk.staff_time_minutes || '?'} min/day staff time${bk.staff_time_resource?.name ? ' · ' + bk.staff_time_resource.name : ''}</div>` : ''}
                             ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
                             ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
                         </div>
@@ -3941,7 +3985,7 @@ async function computeCalendarDayStatuses(dates) {
         client.from('resources').select('id, type'),
         client.from('staff').select('id'),
         client.from('business_closures').select('start_date, end_date'),
-        client.from('bookings').select('check_in, check_out, assigned_staff_id, space_id, status')
+        client.from('bookings').select('check_in, check_out, assigned_staff_id, space_id, requires_staff_time, staff_time_resource_id, status')
             .neq('status', 'cancelled')
             .lte('check_in', rangeEnd + 'T23:59:59')
             .gte('check_out', rangeStart + 'T00:00:00')
@@ -3967,15 +4011,18 @@ async function computeCalendarDayStatuses(dates) {
             return key >= start && key <= end;
         });
 
-        const staffBusy = new Set(dayBookings.filter(bk => bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
+        // Simple boarding (no dedicated staff/trainer time) doesn't tie up a staff member's day —
+        // only appointments that actually declare a staff-time requirement count toward "fully booked."
+        const staffBusy = new Set(dayBookings.filter(bk => bk.requires_staff_time && bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
         const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
 
         const bookedByType = {};
         dayBookings.forEach(bk => {
-            if (!bk.space_id) return;
-            const type = resourceTypeById[bk.space_id];
-            if (!type) return;
-            bookedByType[type] = (bookedByType[type] || 0) + 1;
+            [bk.space_id, bk.staff_time_resource_id].filter(Boolean).forEach(resourceId => {
+                const type = resourceTypeById[resourceId];
+                if (!type) return;
+                bookedByType[type] = (bookedByType[type] || 0) + 1;
+            });
         });
         const fullTypes = Object.keys(resourceTypeCounts).filter(type => bookedByType[type] >= resourceTypeCounts[type]);
 
@@ -4178,7 +4225,7 @@ async function renderApptTypeList() {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
             <div>
                 <strong>${t.name}</strong>
-                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Needs: ' + t.resource_type : ''}</span>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''}</span>
                 ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
@@ -4199,6 +4246,10 @@ async function openApptTypeModal(id) {
     const priceInput = document.getElementById('att-price');
     const durationInput = document.getElementById('att-duration');
     const resourceTypeSel = document.getElementById('att-resource-type');
+    const requiresStaffTimeChk = document.getElementById('att-requires-staff-time');
+    const staffTimeFields = document.getElementById('att-staff-time-fields');
+    const staffTimeMinutesInput = document.getElementById('att-staff-time-minutes');
+    const staffTimeResourceTypeSel = document.getElementById('att-staff-time-resource-type');
     const notesInput = document.getElementById('att-notes');
 
     let t = null;
@@ -4212,6 +4263,10 @@ async function openApptTypeModal(id) {
     if (priceInput) priceInput.value = t?.default_price != null ? t.default_price : '';
     if (durationInput) durationInput.value = t?.default_duration_minutes || '';
     if (resourceTypeSel) resourceTypeSel.value = t?.resource_type || '';
+    if (requiresStaffTimeChk) requiresStaffTimeChk.checked = !!t?.requires_staff_time;
+    if (staffTimeFields) staffTimeFields.style.display = t?.requires_staff_time ? 'flex' : 'none';
+    if (staffTimeMinutesInput) staffTimeMinutesInput.value = t?.staff_time_minutes || '';
+    if (staffTimeResourceTypeSel) staffTimeResourceTypeSel.value = t?.staff_time_resource_type || '';
     if (notesInput) notesInput.value = t?.notes || '';
 
     document.getElementById('appt-type-modal')?.classList.remove('hidden');
@@ -4228,6 +4283,9 @@ async function saveApptType() {
     const price = document.getElementById('att-price')?.value;
     const duration = document.getElementById('att-duration')?.value;
     const resourceType = document.getElementById('att-resource-type')?.value || null;
+    const requiresStaffTime = document.getElementById('att-requires-staff-time')?.checked || false;
+    const staffTimeMinutes = document.getElementById('att-staff-time-minutes')?.value;
+    const staffTimeResourceType = document.getElementById('att-staff-time-resource-type')?.value || null;
     const notes = document.getElementById('att-notes')?.value.trim() || '';
 
     const client = getSupabase();
@@ -4238,6 +4296,9 @@ async function saveApptType() {
         default_price: price ? parseFloat(price) : null,
         default_duration_minutes: duration ? parseInt(duration, 10) : null,
         resource_type: resourceType,
+        requires_staff_time: requiresStaffTime,
+        staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
+        staff_time_resource_type: requiresStaffTime ? staffTimeResourceType : null,
         notes
     };
 
