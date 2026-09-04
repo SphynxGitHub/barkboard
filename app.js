@@ -794,10 +794,12 @@ async function deleteStaff(id) {
    STAFF AVAILABILITY MODAL HANDLER
    ========================================================================== */
 
-function openStaffAvailModal(id) {
-    if (typeof editingStaffAvailId !== 'undefined') {
-        editingStaffAvailId = id;
-    }
+let editingStaffAvailId = null;
+let returnToStaffProfileFromAvail = null;
+
+async function openStaffAvailModal(id, presetStaffId) {
+    editingStaffAvailId = id;
+    returnToStaffProfileFromAvail = presetStaffId || null;
 
     if (typeof populateStaffSelects === 'function') {
         populateStaffSelects();
@@ -814,16 +816,18 @@ function openStaffAvailModal(id) {
     const endInput = document.getElementById('sav-end');
     const notesInput = document.getElementById('sav-notes');
 
-    if (id && typeof staffAvailability !== 'undefined') {
-        const a = staffAvailability.find(x => x.id === id);
+    if (id) {
+        const client = getSupabase();
+        const { data: a } = client ? await client.from('staff_availability').select('*').eq('id', id).single() : { data: null };
         if (a) {
-            if (whoSel) whoSel.value = a.staffId || a.staff_id || '';
-            if (typeSel) typeSel.value = a.type || 'vacation';
-            if (startInput) startInput.value = a.start || a.start_date || '';
-            if (endInput) endInput.value = a.end || a.end_date || '';
+            if (whoSel) whoSel.value = a.staff_id || '';
+            if (typeSel) typeSel.value = a.reason || 'vacation';
+            if (startInput) startInput.value = a.start_date || '';
+            if (endInput) endInput.value = a.end_date || '';
             if (notesInput) notesInput.value = a.notes || '';
         }
     } else {
+        if (whoSel && presetStaffId) whoSel.value = presetStaffId;
         if (startInput) startInput.value = '';
         if (endInput) endInput.value = '';
         if (notesInput) notesInput.value = '';
@@ -835,7 +839,49 @@ function openStaffAvailModal(id) {
     }
 }
 
+async function saveStaffAvail() {
+    const staffId = document.getElementById('sav-who')?.value;
+    const reason = document.getElementById('sav-type')?.value || 'vacation';
+    const start = document.getElementById('sav-start')?.value;
+    const end = document.getElementById('sav-end')?.value || start;
+    const notes = document.getElementById('sav-notes')?.value.trim() || '';
+
+    if (!staffId || !start) return alert('Please select a staff member and start date.');
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const payload = { staff_id: staffId, reason, start_date: start, end_date: end, notes };
+    let response;
+    if (editingStaffAvailId) {
+        response = await client.from('staff_availability').update(payload).eq('id', editingStaffAvailId);
+    } else {
+        response = await client.from('staff_availability').insert([payload]);
+    }
+
+    if (response.error) {
+        alert('Failed to save time off: ' + response.error.message);
+        return;
+    }
+
+    editingStaffAvailId = null;
+    closeStaffAvailModal();
+    if (returnToStaffProfileFromAvail) {
+        const sid = returnToStaffProfileFromAvail;
+        returnToStaffProfileFromAvail = null;
+        openFullWidthProfile('staff', sid);
+    }
+}
+
+async function deleteStaffTimeOff(id, staffId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_availability').delete().eq('id', id);
+    openFullWidthProfile('staff', staffId);
+}
+
 function closeStaffAvailModal() {
+    returnToStaffProfileFromAvail = null;
     const modal = document.getElementById('staff-avail-modal');
     if (modal) modal.classList.add('hidden');
 
@@ -1416,6 +1462,9 @@ function switchBizTab(tab) {
     if (tab === 'availability' && typeof renderAvailabilityList === 'function') {
         renderAvailabilityList();
     }
+    if (tab === 'invoices' && typeof renderInvoicesList === 'function') {
+        renderInvoicesList();
+    }
 }
 
 function bizDateRange() {
@@ -1559,6 +1608,49 @@ function onBizPresetChange() {
 }
 
 let editingClosureId = null;
+
+async function renderInvoicesList() {
+    const el = document.getElementById('biz-invoices-list');
+    if (!el) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const statusFilter = document.getElementById('biz-invoice-status-filter')?.value || 'all';
+    const query = document.getElementById('biz-invoice-search')?.value.trim().toLowerCase() || '';
+
+    let dbQuery = client.from('invoices').select('*, households(name)').order('due_date', { ascending: true });
+    if (statusFilter !== 'all') dbQuery = dbQuery.eq('status', statusFilter);
+
+    const { data: invoices } = await dbQuery;
+    let list = invoices || [];
+    if (query) {
+        list = list.filter(i =>
+            (i.description || '').toLowerCase().includes(query) ||
+            (i.households?.name || '').toLowerCase().includes(query)
+        );
+    }
+
+    if (!list.length) {
+        el.innerHTML = '<div class="biz-empty">No invoices match this filter.</div>';
+        return;
+    }
+
+    el.innerHTML = list.map(i => {
+        const statusColor = i.status === 'paid' ? 'var(--text-muted)' : i.status === 'void' ? 'var(--text-muted)' : '#dc2626';
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('household', '${i.household_id}')">
+                <div>
+                    <strong>${i.description || 'Invoice'}</strong>
+                    <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${i.status || 'unpaid'}</span>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.2rem;">${i.households?.name || 'Unknown household'} ${i.due_date ? '· Due ' + i.due_date : ''}</div>
+                </div>
+                <div style="font-weight:600;">$${Number(i.amount || 0).toFixed(2)}</div>
+            </div>
+        `;
+    }).join('');
+    refreshIcons();
+}
 
 async function renderAvailabilityList() {
     const el = document.getElementById('availability-list');
@@ -2342,6 +2434,30 @@ async function renderAllDashboards() {
         }
     }
 
+    // 5. STAFF
+    if (filter === 'all' || filter === 'staff') {
+        const { data: staffList } = await client.from('staff').select('*').order('name');
+
+        if (staffList) {
+            staffList.forEach(s => {
+                if (!query || s.name?.toLowerCase().includes(query) || s.role?.toLowerCase().includes(query)) {
+                    html += `
+                        <div class="crm-card" onclick="openFullWidthProfile('staff', '${s.id}')" style="cursor:pointer;">
+                            <div class="crm-card-content">
+                                <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem; font-size:1.1rem;">
+                                    <i data-lucide="briefcase"></i> ${s.name}
+                                </h3>
+                                <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">${s.role || 'Staff'} ${s.contact ? '· ' + s.contact : ''}</p>
+                            </div>
+                            <button class="delete-action-btn" onclick="event.stopPropagation(); deleteStaff('${s.id}')" title="Delete Staff">
+                                <i data-lucide="trash-2"></i>
+                            </button>
+                        </div>`;
+                }
+            });
+        }
+    }
+
     container.innerHTML = html || '<div class="biz-empty">No entries found matching criteria.</div>';
     refreshIcons();
 }
@@ -2418,6 +2534,8 @@ async function openFullWidthProfile(type, id) {
             payload.bookings = events || [];
             const { data: tasks } = await client.from('staff_tasks').select('*').eq('staff_id', id).order('due_date');
             payload.tasks = tasks || [];
+            const { data: timeOff } = await client.from('staff_availability').select('*').eq('staff_id', id).order('start_date');
+            payload.timeOff = timeOff || [];
         }
     }
 
@@ -2783,6 +2901,24 @@ function renderEntitySections(type, data, id) {
                             ${a.pets?.households?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${a.pets.households.name}</div>` : ''}
                         </div>
                     `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets assigned.</p>'}
+                </div>
+
+                <!-- Time Off -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="calendar-off"></i> Time Off</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openStaffAvailModal(null, '${id}')">+ Add Time Off</button>
+                    </div>
+                    ${data.timeOff && data.timeOff.length ? data.timeOff.map(t => `
+                        <div style="margin-top:0.6rem; padding:0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong>${t.reason || 'Time Off'}</strong>
+                                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;">${t.start_date}${t.end_date && t.end_date !== t.start_date ? ' → ' + t.end_date : ''}</div>
+                                ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.1rem;">${t.notes}</div>` : ''}
+                            </div>
+                            <button class="btn-icon" onclick="deleteStaffTimeOff('${t.id}', '${id}')" title="Remove" style="background:none; border:none; cursor:pointer; color:var(--danger-text);"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No time off scheduled.</p>'}
                 </div>
                 </div>
 

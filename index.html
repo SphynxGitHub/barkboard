@@ -22,7 +22,7 @@
             <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
             <button onclick="switchView('staff-mgmt-view')" class="nav-btn">Staff</button>
             <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
-            <button onclick="switchView('calendar-view')" class="nav-btn">Resource Grid</button>
+            <button onclick="switchView('calendar-view')" class="nav-btn">Availability</button>
             <button onclick="switchView('biz-view')" class="nav-btn">Business</button>
         </nav>
         <nav id="owner-nav" class="hidden">
@@ -46,7 +46,7 @@
                 <i data-lucide="contact-2"></i> People & Pets
             </button>
             <button onclick="mobileNav('calendar-view')" class="nav-btn">
-                <i data-lucide="calendar"></i> Resource Grid
+                <i data-lucide="calendar"></i> Availability
             </button>
             <button onclick="mobileNav('biz-view')" class="nav-btn">
                 <i data-lucide="bar-chart-3"></i> Business
@@ -154,6 +154,7 @@
                         <button id="filter-people" class="filter-chip" onclick="setEntityFilter('people')">People</button>
                         <button id="filter-pets" class="filter-chip" onclick="setEntityFilter('pets')">Pets</button>
                         <button id="filter-vets" class="filter-chip" onclick="setEntityFilter('vets')">Vets / COIs</button>
+                        <button id="filter-staff" class="filter-chip" onclick="setEntityFilter('staff')">Staff</button>
                     </div>
                 </div>
             </div>
@@ -166,6 +167,7 @@
             <!-- Biz sub-nav -->
             <div class="biz-subnav">
                 <button class="biz-tab active" id="biztab-dashboard" onclick="switchBizTab('dashboard')"> <i data-lucide="gauge"></i> Dashboard</button>
+                <button class="biz-tab" id="biztab-invoices" onclick="switchBizTab('invoices')"><i data-lucide="receipt"></i> Invoices</button>
                 <button class="biz-tab" id="biztab-availability" onclick="switchBizTab('availability')"><i data-lucide="calendar-days"></i> Business Availability</button>
             </div>
 
@@ -240,6 +242,22 @@
                     <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openAvailabilityModal(null)">+ Add closure</button>
                 </div>
                 <div id="availability-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <div id="bizsec-invoices" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">All invoices</h3>
+                </div>
+                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+                    <select id="biz-invoice-status-filter" class="biz-select" onchange="renderInvoicesList()">
+                        <option value="all">All statuses</option>
+                        <option value="unpaid">Unpaid</option>
+                        <option value="paid">Paid</option>
+                        <option value="void">Void</option>
+                    </select>
+                    <input type="text" id="biz-invoice-search" class="biz-select" placeholder="Search description or household..." onkeyup="renderInvoicesList()" style="flex:1; min-width:200px;">
+                </div>
+                <div id="biz-invoices-list" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
             </div>
 
         </section>
