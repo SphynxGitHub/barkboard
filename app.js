@@ -4255,7 +4255,8 @@ async function searchHouseholdDropdown(query) {
                  onclick="selectHouseholdFromDropdown('${h.id}', '${h.name.replace(/'/g, "\\'")}')"
                  onmouseover="this.style.background='var(--bg-hover)'" 
                  onmouseout="this.style.background='transparent'">
-                🏡 <strong>${h.name}</strong>
+                 <i data-lucide="home" style="width:14px; height:14px; color:var(--text-muted);"></i>
+                 <strong>${h.name}</strong>
             </div>
         `).join('');
         dropdown.classList.remove('hidden');
@@ -4574,8 +4575,12 @@ async function renderActivities() {
                 <i data-lucide="${kindIcon[it.kind]}" style="width:16px;height:16px; color:var(--text-muted);"></i>
                 <div>
                     <strong>${it.title}</strong>
-                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">
-                        ${it.subtitle ? it.subtitle + ' · ' : ''}${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? '🛏️ ' + it.resourceNames + ' · ' : ''}${it.householdName ? '🏡 ' + it.householdName + ' · ' : ''}${it.staffName ? '👤 ' + it.staffName + ' · ' : ''}${it.date ? '📅 ' + it.date : ''}
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                        ${it.subtitle ? `<span>${it.subtitle}</span> · ` : ''}
+                        ${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${it.resourceNames}</span> · ` : ''}
+                        ${it.householdName ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="home" style="width:12px;height:12px;"></i> ${it.householdName}</span> · ` : ''}
+                        ${it.staffName ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="user" style="width:12px;height:12px;"></i> ${it.staffName}</span> · ` : ''}
+                        ${it.date ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="calendar" style="width:12px;height:12px;"></i> ${it.date}</span>` : ''}
                     </div>
                 </div>
             </div>
