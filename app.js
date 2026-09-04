@@ -593,6 +593,7 @@ async function saveBooking() {
     const endTime = document.getElementById('bk-end-time')?.value || startTime;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
+    const petNames = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.parentElement?.textContent.trim() || '').filter(Boolean);
 
     if (!startDate) return alert('Please choose a date.');
     if (type === 'stay' && !endDate) return alert('Please choose an end date for a multi-day stay.');
@@ -660,7 +661,10 @@ async function saveBooking() {
                 description: `${serviceName || 'Event'} — ${when}`,
                 amount: amount,
                 status: 'unpaid',
-                due_date: startDate
+                due_date: startDate,
+                service_start_date: startDate,
+                service_end_date: type === 'stay' ? endDate : startDate,
+                pet_names: petNames.join(', ')
             }]);
         }
 
@@ -697,6 +701,9 @@ async function openInvoiceModal(householdId, invoiceId = null) {
     const dueDateInput = document.getElementById('inv-due-date');
     const statusSel = document.getElementById('inv-status');
     const notesInput = document.getElementById('inv-notes');
+    const petNamesInput = document.getElementById('inv-pet-names');
+    const serviceStartInput = document.getElementById('inv-service-start');
+    const serviceEndInput = document.getElementById('inv-service-end');
 
     if (titleEl) titleEl.textContent = invoiceId ? 'Edit Invoice' : 'Create Invoice';
 
@@ -706,21 +713,34 @@ async function openInvoiceModal(householdId, invoiceId = null) {
     if (dueDateInput) dueDateInput.value = '';
     if (statusSel) statusSel.value = 'unpaid';
     if (notesInput) notesInput.value = '';
+    if (petNamesInput) petNamesInput.value = '';
+    if (serviceStartInput) serviceStartInput.value = '';
+    if (serviceEndInput) serviceEndInput.value = '';
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
     // Load this household's events for the optional link dropdown
-    const { data: bookings } = await client.from('bookings').select('id, service_name, check_in, check_out, amount').eq('household_id', householdId).order('check_in', { ascending: false });
+    const { data: bookings } = await client.from('bookings').select('id, service_name, check_in, check_out, amount, pet_id').eq('household_id', householdId).order('check_in', { ascending: false });
+    const { data: householdPets } = await client.from('pets').select('id, name').eq('household_id', householdId);
+    const petNameById = {};
+    (householdPets || []).forEach(p => { petNameById[p.id] = p.name; });
 
     if (bookingSel) {
         const options = (bookings || []).map(bk => {
             const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
             const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
             const when = outDate && outDate !== inDate ? `${inDate} → ${outDate}` : inDate;
-            return `<option value="${bk.id}">${bk.service_name || 'Event'} · ${when}</option>`;
+            return `<option value="${bk.id}" data-start="${inDate}" data-end="${outDate || inDate}" data-pet="${petNameById[bk.pet_id] || ''}">${bk.service_name || 'Event'} · ${when}</option>`;
         }).join('');
         bookingSel.innerHTML = `<option value="">None</option>${options}`;
+        bookingSel.onchange = function () {
+            const opt = this.selectedOptions[0];
+            if (!opt || !opt.value) return;
+            if (serviceStartInput && !serviceStartInput.value) serviceStartInput.value = opt.dataset.start || '';
+            if (serviceEndInput && !serviceEndInput.value) serviceEndInput.value = opt.dataset.end || '';
+            if (petNamesInput && !petNamesInput.value) petNamesInput.value = opt.dataset.pet || '';
+        };
     }
 
     let existingInvoice = null;
@@ -736,6 +756,9 @@ async function openInvoiceModal(householdId, invoiceId = null) {
         if (dueDateInput) dueDateInput.value = existingInvoice.due_date || '';
         if (statusSel) statusSel.value = existingInvoice.status || 'unpaid';
         if (notesInput) notesInput.value = existingInvoice.notes || '';
+        if (petNamesInput) petNamesInput.value = existingInvoice.pet_names || '';
+        if (serviceStartInput) serviceStartInput.value = existingInvoice.service_start_date || '';
+        if (serviceEndInput) serviceEndInput.value = existingInvoice.service_end_date || '';
     }
 
     const modal = document.getElementById('invoice-modal');
@@ -762,6 +785,9 @@ async function saveInvoice() {
     const dueDate = document.getElementById('inv-due-date')?.value || null;
     const status = document.getElementById('inv-status')?.value || 'unpaid';
     const notes = document.getElementById('inv-notes')?.value.trim() || '';
+    const petNames = document.getElementById('inv-pet-names')?.value.trim() || '';
+    const serviceStart = document.getElementById('inv-service-start')?.value || null;
+    const serviceEnd = document.getElementById('inv-service-end')?.value || null;
 
     if (!description) return alert('Please enter a description.');
     const amount = parseFloat(amountRaw);
@@ -774,7 +800,10 @@ async function saveInvoice() {
         amount: amount,
         due_date: dueDate,
         status: status,
-        notes: notes
+        notes: notes,
+        pet_names: petNames,
+        service_start_date: serviceStart,
+        service_end_date: serviceEnd
     };
 
     let response;
@@ -4732,6 +4761,8 @@ async function showPaymentNotice(invoiceId) {
     if (settings?.cash_note) paymentOptions.push(`<li><strong>Cash:</strong> ${settings.cash_note}</li>`);
     if (settings?.square_link) paymentOptions.push(`<li><strong>Square:</strong> <a href="${settings.square_link}" target="_blank">${settings.square_link}</a></li>`);
 
+    const serviceWhen = inv.service_start_date ? (inv.service_end_date && inv.service_end_date !== inv.service_start_date ? `${inv.service_start_date} → ${inv.service_end_date}` : inv.service_start_date) : null;
+
     renderDocumentOverlay(`
         ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:60px; margin-bottom:0.75rem;">` : ''}
         <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Payment Notice'}</h2>
@@ -4739,6 +4770,8 @@ async function showPaymentNotice(invoiceId) {
         <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
         <p><strong>${inv.description || 'Invoice'}</strong></p>
         <p style="color:var(--text-muted);">${inv.households?.name || ''} ${inv.due_date ? '· Due ' + inv.due_date : ''}</p>
+        ${inv.pet_names ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.3rem;"><strong>Pet(s):</strong> ${inv.pet_names}</p>` : ''}
+        ${serviceWhen ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Service Date(s):</strong> ${serviceWhen}</p>` : ''}
         <h4 style="margin:1rem 0 0.5rem;">Ways to Pay</h4>
         <ul style="margin:0; padding-left:1.2rem;">${paymentOptions.join('') || '<li>No payment methods configured yet.</li>'}</ul>
     `);
@@ -4752,6 +4785,8 @@ async function showReceipt(invoiceId) {
     if (!inv) return;
     const settings = await getBusinessSettings();
 
+    const serviceWhen = inv.service_start_date ? (inv.service_end_date && inv.service_end_date !== inv.service_start_date ? `${inv.service_start_date} → ${inv.service_end_date}` : inv.service_start_date) : null;
+
     renderDocumentOverlay(`
         ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:60px; margin-bottom:0.75rem;">` : ''}
         <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Receipt'}</h2>
@@ -4759,6 +4794,8 @@ async function showReceipt(invoiceId) {
         <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
         <p><strong>${inv.description || 'Invoice'}</strong></p>
         <p style="color:var(--text-muted);">${inv.households?.name || ''}</p>
+        ${inv.pet_names ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.3rem;"><strong>Pet(s):</strong> ${inv.pet_names}</p>` : ''}
+        ${serviceWhen ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Service Date(s):</strong> ${serviceWhen}</p>` : ''}
         <p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem;">Paid in full. Thank you!</p>
         <p style="color:var(--text-muted); font-size:0.78rem; margin-top:0.75rem; font-style:italic;">Note: email delivery isn't set up yet — this receipt is view/print only for now.</p>
     `);
