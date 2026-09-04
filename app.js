@@ -693,7 +693,7 @@ async function searchResourcesForPet(petId, query) {
         return `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.78rem;">
             <span>${r.name} <span style="color:var(--text-muted);">(${r.type}${seats > 1 ? ' · ' + (seats - used) + '/' + seats + ' free' : ''})</span>${full ? ' <span style="color:#dc2626;">— full</span>' : ''}</span>
-            <button class="btn btn-primary" style="font-size:0.7rem; padding:0.18rem 0.4rem;" onclick="addResourceToPet('${petId}', '${r.id}', ${JSON.stringify(r.name)}, ${JSON.stringify(r.type)}, ${JSON.stringify(r.default_mode || 'all_day')})">Add</button>
+            <button class="btn btn-primary" style="font-size:0.7rem; padding:0.18rem 0.4rem;" data-resource-id="${r.id}" data-resource-name="${r.name.replace(/"/g, '&quot;')}" data-resource-type="${(r.type || '').replace(/"/g, '&quot;')}" data-resource-mode="${r.default_mode || 'all_day'}" onclick="addResourceToPet('${petId}', this.dataset.resourceId, this.dataset.resourceName, this.dataset.resourceType, this.dataset.resourceMode)">Add</button>
         </div>
     `;
     }).join('') : '<div style="font-size:0.78rem; color:var(--text-muted);">No matching resources.</div>';
@@ -1052,7 +1052,7 @@ async function saveInvoice() {
     const description = document.getElementById('inv-description')?.value.trim() || '';
     const bookingId = document.getElementById('inv-booking-id')?.value || null;
     const amountRaw = document.getElementById('inv-amount')?.value;
-    const dueDate = document.getElementById('inv-due-date')?.value || null;
+    const dueDate = document.getElementById('inv-due-date')?.value || new Date().toISOString().slice(0, 10);
     const status = document.getElementById('inv-status')?.value || 'unpaid';
     const notes = document.getElementById('inv-notes')?.value.trim() || '';
     const petNames = document.getElementById('inv-pet-names')?.value.trim() || '';
@@ -1969,7 +1969,7 @@ async function renderResourceList() {
     }
 
     el.innerHTML = list.map(r => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openResourceModal('${r.id}')">
             <div>
                 <strong>${r.name}</strong>
                 <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${r.type || ''} · ${(r.seats || 1) > 1 ? (r.seats || 1) + ' seats' : '1 seat'} · ${r.default_mode === 'time_based' ? 'Time-based' : 'All day'}</span>
@@ -1977,11 +1977,11 @@ async function renderResourceList() {
                 ${r.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${r.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
-                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;" onclick="openResourceModal('${r.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
-                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="deleteResource('${r.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="event.stopPropagation(); deleteResource('${r.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
             </div>
         </div>
     `).join('');
+    refreshIcons();
 }
 
 async function openResourceModal(id) {
@@ -4776,15 +4776,14 @@ async function renderApptTypeList() {
     }
 
     el.innerHTML = list.map(t => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openApptTypeModal('${t.id}')">
             <div>
                 <strong>${t.name}</strong>
                 <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''}</span>
                 ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
-                <button class="btn-icon" style="background:none;border:none;cursor:pointer;" onclick="openApptTypeModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
-                <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="deleteApptType('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="event.stopPropagation(); deleteApptType('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
             </div>
         </div>
     `).join('');
@@ -4895,15 +4894,14 @@ async function renderTaskTemplateList() {
     }
 
     el.innerHTML = list.map(t => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openTaskTemplateModal('${t.id}')">
             <div>
                 <strong>${t.name}</strong>
                 <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem; text-transform:capitalize;">${t.default_priority || 'normal'} priority</span>
                 ${t.description ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.description}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
-                <button class="btn-icon" style="background:none;border:none;cursor:pointer;" onclick="openTaskTemplateModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
-                <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="deleteTaskTemplate('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="event.stopPropagation(); deleteTaskTemplate('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
             </div>
         </div>
     `).join('');
@@ -4987,12 +4985,11 @@ async function renderAssessmentTemplateList() {
     }
 
     el.innerHTML = list.map(t => `
-        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openAssessmentTemplateModal('${t.id}')">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <strong>${t.name}</strong>
                 <div style="display:flex; gap:0.4rem;">
-                    <button class="btn-icon" style="background:none;border:none;cursor:pointer;" onclick="openAssessmentTemplateModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
-                    <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="deleteAssessmentTemplate('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                    <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="event.stopPropagation(); deleteAssessmentTemplate('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
                 </div>
             </div>
             ${t.criteria && t.criteria.length ? `<ul style="margin:0.4rem 0 0; padding-left:1.2rem; font-size:0.82rem; color:var(--text-muted);">${t.criteria.map(c => `<li>${c}</li>`).join('')}</ul>` : ''}
