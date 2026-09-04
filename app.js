@@ -4482,6 +4482,17 @@ const ACT_GROUP_BY_KEY = 'barkboard-act-group-by';
 let actWeekOffset = 0;
 let actCalendarMode = 'week';
 
+function quickScheduleOnDate(dateStr) {
+    pendingCalendarDate = dateStr;
+    
+    // Open quick schedule modal if available, otherwise open main booking modal
+    if (typeof openQuickScheduleModal === 'function') {
+        openQuickScheduleModal(dateStr);
+    } else if (typeof openBookingModal === 'function') {
+        openBookingModal(null);
+    }
+}
+
 async function initActivitiesView() {
     // 1. Restore saved Group By preference (if set)
     const savedGroup = localStorage.getItem(ACT_GROUP_BY_KEY);
