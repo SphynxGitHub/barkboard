@@ -501,34 +501,84 @@
                     <button class="biz-tab" id="acttab-calendar" onclick="switchActivitiesView('calendar')"><i data-lucide="calendar"></i> Calendar</button>
                 </div>
             </div>
-
+        
+            <!-- Controls Row: Grouping + All Filters -->
             <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
-                <select id="act-category-filter" class="biz-select" onchange="renderActivities()">
-                    <option value="all">All Categories</option>
-                    <option value="appointment">Appointments</option>
-                    <option value="task">Tasks</option>
-                    <option value="invoice">Invoice Due Dates</option>
-                </select>
-                <select id="act-staff-filter" class="biz-select" onchange="renderActivities()">
-                    <option value="all">All Team Members</option>
-                </select>
-                <select id="act-status-filter" class="biz-select" onchange="renderActivities()">
-                    <option value="all">All Statuses</option>
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="no-show">No-show</option>
-                </select>
-                <input type="date" id="act-date-from" class="biz-select" onchange="renderActivities()">
-                <input type="date" id="act-date-to" class="biz-select" onchange="renderActivities()">
-                <input type="text" id="act-search" class="biz-select" placeholder="Search..." onkeyup="renderActivities()" style="flex:1; min-width:180px;">
+                <!-- Group By Control -->
+                <div>
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Group By:</label>
+                    <select id="act-group-by" class="biz-select" onchange="renderActivities()">
+                        <option value="date">Date</option>
+                        <option value="kind">Type (Appointment, Task, Invoice)</option>
+                        <option value="staff">Team Member</option>
+                        <option value="resource">Resource(s) Used</option>
+                        <option value="status">Status</option>
+                        <option value="household">Household</option>
+                    </select>
+                </div>
+        
+                <!-- Filter Controls -->
+                <div>
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Type:</label>
+                    <select id="act-category-filter" class="biz-select" onchange="renderActivities()">
+                        <option value="all">All Types</option>
+                        <option value="appointment">Appointments</option>
+                        <option value="task">Tasks</option>
+                        <option value="invoice">Invoices</option>
+                    </select>
+                </div>
+        
+                <div>
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Team Member:</label>
+                    <select id="act-staff-filter" class="biz-select" onchange="renderActivities()">
+                        <option value="all">All Team Members</option>
+                    </select>
+                </div>
+        
+                <div>
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Resource Used:</label>
+                    <select id="act-resource-filter" class="biz-select" onchange="renderActivities()">
+                        <option value="all">All Resources</option>
+                    </select>
+                </div>
+        
+                <div>
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Household:</label>
+                    <select id="act-household-filter" class="biz-select" onchange="renderActivities()">
+                        <option value="all">All Households</option>
+                    </select>
+                </div>
+        
+                <div>
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Status:</label>
+                    <select id="act-status-filter" class="biz-select" onchange="renderActivities()">
+                        <option value="all">All Statuses</option>
+                        <option value="pending">Pending / Unpaid</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="completed">Completed / Paid</option>
+                        <option value="cancelled">Cancelled / Void</option>
+                        <option value="no-show">No-show</option>
+                    </select>
+                </div>
+        
+                <div>
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Date Range:</label>
+                    <div style="display:flex; gap:0.25rem;">
+                        <input type="date" id="act-date-from" class="biz-select" onchange="renderActivities()">
+                        <input type="date" id="act-date-to" class="biz-select" onchange="renderActivities()">
+                    </div>
+                </div>
+        
+                <div style="flex:1; min-width:180px;">
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.15rem;">Search:</label>
+                    <input type="text" id="act-search" class="biz-select" placeholder="Search activities..." onkeyup="renderActivities()" style="width:100%;">
+                </div>
             </div>
-
+        
             <div id="activities-list-view">
-                <div id="activities-list" style="display:flex; flex-direction:column; gap:0.6rem;"></div>
+                <div id="activities-list" style="display:flex; flex-direction:column; gap:1rem;"></div>
             </div>
-
+        
             <div id="activities-calendar-view" class="hidden">
                 <div class="cal-toolbar">
                     <div class="cal-nav">
