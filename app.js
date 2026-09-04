@@ -4429,7 +4429,7 @@ async function fetchActivityItems() {
 /* ==========================================================================
    ACTIVITIES VIEW (DYNAMIC GROUPING, RESOURCES & EXPANDED FILTERS)
    ========================================================================== */
-
+const ACT_GROUP_BY_KEY = 'barkboard-act-group-by';
 let actWeekOffset = 0;
 
 async function initActivitiesView() {
