@@ -23,7 +23,6 @@
             <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
             <button onclick="switchView('activities-view')" class="nav-btn">Activities</button>
             <button onclick="switchView('templates-view')" class="nav-btn">Templates</button>
-            <button onclick="switchView('calendar-view')" class="nav-btn">Availability</button>
             <button onclick="switchView('biz-view')" class="nav-btn">Business</button>
         </nav>
         <nav id="owner-nav" class="hidden">
@@ -42,9 +41,6 @@
             </button>
             <button onclick="mobileNav('crm-view')" class="nav-btn">
                 <i data-lucide="contact-2"></i> People & Pets
-            </button>
-            <button onclick="mobileNav('calendar-view')" class="nav-btn">
-                <i data-lucide="calendar"></i> Availability
             </button>
             <button onclick="mobileNav('biz-view')" class="nav-btn">
                 <i data-lucide="bar-chart-3"></i> Business
@@ -310,6 +306,16 @@
                         <option>Dog Suite</option><option>Dog Run</option><option>Cat Suite</option><option>Training Room</option><option>Other</option>
                     </select>
                 </div>
+                <div class="form-group"><label>Booking Mode</label>
+                    <select id="rm-default-mode">
+                        <option value="all_day">All Day (e.g. kennels — occupied for the full stay)</option>
+                        <option value="time_based">Time-based (e.g. training runs — only while in use)</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Seats (how many bookings this can hold at once)</label>
+                    <input type="number" id="rm-seats" min="1" placeholder="1" value="1">
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">e.g. one "Kennels" resource with 10 seats instead of 10 separate resources. A group training room might have 5+ seats; most single-use spaces stay at 1.</p>
+                </div>
                 <div class="form-group"><label>Blackout dates (one per line: YYYY-MM-DD or YYYY-MM-DD:YYYY-MM-DD for ranges)</label>
                     <textarea id="rm-blackouts" rows="4" placeholder="2026-07-04&#10;2026-12-24:2026-12-26"></textarea>
                 </div>
@@ -558,6 +564,7 @@
                 <button class="biz-tab active" id="tmpltab-appt" onclick="switchTemplatesTab('appt')"><i data-lucide="calendar-plus"></i> Appointment Types</button>
                 <button class="biz-tab" id="tmpltab-task" onclick="switchTemplatesTab('task')"><i data-lucide="list-checks"></i> Task Templates</button>
                 <button class="biz-tab" id="tmpltab-assess" onclick="switchTemplatesTab('assess')"><i data-lucide="clipboard-check"></i> Assessment Templates</button>
+                <button class="biz-tab" id="tmpltab-resources" onclick="switchTemplatesTab('resources')"><i data-lucide="bed-double"></i> Resources</button>
             </div>
 
             <div id="tmplsec-appt" class="biz-section active">
@@ -582,6 +589,14 @@
                     <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openAssessmentTemplateModal(null)">+ Add assessment template</button>
                 </div>
                 <div id="assessment-template-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <div id="tmplsec-resources" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Resource spaces</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openResourceModal(null)">+ Add resource</button>
+                </div>
+                <div id="resource-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
             </div>
         </section>
 
@@ -649,49 +664,6 @@
         </div>
 
         <!-- ═══ AVAILABILITY / CALENDAR ═══ -->
-        <section id="calendar-view" class="view-panel hidden">
-
-            <!-- Cal sub-nav -->
-            <div class="biz-subnav">
-                <button class="biz-tab active" id="caltab-grid" onclick="switchCalTab('grid')"><i data-lucide="calendar-clock"></i> Availability Grid</button>
-                <button class="biz-tab" id="caltab-resources" onclick="switchCalTab('resources')"><i data-lucide="bed-double"></i> Manage Resources</button>
-            </div>
-
-            <!-- ── GRID TAB ── -->
-            <div id="calsec-grid" class="biz-section active">
-                <div class="cal-toolbar">
-                    <div class="cal-nav">
-                        <button class="cal-nav-btn" onclick="shiftCalWeek(-1)">← Prev</button>
-                        <button class="cal-nav-btn today" onclick="resetCalWeek()">Today</button>
-                        <button class="cal-nav-btn" onclick="shiftCalWeek(1)">Next →</button>
-                    </div>
-                    <span class="cal-week-label" id="cal-week-label"></span>
-                    <div class="cal-legend">
-                        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#e5e7eb;"></div>Business Closed</div>
-                        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fecaca;"></div>Staff Fully Booked</div>
-                        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fef08a;"></div>Resource Fully Booked</div>
-                        <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#fff; box-shadow: inset 0 0 0 2px #2563eb;"></div>Today</div>
-                    </div>
-                </div>
-                <div class="table-wrap cal-table-wrap">
-                    <table class="calendar-table">
-                        <thead id="cal-thead"></thead>
-                        <tbody id="calendar-body-target"></tbody>
-                    </table>
-                </div>
-                <div class="cal-cards" id="cal-cards"></div>
-            </div>
-
-            <!-- ── MANAGE RESOURCES TAB ── -->
-            <div id="calsec-resources" class="biz-section">
-                <div class="section-header-row" style="margin-bottom:1rem;">
-                    <h3 style="margin:0;">Resource spaces</h3>
-                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openResourceModal(null)">+ Add resource</button>
-                </div>
-                <div id="resource-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
-            </div>
-
-        </section>
 
         <!-- ═══════════════════════════════════
              OWNER PORTAL VIEW
@@ -930,7 +902,7 @@
                 <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Event Type *</label>
-                        <select id="bk-type" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="toggleBookingTypeFields(); refreshAllResourceAvailability();">
+                        <select id="bk-type" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="toggleBookingTypeFields(); searchResourcesForBooking(document.getElementById('bk-resource-search')?.value || '');">
                             <option value="appointment">Single Appointment</option>
                             <option value="stay">Multi-Day Stay</option>
                         </select>
@@ -940,21 +912,9 @@
                         <input type="text" id="bk-service-type" placeholder="Search appointment types or type your own..." autocomplete="off" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onkeyup="searchServiceTypeForBooking(this.value)" onfocus="searchServiceTypeForBooking(this.value)" onblur="setTimeout(() => document.getElementById('bk-service-type-results')?.classList.add('hidden'), 150)">
                         <div id="bk-service-type-results" class="hidden" style="position:absolute; z-index:10; width:100%; margin-top:0.25rem; background:#fff; border:1px solid var(--border); border-radius:0.25rem; max-height:180px; overflow-y:auto; box-shadow:0 4px 10px rgba(0,0,0,0.08);"></div>
                     </div>
-                    <div id="bk-resource-field" class="hidden">
-                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Resource (full stay/visit, e.g. Kennel)</label>
-                        <select id="bk-resource-id" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                            <option value="">Unassigned</option>
-                        </select>
-                    </div>
                     <div id="bk-staff-time-field" class="hidden" style="padding:0.6rem; border:1px dashed var(--border); border-radius:0.25rem;">
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Staff/Trainer Time (minutes per day)</label>
                         <input type="number" id="bk-staff-time-minutes" placeholder="60" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                        <div id="bk-staff-time-resource-field" class="hidden" style="margin-top:0.6rem;">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Resource for this Time (e.g. Training Room)</label>
-                            <select id="bk-staff-time-resource-id" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                                <option value="">Unassigned</option>
-                            </select>
-                        </div>
                     </div>
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Pet(s) *</label>
@@ -965,19 +925,19 @@
                     <div id="bk-date-fields" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
                         <div>
                             <label id="bk-start-label" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Date *</label>
-                            <input type="date" id="bk-start-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
+                            <input type="date" id="bk-start-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="searchResourcesForBooking(document.getElementById('bk-resource-search')?.value || '')">
                         </div>
                         <div id="bk-time-field">
                             <label id="bk-start-time-label" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Time</label>
-                            <input type="time" id="bk-start-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
+                            <input type="time" id="bk-start-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="searchResourcesForBooking(document.getElementById('bk-resource-search')?.value || '')">
                         </div>
                         <div id="bk-end-date-field" class="hidden">
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">End Date *</label>
-                            <input type="date" id="bk-end-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
+                            <input type="date" id="bk-end-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="searchResourcesForBooking(document.getElementById('bk-resource-search')?.value || '')">
                         </div>
                         <div id="bk-end-time-field" class="hidden">
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Pick-up Time</label>
-                            <input type="time" id="bk-end-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
+                            <input type="time" id="bk-end-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="searchResourcesForBooking(document.getElementById('bk-resource-search')?.value || '')">
                         </div>
                     </div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">

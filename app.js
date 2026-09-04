@@ -16,6 +16,23 @@ async function attachResourceNames(client, bookings) {
         bk.resources = bk.space_id ? (map[bk.space_id] || null) : null;
         bk.staff_time_resource = bk.staff_time_resource_id ? (map[bk.staff_time_resource_id] || null) : null;
     });
+
+    // Also pull the new multi-resource assignments so display code can show all of them.
+    const bookingIds = bookings.map(bk => bk.id);
+    const { data: assignments } = await client.from('booking_resources').select('*, resources(name, type)').in('booking_id', bookingIds);
+    const byBooking = {};
+    (assignments || []).forEach(a => {
+        if (!byBooking[a.booking_id]) byBooking[a.booking_id] = [];
+        byBooking[a.booking_id].push({
+            name: a.resources?.name || 'Resource',
+            type: a.resources?.type || '',
+            allDay: a.all_day,
+            startTime: a.start_time,
+            endTime: a.end_time
+        });
+    });
+    bookings.forEach(bk => { bk.resourceAssignments = byBooking[bk.id] || []; });
+
     return bookings;
 }
 
@@ -257,9 +274,6 @@ function switchView(viewId) {
     if (viewId === 'biz-view' && typeof renderBizDashboard === 'function') {
         renderBizDashboard();
     }
-    if (viewId === 'calendar-view' && typeof renderCalendar === 'function') {
-        renderCalendar();
-    }
     if (viewId === 'activities-view' && typeof initActivitiesView === 'function') {
         initActivitiesView();
     }
@@ -378,12 +392,9 @@ async function openBookingModal(householdId, bookingId = null) {
     const staffSel = document.getElementById('bk-staff-id');
     const notesInput = document.getElementById('bk-notes');
     const petBox = document.getElementById('bk-pet-checkboxes');
-    const resourceField = document.getElementById('bk-resource-field');
-    const resourceSel = document.getElementById('bk-resource-id');
+    const resourcesSection = document.getElementById('bk-resources-section');
     const staffTimeField = document.getElementById('bk-staff-time-field');
     const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
-    const staffTimeResourceField = document.getElementById('bk-staff-time-resource-field');
-    const staffTimeResourceSel = document.getElementById('bk-staff-time-resource-id');
 
     if (titleEl) titleEl.textContent = bookingId ? 'Edit Event' : 'Add Event';
 
@@ -397,15 +408,10 @@ async function openBookingModal(householdId, bookingId = null) {
     if (amountInput) amountInput.value = '';
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
-    if (resourceField) resourceField.classList.add('hidden');
-    if (resourceSel) resourceSel.innerHTML = '<option value="">Unassigned</option>';
+    bkResourcesByPet = {};
     if (staffTimeField) staffTimeField.classList.add('hidden');
     if (staffTimeMinutesInput) staffTimeMinutesInput.value = '';
-    if (staffTimeResourceField) staffTimeResourceField.classList.add('hidden');
-    if (staffTimeResourceSel) staffTimeResourceSel.innerHTML = '<option value="">Unassigned</option>';
     document.getElementById('bk-invoice-section')?.classList.add('hidden');
-    currentBookingResourceType = null;
-    currentStaffTimeResourceType = null;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
     if (!bookingId && pendingCalendarDate && startDateInput) {
         startDateInput.value = pendingCalendarDate;
@@ -437,12 +443,28 @@ async function openBookingModal(householdId, bookingId = null) {
     if (petBox) {
         petBox.innerHTML = (pets && pets.length)
             ? pets.map(p => `
-                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem;">
-                    <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" ${selectedPetIds.includes(p.id) ? 'checked' : ''}>
-                    ${p.name} (${p.species})
-                </label>
+                <div>
+                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem;">
+                        <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" ${selectedPetIds.includes(p.id) ? 'checked' : ''} onchange="onBkPetToggle('${p.id}', this.checked)">
+                        ${p.name} (${p.species})
+                    </label>
+                    <div id="bk-pet-resources-${p.id}" class="${selectedPetIds.includes(p.id) ? '' : 'hidden'}" style="margin:0.4rem 0 0.5rem 1.4rem; padding:0.5rem; border:1px dashed var(--border); border-radius:0.25rem;">
+                        <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); margin-bottom:0.3rem;">Resources for ${p.name}</div>
+                        <div id="bk-pet-resources-list-${p.id}" style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.35rem;"></div>
+                        <input type="text" placeholder="Type to filter resources to add..." style="width:100%; padding:0.4rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.8rem;" onkeyup="searchResourcesForPet('${p.id}', this.value)" onfocus="searchResourcesForPet('${p.id}', this.value)">
+                        <div id="bk-pet-resource-search-results-${p.id}" style="margin-top:0.3rem; display:flex; flex-direction:column; gap:0.25rem;"></div>
+                    </div>
+                </div>
             `).join('')
             : '<span style="font-size:0.8rem; color:var(--text-muted);">No pets on file for this household yet.</span>';
+
+        bkResourcesByPet = {};
+        if (selectedPetIds.length && existingBooking) {
+            for (const pid of selectedPetIds) {
+                bkResourcesByPet[pid] = await loadExistingBookingResources(existingBooking.id);
+                renderBkResourcesList(pid);
+            }
+        }
     }
 
     if (existingBooking) {
@@ -465,32 +487,15 @@ async function openBookingModal(householdId, bookingId = null) {
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
 
-        // Restore resource / staff-time fields by looking up the matching template
-        const { data: matchedTemplate } = await client.from('appointment_type_templates').select('*').eq('name', existingBooking.service_name || '').maybeSingle();
-        let resourceType = matchedTemplate?.resource_type || null;
-        if (!resourceType && existingBooking.space_id) {
-            const { data: existingResource } = await client.from('resources').select('type').eq('id', existingBooking.space_id).maybeSingle();
-            resourceType = existingResource?.type || null;
-        }
-        currentBookingResourceType = resourceType;
-        if (resourceType) {
-            if (resourceField) resourceField.classList.remove('hidden');
-            await populateResourceSelect('bk-resource-id', resourceType, existingBooking.space_id);
-        }
+        // Load this booking's resource assignments from the new multi-resource model
+        bkSelectedResources = await loadExistingBookingResources(existingBooking.id);
+        document.getElementById('bk-resources-section')?.classList.remove('hidden');
+        renderBkResourcesList();
 
-        const needsStaffTime = existingBooking.requires_staff_time || matchedTemplate?.requires_staff_time || false;
-        currentStaffTimeResourceType = needsStaffTime ? (matchedTemplate?.staff_time_resource_type || null) : null;
-        if (!currentStaffTimeResourceType && existingBooking.staff_time_resource_id) {
-            const { data: existingStaffResource } = await client.from('resources').select('type').eq('id', existingBooking.staff_time_resource_id).maybeSingle();
-            currentStaffTimeResourceType = existingStaffResource?.type || null;
-        }
-        if (needsStaffTime || existingBooking.staff_time_resource_id) {
+        const needsStaffTime = existingBooking.requires_staff_time || false;
+        if (needsStaffTime) {
             if (staffTimeField) staffTimeField.classList.remove('hidden');
-            if (staffTimeMinutesInput) staffTimeMinutesInput.value = existingBooking.staff_time_minutes || matchedTemplate?.staff_time_minutes || '';
-            if (currentStaffTimeResourceType) {
-                if (staffTimeResourceField) staffTimeResourceField.classList.remove('hidden');
-                await populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, existingBooking.staff_time_resource_id);
-            }
+            if (staffTimeMinutesInput) staffTimeMinutesInput.value = existingBooking.staff_time_minutes || '';
         }
 
         // Show the linked invoice (if any) with a jump-to-edit button, or a quick way to create one.
@@ -549,8 +554,7 @@ async function searchServiceTypeForBooking(query) {
     container.classList.remove('hidden');
 }
 
-let currentBookingResourceType = null;
-let currentStaffTimeResourceType = null;
+let bkResourcesByPet = {}; // { [petId]: [{ resourceId, name, type, defaultMode, allDay, startTime, endTime }] }
 
 function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType) {
     const serviceInput = document.getElementById('bk-service-type');
@@ -559,83 +563,168 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
     if (amountInput && price != null && !amountInput.value) amountInput.value = price;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
 
-    currentBookingResourceType = resourceType;
-    const resourceField = document.getElementById('bk-resource-field');
-    if (resourceField) resourceField.classList.toggle('hidden', !resourceType);
-    if (resourceType) populateResourceSelect('bk-resource-id', resourceType, null);
-
     const staffTimeField = document.getElementById('bk-staff-time-field');
-    const staffTimeResourceField = document.getElementById('bk-staff-time-resource-field');
     const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
-    currentStaffTimeResourceType = requiresStaffTime ? staffTimeResourceType : null;
 
     if (staffTimeField) staffTimeField.classList.toggle('hidden', !requiresStaffTime);
     if (staffTimeMinutesInput && requiresStaffTime) staffTimeMinutesInput.value = staffTimeMinutes || '';
-    if (staffTimeResourceField) staffTimeResourceField.classList.toggle('hidden', !currentStaffTimeResourceType);
-    if (currentStaffTimeResourceType) populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, null);
+
+    // If a resource type is declared, prefill each currently-checked pet's resource search to nudge toward it.
+    if (resourceType) {
+        document.querySelectorAll('.bk-pet-checkbox:checked').forEach(cb => {
+            const petId = cb.value;
+            const searchInput = document.querySelector(`#bk-pet-resources-${petId} input[type="text"]`);
+            if (searchInput && !(bkResourcesByPet[petId] || []).length) {
+                searchInput.value = resourceType;
+                searchResourcesForPet(petId, resourceType);
+            }
+        });
+    }
 }
 
-// Resources of a given type are treated as interchangeable: this shows only
-// the ones actually free for the currently entered dates, so picking "the
-// next available one" is automatic rather than something staff have to check by hand.
-// A resource counts as "used" if it's assigned as either the main resource OR the
-// staff-time resource on any other (non-cancelled) booking that overlaps the same window.
-async function populateResourceSelect(selectId, resourceType, preserveSelectedId) {
-    const sel = document.getElementById(selectId);
-    if (!sel) return;
-
-    if (!resourceType) {
-        sel.innerHTML = '<option value="">Unassigned</option>';
-        return;
+function onBkPetToggle(petId, checked) {
+    const section = document.getElementById(`bk-pet-resources-${petId}`);
+    if (section) section.classList.toggle('hidden', !checked);
+    if (checked && !bkResourcesByPet[petId]) {
+        bkResourcesByPet[petId] = [];
+        renderBkResourcesList(petId);
     }
+}
+
+// Resources of a given type are treated as interchangeable, and a resource's "seats" setting
+// controls how many bookings can use it at once (e.g. a "Kennels" resource with 10 seats).
+// This shows only resources with a free seat for the currently entered dates.
+// NOTE: availability checking here is date-range granularity only — a time-based resource
+// already assigned to another booking on an overlapping date counts against its seat total
+// even if the specific times wouldn't actually conflict. True time-slot-level conflict
+// resolution (the "matrix") is a bigger follow-up piece, not built yet.
+
+function renderBkResourcesList(petId) {
+    const el = document.getElementById(`bk-pet-resources-list-${petId}`);
+    if (!el) return;
+    const list = bkResourcesByPet[petId] || [];
+
+    el.innerHTML = list.length ? list.map((r, idx) => `
+        <div style="padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:0.8rem;">${r.name} <span style="color:var(--text-muted); font-weight:400;">(${r.type})</span></strong>
+                <button class="btn-icon" onclick="removeResourceFromPet('${petId}', ${idx})" title="Remove" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
+            </div>
+            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; margin-top:0.3rem;">
+                <input type="checkbox" ${r.allDay ? 'checked' : ''} onchange="setBkResourceAllDay('${petId}', ${idx}, this.checked)"> All day
+            </label>
+            ${!r.allDay ? `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem; margin-top:0.3rem;">
+                    <input type="time" value="${r.startTime || ''}" onchange="setBkResourceTime('${petId}', ${idx}, 'startTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
+                    <input type="time" value="${r.endTime || ''}" onchange="setBkResourceTime('${petId}', ${idx}, 'endTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
+                </div>
+            ` : ''}
+        </div>
+    `).join('') : '<p style="font-size:0.78rem; color:var(--text-muted);">No resources assigned yet.</p>';
+    refreshIcons();
+}
+
+function setBkResourceAllDay(petId, idx, checked) {
+    if (bkResourcesByPet[petId]?.[idx]) bkResourcesByPet[petId][idx].allDay = checked;
+    renderBkResourcesList(petId);
+}
+
+function setBkResourceTime(petId, idx, field, value) {
+    if (bkResourcesByPet[petId]?.[idx]) bkResourcesByPet[petId][idx][field] = value;
+}
+
+function removeResourceFromPet(petId, idx) {
+    bkResourcesByPet[petId]?.splice(idx, 1);
+    renderBkResourcesList(petId);
+}
+
+function addResourceToPet(petId, resourceId, name, type, defaultMode) {
+    if (!bkResourcesByPet[petId]) bkResourcesByPet[petId] = [];
+    if (bkResourcesByPet[petId].some(r => r.resourceId === resourceId)) return;
+    bkResourcesByPet[petId].push({
+        resourceId, name, type, defaultMode,
+        allDay: defaultMode !== 'time_based',
+        startTime: '', endTime: ''
+    });
+    const searchInput = document.querySelector(`#bk-pet-resources-${petId} input[type="text"]`);
+    if (searchInput) searchInput.value = '';
+    document.getElementById(`bk-pet-resource-search-results-${petId}`).innerHTML = '';
+    renderBkResourcesList(petId);
+}
+
+async function searchResourcesForPet(petId, query) {
+    const container = document.getElementById(`bk-pet-resource-search-results-${petId}`);
+    if (!container) return;
 
     const client = getSupabase();
     if (!client) return;
 
-    const { data: allOfType } = await client.from('resources').select('*').eq('type', resourceType).order('name');
-    if (!allOfType || !allOfType.length) {
-        sel.innerHTML = '<option value="">No resources of this type set up yet</option>';
-        return;
-    }
+    const q = query.trim();
+    let dbQuery = client.from('resources').select('*').order('name').limit(20);
+    if (q) dbQuery = dbQuery.or(`name.ilike.%${q}%,type.ilike.%${q}%`);
+    const { data: allResources } = await dbQuery;
 
     const type = document.getElementById('bk-type')?.value || 'appointment';
     const startDate = document.getElementById('bk-start-date')?.value;
     const startTime = document.getElementById('bk-start-time')?.value || '00:00';
     const endDate = document.getElementById('bk-end-date')?.value || startDate;
 
-    if (!startDate) {
-        sel.innerHTML = '<option value="">Select a date to check availability</option>' + allOfType.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
-        return;
+    let usageCounts = {}; // resourceId -> count of overlapping bookings using it
+    if (startDate) {
+        const rangeStart = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
+        const rangeEnd = type === 'stay' ? `${endDate}T23:59:59` : `${startDate}T23:59:59`;
+
+        const { data: bookedRows } = await client.from('booking_resources').select('resource_id, bookings!inner(check_in, check_out, status, id)')
+            .neq('bookings.status', 'cancelled')
+            .lte('bookings.check_in', rangeEnd).gte('bookings.check_out', rangeStart);
+        (bookedRows || []).forEach(row => {
+            if (editingBookingId && row.bookings?.id === editingBookingId) return;
+            usageCounts[row.resource_id] = (usageCounts[row.resource_id] || 0) + 1;
+        });
     }
 
-    const rangeStart = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
-    const rangeEnd = type === 'stay' ? `${endDate}T23:59:59` : `${startDate}T23:59:59`;
+    const selectedIds = new Set((bkResourcesByPet[petId] || []).map(r => r.resourceId));
+    const list = (allResources || []).filter(r => !selectedIds.has(r.id));
 
-    let bookedQuery = client.from('bookings').select('space_id, staff_time_resource_id')
-        .neq('status', 'cancelled')
-        .lte('check_in', rangeEnd).gte('check_out', rangeStart);
-    if (editingBookingId) bookedQuery = bookedQuery.neq('id', editingBookingId);
-
-    const { data: bookedRows } = await bookedQuery;
-    const bookedIds = new Set();
-    (bookedRows || []).forEach(r => {
-        if (r.space_id) bookedIds.add(r.space_id);
-        if (r.staff_time_resource_id) bookedIds.add(r.staff_time_resource_id);
-    });
-
-    const available = allOfType.filter(r => !bookedIds.has(r.id) || r.id === preserveSelectedId);
-
-    if (!available.length) {
-        sel.innerHTML = `<option value="">Fully booked — no ${resourceType} available these dates</option>`;
-        return;
-    }
-
-    sel.innerHTML = available.map((r, i) => `<option value="${r.id}" ${r.id === preserveSelectedId || (!preserveSelectedId && i === 0) ? 'selected' : ''}>${r.name}</option>`).join('');
+    container.innerHTML = list.length ? list.map(r => {
+        const seats = r.seats || 1;
+        const used = usageCounts[r.id] || 0;
+        const full = used >= seats;
+        return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.78rem;">
+            <span>${r.name} <span style="color:var(--text-muted);">(${r.type}${seats > 1 ? ' · ' + (seats - used) + '/' + seats + ' free' : ''})</span>${full ? ' <span style="color:#dc2626;">— full</span>' : ''}</span>
+            <button class="btn btn-primary" style="font-size:0.7rem; padding:0.18rem 0.4rem;" onclick="addResourceToPet('${petId}', '${r.id}', ${JSON.stringify(r.name)}, ${JSON.stringify(r.type)}, ${JSON.stringify(r.default_mode || 'all_day')})">Add</button>
+        </div>
+    `;
+    }).join('') : '<div style="font-size:0.78rem; color:var(--text-muted);">No matching resources.</div>';
 }
 
-function refreshAllResourceAvailability() {
-    if (currentBookingResourceType) populateResourceSelect('bk-resource-id', currentBookingResourceType, document.getElementById('bk-resource-id')?.value || null);
-    if (currentStaffTimeResourceType) populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, document.getElementById('bk-staff-time-resource-id')?.value || null);
+async function loadExistingBookingResources(bookingId) {
+    const client = getSupabase();
+    if (!client) return [];
+    const { data } = await client.from('booking_resources').select('*, resources(name, type, default_mode)').eq('booking_id', bookingId);
+    return (data || []).map(row => ({
+        resourceId: row.resource_id,
+        name: row.resources?.name || 'Resource',
+        type: row.resources?.type || '',
+        defaultMode: row.resources?.default_mode || 'all_day',
+        allDay: row.all_day,
+        startTime: row.start_time || '',
+        endTime: row.end_time || ''
+    }));
+}
+
+async function saveBookingResources(client, bookingId, resourceList) {
+    await client.from('booking_resources').delete().eq('booking_id', bookingId);
+    if (!resourceList || !resourceList.length) return;
+    const rows = resourceList.map(r => ({
+        booking_id: bookingId,
+        resource_id: r.resourceId,
+        all_day: r.allDay,
+        start_time: r.allDay ? null : (r.startTime || null),
+        end_time: r.allDay ? null : (r.endTime || null)
+    }));
+    await client.from('booking_resources').insert(rows);
 }
 
 async function searchInvoicesForBooking(query, bookingId) {
@@ -688,10 +777,8 @@ async function saveBooking() {
     const amountRaw = document.getElementById('bk-amount')?.value;
     const status = document.getElementById('bk-status')?.value || 'pending';
     const staffId = document.getElementById('bk-staff-id')?.value || null;
-    const resourceId = document.getElementById('bk-resource-id')?.value || null;
     const requiresStaffTime = !document.getElementById('bk-staff-time-field')?.classList.contains('hidden');
     const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
-    const staffTimeResourceId = document.getElementById('bk-staff-time-resource-id')?.value || null;
     const endTime = document.getElementById('bk-end-time')?.value || startTime;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
@@ -700,12 +787,6 @@ async function saveBooking() {
     if (!startDate) return alert('Please choose a date.');
     if (type === 'stay' && !endDate) return alert('Please choose an end date for a multi-day stay.');
     if (petIds.length === 0) return alert('Please select at least one pet.');
-    if (currentBookingResourceType && !resourceId) {
-        return alert(`No ${currentBookingResourceType} is available for these dates. Try different dates or choose a different service type.`);
-    }
-    if (currentStaffTimeResourceType && !staffTimeResourceId) {
-        return alert(`No ${currentStaffTimeResourceType} is available for the staff time on these dates. Try different dates or choose a different service type.`);
-    }
 
     const amount = amountRaw ? parseFloat(amountRaw) : 0;
 
@@ -722,31 +803,34 @@ async function saveBooking() {
         amount: amount,
         status: status,
         assigned_staff_id: staffId || null,
-        space_id: resourceId || null,
         requires_staff_time: requiresStaffTime,
         staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
-        staff_time_resource_id: staffTimeResourceId || null,
         notes: notes
     };
 
     // The bookings table has one pet_id per row, so linking multiple pets means
     // one row per pet. When editing, the edited row becomes the first selected
     // pet, and any additional newly-checked pets get their own new rows.
+    // Each pet's own resource assignments (from bkResourcesByPet) apply to its own row.
     let response;
     let firstNewBookingId = null;
+    let petIdToBookingId = {};
     if (editingBookingId) {
         const [firstPetId, ...extraPetIds] = petIds;
         response = await client.from('bookings').update({ ...basePayload, pet_id: firstPetId }).eq('id', editingBookingId);
+        petIdToBookingId[firstPetId] = editingBookingId;
         if (!response.error && extraPetIds.length) {
             const extraRows = extraPetIds.map(pid => ({ ...basePayload, pet_id: pid }));
-            const extraResponse = await client.from('bookings').insert(extraRows);
+            const extraResponse = await client.from('bookings').insert(extraRows).select();
             if (extraResponse.error) response = extraResponse;
+            else (extraResponse.data || []).forEach(r => { petIdToBookingId[r.pet_id] = r.id; });
         }
     } else {
         const rows = petIds.map(pid => ({ ...basePayload, pet_id: pid }));
         response = await client.from('bookings').insert(rows).select();
-        if (!response.error && response.data && response.data[0]) {
+        if (!response.error && response.data && response.data.length) {
             firstNewBookingId = response.data[0].id;
+            response.data.forEach(r => { petIdToBookingId[r.pet_id] = r.id; });
         }
     }
 
@@ -754,6 +838,11 @@ async function saveBooking() {
         alert('Failed to save event: ' + response.error.message);
         console.error('Supabase booking error:', response.error);
     } else {
+        // Apply each pet's own resource assignments to its own booking row.
+        for (const pid of Object.keys(petIdToBookingId)) {
+            await saveBookingResources(client, petIdToBookingId[pid], bkResourcesByPet[pid] || []);
+        }
+
         // If this is a brand-new priced event, automatically create the matching invoice.
         if (firstNewBookingId && amount > 0) {
             const when = type === 'stay' ? `${startDate} → ${endDate}` : startDate;
@@ -1883,7 +1972,7 @@ async function renderResourceList() {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
             <div>
                 <strong>${r.name}</strong>
-                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${r.type || ''}</span>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${r.type || ''} · ${(r.seats || 1) > 1 ? (r.seats || 1) + ' seats' : '1 seat'} · ${r.default_mode === 'time_based' ? 'Time-based' : 'All day'}</span>
                 ${r.blackouts && r.blackouts.length ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Blackouts: ${r.blackouts.join(', ')}</div>` : ''}
                 ${r.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${r.notes}</div>` : ''}
             </div>
@@ -1909,11 +1998,15 @@ async function openResourceModal(id) {
 
     const nameInput = document.getElementById('rm-name');
     const typeSelect = document.getElementById('rm-type');
+    const modeSelect = document.getElementById('rm-default-mode');
+    const seatsInput = document.getElementById('rm-seats');
     const blackoutsArea = document.getElementById('rm-blackouts');
     const notesInput = document.getElementById('rm-notes');
 
     if (nameInput) nameInput.value = r ? r.name : '';
     if (typeSelect) typeSelect.value = r ? r.type : 'Dog Suite';
+    if (modeSelect) modeSelect.value = r?.default_mode || 'all_day';
+    if (seatsInput) seatsInput.value = r?.seats || 1;
     if (blackoutsArea) blackoutsArea.value = r && r.blackouts ? r.blackouts.join('\n') : '';
     if (notesInput) notesInput.value = r ? r.notes || '' : '';
 
@@ -1931,6 +2024,8 @@ async function saveResource() {
     if (!name) return alert('Please enter a resource name.');
 
     const type = document.getElementById('rm-type')?.value || 'Dog Suite';
+    const defaultMode = document.getElementById('rm-default-mode')?.value || 'all_day';
+    const seats = parseInt(document.getElementById('rm-seats')?.value, 10) || 1;
     const notes = document.getElementById('rm-notes')?.value.trim() || '';
     const blackoutsText = document.getElementById('rm-blackouts')?.value || '';
     const blackouts = blackoutsText.split('\n').map(s => s.trim()).filter(Boolean);
@@ -1938,7 +2033,7 @@ async function saveResource() {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const payload = { name, type, notes, blackouts };
+    const payload = { name, type, default_mode: defaultMode, seats, notes, blackouts };
     let response;
     if (editingResourceId) {
         response = await client.from('resources').update(payload).eq('id', editingResourceId);
@@ -1954,7 +2049,6 @@ async function saveResource() {
     editingResourceId = null;
     closeResourceModal();
     renderResourceList();
-    if (typeof renderCalendar === 'function') renderCalendar();
 }
 
 async function deleteResource(id) {
@@ -1965,7 +2059,6 @@ async function deleteResource(id) {
     await client.from('resources').delete().eq('id', id);
 
     renderResourceList();
-    if (typeof renderCalendar === 'function') renderCalendar();
 }
 
 /* ==========================================================================
@@ -3788,7 +3881,7 @@ function renderEventsCard(bookings, householdId, opts) {
                                 </div>
                             ` : ''}
                             ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.3rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
-                            ${bk.resources?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${bk.resources.name}</div>` : ''}
+                            ${(bk.resourceAssignments || []).map(r => `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${r.name}${r.allDay ? ' (all day)' : (r.startTime ? ' (' + r.startTime.slice(0,5) + (r.endTime ? '–' + r.endTime.slice(0,5) : '') + ')' : ' (time-based)')}</div>`).join('')}
                             ${bk.requires_staff_time ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${bk.staff_time_minutes || '?'} min/day staff time${bk.staff_time_resource?.name ? ' · ' + bk.staff_time_resource.name : ''}</div>` : ''}
                             ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
                         </div>
@@ -4422,21 +4515,28 @@ async function computeCalendarDayStatuses(dates) {
     const rangeStart = fmt(dates[0]);
     const rangeEnd = fmt(dates[dates.length - 1]);
 
-    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }] = await Promise.all([
-        client.from('resources').select('id, type'),
+    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }, { data: resourceUsage }] = await Promise.all([
+        client.from('resources').select('id, type, seats'),
         client.from('staff').select('id'),
         client.from('business_closures').select('start_date, end_date'),
-        client.from('bookings').select('check_in, check_out, assigned_staff_id, space_id, requires_staff_time, staff_time_resource_id, status')
+        client.from('bookings').select('id, check_in, check_out, assigned_staff_id, requires_staff_time, status')
             .neq('status', 'cancelled')
             .lte('check_in', rangeEnd + 'T23:59:59')
-            .gte('check_out', rangeStart + 'T00:00:00')
+            .gte('check_out', rangeStart + 'T00:00:00'),
+        client.from('booking_resources').select('resource_id, bookings!inner(id, check_in, check_out, status)')
+            .neq('bookings.status', 'cancelled')
+            .lte('bookings.check_in', rangeEnd + 'T23:59:59')
+            .gte('bookings.check_out', rangeStart + 'T00:00:00')
     ]);
 
-    const resourceTypeCounts = {}; // type -> total count
+    // Total seat capacity per resource TYPE (a 10-seat "Kennels" resource counts as 10).
+    const resourceTypeCapacity = {};
     const resourceTypeById = {};
+    const resourceSeatsById = {};
     (resources || []).forEach(r => {
         resourceTypeById[r.id] = r.type;
-        resourceTypeCounts[r.type] = (resourceTypeCounts[r.type] || 0) + 1;
+        resourceSeatsById[r.id] = r.seats || 1;
+        resourceTypeCapacity[r.type] = (resourceTypeCapacity[r.type] || 0) + (r.seats || 1);
     });
     const totalStaff = (staffList || []).length;
 
@@ -4457,15 +4557,22 @@ async function computeCalendarDayStatuses(dates) {
         const staffBusy = new Set(dayBookings.filter(bk => bk.requires_staff_time && bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
         const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
 
-        const bookedByType = {};
-        dayBookings.forEach(bk => {
-            [bk.space_id, bk.staff_time_resource_id].filter(Boolean).forEach(resourceId => {
-                const type = resourceTypeById[resourceId];
-                if (!type) return;
-                bookedByType[type] = (bookedByType[type] || 0) + 1;
-            });
+        const dayResourceUsage = (resourceUsage || []).filter(row => {
+            const bk = row.bookings;
+            if (!bk) return false;
+            const start = (bk.check_in || '').slice(0, 10);
+            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
+            return key >= start && key <= end;
         });
-        const fullTypes = Object.keys(resourceTypeCounts).filter(type => bookedByType[type] >= resourceTypeCounts[type]);
+
+        // Seat-aware: count usage per TYPE against total seat capacity for that type, not per-resource.
+        const usedByType = {};
+        dayResourceUsage.forEach(row => {
+            const type = resourceTypeById[row.resource_id];
+            if (!type) return;
+            usedByType[type] = (usedByType[type] || 0) + 1;
+        });
+        const fullTypes = Object.keys(resourceTypeCapacity).filter(type => usedByType[type] >= resourceTypeCapacity[type]);
 
         let level = null;
         if (closed) level = 'closed';
@@ -4649,6 +4756,7 @@ function switchTemplatesTab(tab) {
     if (tab === 'appt') renderApptTypeList();
     if (tab === 'task') renderTaskTemplateList();
     if (tab === 'assess') renderAssessmentTemplateList();
+    if (tab === 'resources' && typeof renderResourceList === 'function') renderResourceList();
 }
 
 // ---- Appointment Type Templates ----
