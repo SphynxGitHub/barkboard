@@ -2781,6 +2781,9 @@ function switchBizTab(tab) {
     if (tab === 'payments' && typeof loadBusinessPaymentSettings === 'function') {
         loadBusinessPaymentSettings();
     }
+    if (tab === 'public-booking' && typeof loadPublicBookingSettings === 'function') {
+        loadPublicBookingSettings();
+    }
 }
 
 function bizDateRange() {
@@ -6042,6 +6045,71 @@ async function saveBusinessPaymentSettings() {
 
     if (response.error) return alert('Failed to save: ' + response.error.message);
     alert('Payment settings saved.');
+}
+
+/* ==========================================================================
+   PUBLIC BOOKING PAGE SETTINGS
+   ========================================================================== */
+
+async function loadPublicBookingSettings() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: business, error } = await client.from('businesses')
+        .select('slug, public_booking_enabled, logo_url, accent_color, welcome_message')
+        .eq('id', currentBusinessId)
+        .single();
+
+    if (error || !business) {
+        console.error('Failed to load public booking settings:', error);
+        return;
+    }
+
+    const enabledChk = document.getElementById('pb-enabled');
+    if (enabledChk) enabledChk.checked = !!business.public_booking_enabled;
+    document.getElementById('pb-welcome').value = business.welcome_message || '';
+    document.getElementById('pb-logo-url').value = business.logo_url || '';
+    document.getElementById('pb-accent-color').value = business.accent_color || '#4f46e5';
+
+    const linkBox = document.getElementById('pb-link-box');
+    const linkInput = document.getElementById('pb-link');
+    if (business.public_booking_enabled && business.slug) {
+        const link = `${window.location.origin}/book.html?biz=${encodeURIComponent(business.slug)}`;
+        linkInput.value = link;
+        linkBox.classList.remove('hidden');
+    } else {
+        linkBox.classList.add('hidden');
+    }
+}
+
+async function savePublicBookingSettings() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const payload = {
+        public_booking_enabled: document.getElementById('pb-enabled')?.checked || false,
+        welcome_message: document.getElementById('pb-welcome')?.value.trim() || null,
+        logo_url: document.getElementById('pb-logo-url')?.value.trim() || null,
+        accent_color: document.getElementById('pb-accent-color')?.value || '#4f46e5'
+    };
+
+    const { error } = await client.from('businesses').update(payload).eq('id', currentBusinessId);
+    if (error) return alert('Failed to save: ' + error.message);
+
+    alert('Public booking settings saved.');
+    loadPublicBookingSettings(); // refresh the link box now that enabled/slug state may have changed
+}
+
+function copyPublicBookingLink() {
+    const linkInput = document.getElementById('pb-link');
+    if (!linkInput || !linkInput.value) return;
+    linkInput.select();
+    navigator.clipboard?.writeText(linkInput.value).then(() => {
+        alert('Link copied to clipboard.');
+    }).catch(() => {
+        // Fallback for browsers without Clipboard API permission
+        document.execCommand('copy');
+    });
 }
 
 function closeDocumentOverlay() {

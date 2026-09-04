@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book an Appointment</title>
+    <link rel="icon" href="https://fav.farm/🐾" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --accent: #4f46e5;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --bg: #f9fafb;
+            --surface: #ffffff;
+            --danger: #fee2e2;
+            --danger-text: #991b1b;
+            --success: #d1fae5;
+            --success-text: #065f46;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 2.5rem 1.25rem;
+        }
+        .page { width: 100%; max-width: 480px; }
+        .brand-header { text-align: center; margin-bottom: 1.75rem; }
+        .brand-logo { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; margin: 0 auto 0.75rem; display: block; }
+        .brand-logo-fallback {
+            width: 64px; height: 64px; border-radius: 16px; margin: 0 auto 0.75rem;
+            display: flex; align-items: center; justify-content: center; font-size: 1.8rem;
+            background: var(--accent); color: #fff;
+        }
+        .brand-header h1 { margin: 0; font-size: 1.4rem; }
+        .brand-header p { margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.9rem; }
+        .card {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+            padding: 1.75rem; box-shadow: 0 10px 30px -10px rgba(15,23,42,0.08);
+        }
+        .form-group { margin-bottom: 1.1rem; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+        label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
+        input, select, textarea {
+            width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px;
+            font-size: 0.92rem; font-family: var(--font-sans); background: #fbfbfe;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none; border-color: var(--accent); background: #fff;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+        }
+        textarea { resize: vertical; min-height: 70px; }
+        .submit-btn {
+            width: 100%; padding: 0.75rem; border: none; border-radius: 9px;
+            background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+        }
+        .submit-btn:disabled { opacity: 0.6; cursor: default; }
+        .msg-box { padding: 0.7rem 0.85rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; }
+        .msg-error { background: var(--danger); color: var(--danger-text); }
+        .msg-success { background: var(--success); color: var(--success-text); }
+        .hidden { display: none !important; }
+        .section-divider { border: none; border-top: 1px solid var(--border); margin: 1.4rem 0; }
+        .field-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
+        .center-msg { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div id="loading-state" class="center-msg">Loading booking form...</div>
+
+        <div id="not-available-state" class="center-msg hidden">
+            <div style="font-size:2rem;">🐾</div>
+            <p>This booking page isn't available.</p>
+        </div>
+
+        <div id="booking-content" class="hidden">
+            <div class="brand-header">
+                <div id="brand-logo-slot"></div>
+                <h1 id="biz-name"></h1>
+                <p id="biz-welcome"></p>
+            </div>
+
+            <div class="card">
+                <div id="form-error" class="msg-box msg-error hidden"></div>
+
+                <form id="booking-form">
+                    <div class="form-group">
+                        <label>Your Name *</label>
+                        <input type="text" id="f-owner-name" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="f-email">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="tel" id="f-phone">
+                        </div>
+                    </div>
+                    <p class="field-hint" style="margin-top:-0.6rem; margin-bottom:1.1rem;">Please provide at least one way to reach you.</p>
+
+                    <hr class="section-divider">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Pet's Name *</label>
+                            <input type="text" id="f-pet-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Species</label>
+                            <select id="f-species">
+                                <option value="dog">Dog</option>
+                                <option value="cat">Cat</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Service *</label>
+                        <select id="f-service" required onchange="onServiceChange()">
+                            <option value="">Select a service...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label id="f-start-label">Date *</label>
+                            <input type="date" id="f-start-date" required>
+                        </div>
+                        <div class="form-group" id="f-end-date-group">
+                            <label>End Date</label>
+                            <input type="date" id="f-end-date">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea id="f-notes" placeholder="Anything we should know? Allergies, temperament, special requests..."></textarea>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="submit-btn">Request Booking</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="success-state" class="hidden">
+            <div class="card" style="text-align:center;">
+                <div style="font-size:2.2rem; margin-bottom:0.5rem;">✅</div>
+                <p id="success-message" style="font-size:0.95rem;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentBusiness = null;
+        let serviceTemplates = [];
+
+        function getSlugFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get('biz') || '').trim();
+        }
+
+        function showState(stateId) {
+            ['loading-state', 'not-available-state', 'booking-content', 'success-state'].forEach(id => {
+                document.getElementById(id).classList.toggle('hidden', id !== stateId);
+            });
+        }
+
+        async function init() {
+            const slug = getSlugFromUrl();
+            if (!slug) {
+                showState('not-available-state');
+                return;
+            }
+
+            const { data: business, error } = await supabase
+                .from('businesses')
+                .select('id, name, slug, logo_url, accent_color, welcome_message, public_booking_enabled')
+                .eq('slug', slug)
+                .eq('public_booking_enabled', true)
+                .maybeSingle();
+
+            if (error || !business) {
+                showState('not-available-state');
+                return;
+            }
+
+            currentBusiness = business;
+            applyBranding(business);
+
+            const { data: templates } = await supabase
+                .from('appointment_type_templates')
+                .select('name, default_price, pricing_unit, default_duration_minutes')
+                .eq('business_id', business.id)
+                .order('name');
+            serviceTemplates = templates || [];
+            populateServiceOptions();
+
+            showState('booking-content');
+        }
+
+        function applyBranding(business) {
+            if (business.accent_color) {
+                document.documentElement.style.setProperty('--accent', business.accent_color);
+            }
+            document.getElementById('biz-name').textContent = business.name;
+            document.getElementById('biz-welcome').textContent = business.welcome_message || 'Request an appointment below.';
+            document.title = `Book with ${business.name}`;
+
+            const logoSlot = document.getElementById('brand-logo-slot');
+            if (business.logo_url) {
+                logoSlot.innerHTML = `<img src="${business.logo_url}" class="brand-logo" alt="${business.name}">`;
+            } else {
+                logoSlot.innerHTML = `<div class="brand-logo-fallback">🐾</div>`;
+            }
+        }
+
+        function populateServiceOptions() {
+            const sel = document.getElementById('f-service');
+            sel.innerHTML = '<option value="">Select a service...</option>' +
+                serviceTemplates.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('') +
+                '<option value="__other__">Other / Not Listed</option>';
+        }
+
+        function onServiceChange() {
+            // No-op hook for future per-service behavior (e.g. auto-toggling multi-day fields
+            // based on the template); kept simple for now since dates are always both shown.
+        }
+
+        function showFormError(message) {
+            const el = document.getElementById('form-error');
+            el.textContent = message;
+            el.classList.remove('hidden');
+        }
+
+        function clearFormError() {
+            document.getElementById('form-error').classList.add('hidden');
+        }
+
+        document.getElementById('booking-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearFormError();
+
+            const ownerName = document.getElementById('f-owner-name').value.trim();
+            const email = document.getElementById('f-email').value.trim();
+            const phone = document.getElementById('f-phone').value.trim();
+            const petName = document.getElementById('f-pet-name').value.trim();
+            const species = document.getElementById('f-species').value;
+            let serviceName = document.getElementById('f-service').value;
+            const startDate = document.getElementById('f-start-date').value;
+            const endDate = document.getElementById('f-end-date').value;
+            const notes = document.getElementById('f-notes').value.trim();
+
+            if (serviceName === '__other__') {
+                serviceName = prompt('Please describe the service you\'re requesting:') || '';
+                if (!serviceName.trim()) return;
+            }
+
+            if (!email && !phone) {
+                showFormError('Please provide an email or phone number so we can reach you.');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/functions/v1/create-public-booking`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'apikey': SUPABASE_ANON_KEY
+                    },
+                    body: JSON.stringify({
+                        slug: currentBusiness.slug,
+                        ownerName, contactEmail: email, contactPhone: phone,
+                        petName, species, serviceName, startDate, endDate, notes
+                    })
+                });
+                const result = await res.json();
+
+                if (!result.success) {
+                    showFormError(result.error || 'Something went wrong. Please try again.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Request Booking';
+                    return;
+                }
+
+                document.getElementById('success-message').textContent = result.message;
+                showState('success-state');
+            } catch (err) {
+                console.error(err);
+                showFormError('Could not reach the server. Please check your connection and try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Request Booking';
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
