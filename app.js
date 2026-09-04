@@ -5517,21 +5517,16 @@ async function openApptTypeModal(id) {
         t = data;
     }
 
-    // Pull real resource types from the resources table instead of a hardcoded sample list,
-    // so this stays in sync with whatever resources actually exist. Keep the template's
-    // currently-saved value selectable even if no resource of that type exists anymore.
-    if (client && (resourceTypeSel || staffTimeResourceTypeSel)) {
+    // Pull real resource types from the resources table into the shared datalist, so both
+    // fields can suggest existing types while still letting the user type a brand-new custom one.
+    if (client) {
         const { data: resourceRows } = await client.from('resources').select('type');
         const types = Array.from(new Set((resourceRows || []).map(r => r.type).filter(Boolean))).sort();
         if (t?.resource_type && !types.includes(t.resource_type)) types.push(t.resource_type);
         if (t?.staff_time_resource_type && !types.includes(t.staff_time_resource_type)) types.push(t.staff_time_resource_type);
 
-        if (resourceTypeSel) {
-            resourceTypeSel.innerHTML = `<option value="">None</option>${types.map(ty => `<option value="${ty}">${ty}</option>`).join('')}`;
-        }
-        if (staffTimeResourceTypeSel) {
-            staffTimeResourceTypeSel.innerHTML = `<option value="">No — just staff time</option>${types.map(ty => `<option value="${ty}">${ty}</option>`).join('')}`;
-        }
+        const datalist = document.getElementById('att-resource-type-options');
+        if (datalist) datalist.innerHTML = types.map(ty => `<option value="${ty.replace(/"/g, '&quot;')}"></option>`).join('');
     }
 
     if (nameInput) nameInput.value = t?.name || '';
@@ -5560,10 +5555,10 @@ async function saveApptType() {
     const price = document.getElementById('att-price')?.value;
     const pricingUnit = document.getElementById('att-pricing-per-day')?.checked ? 'per_day' : 'flat';
     const duration = document.getElementById('att-duration')?.value;
-    const resourceType = document.getElementById('att-resource-type')?.value || null;
+    const resourceType = document.getElementById('att-resource-type')?.value.trim() || null;
     const requiresStaffTime = document.getElementById('att-requires-staff-time')?.checked || false;
     const staffTimeMinutes = document.getElementById('att-staff-time-minutes')?.value;
-    const staffTimeResourceType = document.getElementById('att-staff-time-resource-type')?.value || null;
+    const staffTimeResourceType = document.getElementById('att-staff-time-resource-type')?.value.trim() || null;
     const notes = document.getElementById('att-notes')?.value.trim() || '';
 
     const client = getSupabase();
