@@ -4,7 +4,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 async function attachResourceNames(client, bookings) {
     if (!bookings || !bookings.length) return bookings || [];
-    const { data: allResources } = await client.from('resources').select('id, name');
+    const { data: allResources } = await client.from('resources').select('id, name, type');
     const map = {};
     (allResources || []).forEach(r => { map[r.id] = r; });
     bookings.forEach(bk => {
@@ -13,14 +13,17 @@ async function attachResourceNames(client, bookings) {
     });
 
     // Also pull the new multi-resource assignments so display code can show all of them.
+    // Joined manually in JS (rather than a nested PostgREST embed) since booking_resources
+    // has more than one relationship to resources and the embed can't disambiguate it.
     const bookingIds = bookings.map(bk => bk.id);
-    const { data: assignments } = await client.from('booking_resources').select('*, resources!resource_id(name, type)').in('booking_id', bookingIds);
+    const { data: assignments } = await client.from('booking_resources').select('*').in('booking_id', bookingIds);
     const byBooking = {};
     (assignments || []).forEach(a => {
         if (!byBooking[a.booking_id]) byBooking[a.booking_id] = [];
+        const res = map[a.resource_id];
         byBooking[a.booking_id].push({
-            name: a.resources?.name || 'Resource',
-            type: a.resources?.type || '',
+            name: res?.name || 'Resource',
+            type: res?.type || '',
             allDay: a.all_day,
             startTime: a.start_time,
             endTime: a.end_time
@@ -812,20 +815,41 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
 async function loadExistingBookingResources(bookingId) {
     const client = getSupabase();
     if (!client) return [];
-    const { data, error } = await client.from('booking_resources').select('*, resources!resource_id(name, type, default_mode)').eq('booking_id', bookingId);
+
+    // Fetching booking_resources and resources as two plain queries and joining in JS,
+    // rather than a nested PostgREST embed — the embed kept failing with PGRST201
+    // ("more than one relationship") no matter which column/constraint hint was given,
+    // so this sidesteps that ambiguity entirely regardless of how the FKs are set up.
+    const { data: rows, error } = await client.from('booking_resources').select('*').eq('booking_id', bookingId);
     if (error) {
         console.error('Failed to load resource assignments:', error);
         return [];
     }
-    return (data || []).map(row => ({
-        resourceId: row.resource_id,
-        name: row.resources?.name || 'Resource',
-        type: row.resources?.type || '',
-        defaultMode: row.resources?.default_mode || 'all_day',
-        allDay: row.all_day,
-        startTime: row.start_time || '',
-        endTime: row.end_time || ''
-    }));
+    if (!rows || !rows.length) return [];
+
+    const resourceIds = Array.from(new Set(rows.map(r => r.resource_id).filter(Boolean)));
+    let resourcesById = {};
+    if (resourceIds.length) {
+        const { data: resourceRows, error: resErr } = await client.from('resources').select('id, name, type, default_mode').in('id', resourceIds);
+        if (resErr) {
+            console.error('Failed to load resource details:', resErr);
+        } else {
+            (resourceRows || []).forEach(r => { resourcesById[r.id] = r; });
+        }
+    }
+
+    return rows.map(row => {
+        const res = resourcesById[row.resource_id];
+        return {
+            resourceId: row.resource_id,
+            name: res?.name || 'Resource',
+            type: res?.type || '',
+            defaultMode: res?.default_mode || 'all_day',
+            allDay: row.all_day,
+            startTime: row.start_time || '',
+            endTime: row.end_time || ''
+        };
+    });
 }
 
 async function searchInvoicesForBooking(query, bookingId) {
