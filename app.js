@@ -969,24 +969,48 @@ async function openInvoiceModal(householdId, invoiceId = null) {
 
 async function renderLinkedAppointments(invoiceId) {
     const el = document.getElementById('inv-linked-appts-list');
+    const amountInput = document.getElementById('inv-amount');
     if (!el) return;
 
     const client = getSupabase();
     if (!client) return;
 
-    const { data: linked } = await client.from('bookings').select('id, service_name, check_in, check_out, amount').eq('invoice_id', invoiceId).order('check_in');
+    const { data: linked } = await client
+        .from('bookings')
+        .select('id, service_name, check_in, check_out, amount, pets(name)')
+        .eq('invoice_id', invoiceId)
+        .order('check_in');
 
-    el.innerHTML = (linked && linked.length) ? linked.map(bk => {
-        const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
-        const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
-        const when = outDate && outDate !== inDate ? `${inDate} → ${outDate}` : inDate;
-        return `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.82rem;">
-                <span>${bk.service_name || 'Event'} · ${when}${bk.amount ? ' · $' + Number(bk.amount).toFixed(2) : ''}</span>
-                <button class="btn-icon" onclick="removeAppointmentFromInvoice('${bk.id}', '${invoiceId}')" title="Unlink" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
-            </div>
-        `;
-    }).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No appointments linked yet.</p>';
+    let calculatedTotal = 0;
+
+    if (linked && linked.length) {
+        el.innerHTML = linked.map(bk => {
+            const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
+            const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
+            const when = outDate && outDate !== inDate ? `${inDate} → ${outDate}` : inDate;
+            const petName = bk.pets?.name ? ` (${bk.pets.name})` : '';
+            const itemAmount = Number(bk.amount || 0);
+            calculatedTotal += itemAmount;
+
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.82rem; margin-bottom:0.35rem;">
+                    <span><strong>${bk.service_name || 'Appointment'}</strong>${petName} · ${when} · $${itemAmount.toFixed(2)}</span>
+                    <button class="btn-icon" onclick="removeAppointmentFromInvoice('${bk.id}', '${invoiceId}')" title="Unlink" style="background:none; border:none; cursor:pointer;">
+                        <i data-lucide="x" style="width:13px;height:13px;"></i>
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        // Automatically update invoice total from linked appointments
+        if (amountInput) {
+            amountInput.value = calculatedTotal.toFixed(2);
+            autoSaveField('invoices', invoiceId, 'amount', calculatedTotal.toString());
+        }
+    } else {
+        el.innerHTML = '<p style="font-size:0.82rem; color:var(--text-muted);">No appointments linked to this invoice.</p>';
+    }
+
     refreshIcons();
 }
 
@@ -1961,27 +1985,80 @@ async function renderResourceList() {
     const client = getSupabase();
     if (!client) return;
 
-    const { data: list } = await client.from('resources').select('*').order('name');
+    const { data: list } = await client.from('resources').select('*').order('type').order('name');
 
     if (!list || !list.length) {
         el.innerHTML = '<div class="biz-empty">No resource spaces yet.</div>';
         return;
     }
 
-    el.innerHTML = list.map(r => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openResourceModal('${r.id}')">
-            <div>
-                <strong>${r.name}</strong>
-                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${r.type || ''} · ${(r.seats || 1) > 1 ? (r.seats || 1) + ' seats' : '1 seat'} · ${r.default_mode === 'time_based' ? 'Time-based' : 'All day'}</span>
-                ${r.blackouts && r.blackouts.length ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Blackouts: ${r.blackouts.join(', ')}</div>` : ''}
-                ${r.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${r.notes}</div>` : ''}
-            </div>
-            <div style="display:flex; gap:0.4rem;">
-                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="event.stopPropagation(); deleteResource('${r.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
-            </div>
-        </div>
-    `).join('');
+    // Group resources by "Type"
+    const grouped = {};
+    list.forEach(r => {
+        const typeKey = r.type || 'Uncategorized';
+        if (!grouped[typeKey]) grouped[typeKey] = [];
+        grouped[typeKey].push(r);
+    });
+
+    let html = '';
+    Object.keys(grouped).forEach(type => {
+        html += `<div style="font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin:1.25rem 0 0.5rem 0;">${type} (${grouped[type].length})</div>`;
+        
+        grouped[type].forEach(r => {
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); margin-bottom:0.5rem;">
+                    <div style="cursor:pointer; flex:1;" onclick="openResourceModal('${r.id}')">
+                        <strong>${r.name}</strong>
+                        <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">
+                            ${(r.seats || 1) > 1 ? (r.seats || 1) + ' seats' : '1 seat'} · ${r.default_mode === 'time_based' ? 'Time-based' : 'All day'}
+                        </span>
+                        ${r.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${r.notes}</div>` : ''}
+                    </div>
+                    <div style="display:flex; gap:0.4rem; align-items:center;">
+                        <button class="btn" style="font-size:0.75rem; padding:0.25rem 0.6rem;" onclick="cloneResource('${r.id}')" title="Duplicate Resource">
+                            <i data-lucide="copy" style="width:13px;height:13px;"></i> Clone
+                        </button>
+                        <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="event.stopPropagation(); deleteResource('${r.id}')" title="Delete">
+                            <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    });
+
+    el.innerHTML = html;
     refreshIcons();
+}
+
+/**
+ * Duplicates an existing resource/kennel with a cloned name prefix
+ */
+async function cloneResource(id) {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const { data: source } = await client.from('resources').select('*').eq('id', id).single();
+    if (!source) return alert('Resource not found.');
+
+    const newName = prompt('Enter name for cloned resource:', `${source.name} (Copy)`);
+    if (!newName) return;
+
+    const payload = {
+        name: newName.trim(),
+        type: source.type,
+        default_mode: source.default_mode,
+        seats: source.seats,
+        notes: source.notes,
+        blackouts: source.blackouts || []
+    };
+
+    const { error } = await client.from('resources').insert([payload]);
+    if (error) {
+        alert('Failed to clone resource: ' + error.message);
+    } else {
+        renderResourceList();
+    }
 }
 
 async function openResourceModal(id) {
