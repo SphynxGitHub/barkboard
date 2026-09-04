@@ -680,6 +680,13 @@ async function searchResourcesForPet(petId, query) {
             .lte('bookings.check_in', rangeEnd).gte('bookings.check_out', rangeStart);
         (bookedRows || []).forEach(row => {
             if (editingBookingId && row.bookings?.id === editingBookingId) return;
+            
+            const bkStart = (row.bookings?.check_in || '').slice(0, 10);
+            const bkEnd = (row.bookings?.check_out || bkStart).slice(0, 10);
+        
+            // If a guest checks out on the new stay's start date, the seat is available
+            if (bkStart !== bkEnd && bkEnd === startDate) return;
+        
             usageCounts[row.resource_id] = (usageCounts[row.resource_id] || 0) + 1;
         });
     }
@@ -4849,7 +4856,6 @@ async function computeCalendarDayStatuses(dates) {
             .gte('bookings.check_out', rangeStart + 'T00:00:00')
     ]);
 
-    // Resource seats and capacity mapping per resource type
     const resourceTypeCapacity = {};
     const resourceTypeById = {};
     (resources || []).forEach(r => {
@@ -4869,19 +4875,21 @@ async function computeCalendarDayStatuses(dates) {
         const dayBookings = (bookings || []).filter(bk => {
             const start = (bk.check_in || '').slice(0, 10);
             const end = (bk.check_out || bk.check_in || '').slice(0, 10);
-            return key >= start && key <= end;
+            // Check-out date is freed up for same-day check-ins unless check_in === check_out
+            return key >= start && (start === end ? key <= end : key < end);
         });
 
         const staffBusy = new Set(dayBookings.filter(bk => bk.requires_staff_time && bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
         const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
 
-        // 3. Resource Seat Full check
+        // 3. Resource Seat Full check (Check-out date frees up the seat)
         const dayResourceUsage = (resourceUsage || []).filter(row => {
             const bk = row.bookings;
             if (!bk) return false;
             const start = (bk.check_in || '').slice(0, 10);
             const end = (bk.check_out || bk.check_in || '').slice(0, 10);
-            return key >= start && key <= end;
+            // Seat is occupied from check-in up until (but NOT including) check-out date
+            return key >= start && (start === end ? key <= end : key < end);
         });
 
         const usedByType = {};
@@ -4892,7 +4900,6 @@ async function computeCalendarDayStatuses(dates) {
         });
         const fullTypes = Object.keys(resourceTypeCapacity).filter(type => usedByType[type] >= resourceTypeCapacity[type]);
 
-        // Prioritize levels: closed > staff-full > resource-full
         let level = null;
         if (closed) level = 'closed';
         else if (staffFull) level = 'staff-full';
