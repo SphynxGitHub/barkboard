@@ -3069,10 +3069,10 @@ function renderEntitySections(type, data, id) {
                                             ${inv.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${inv.notes}</div>` : ''}
                                         </div>
                                         <div style="display:flex; gap:0.35rem;">
+                                            <button class="btn-icon" onclick="${inv.status === 'paid' ? `showReceipt('${inv.id}')` : `showPaymentNotice('${inv.id}')`}" title="${inv.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;">
+                                                <i data-lucide="printer" style="width:14px;height:14px;"></i>
+                                            </button>
                                             ${inv.status !== 'paid' ? `
-                                                <button class="btn-icon" onclick="showPaymentNotice('${inv.id}')" title="View payment notice" style="background:none; border:none; cursor:pointer;">
-                                                    <i data-lucide="file-text" style="width:14px;height:14px;"></i>
-                                                </button>
                                                 <button class="btn-icon" onclick="markInvoicePaid('${inv.id}', '${id}')" title="Mark as paid" style="background:none; border:none; cursor:pointer;">
                                                     <i data-lucide="check" style="width:14px;height:14px;"></i>
                                                 </button>
@@ -4071,7 +4071,10 @@ async function renderActivities() {
                     <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${it.subtitle}${it.staffName ? ' · ' + it.staffName : ''} ${it.date ? '· ' + it.date : ''}</div>
                 </div>
             </div>
-            ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+                ${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="${it.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:15px;height:15px;"></i></button>` : ''}
+                ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
+            </div>
         </div>
     `).join('');
     refreshIcons();
@@ -4232,7 +4235,7 @@ async function renderActivitiesCalendar() {
             <div style="display:flex; justify-content:space-between; align-items:center; gap:0.3rem;">
                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
             </div>
-            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div>${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}` : ''}
+            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div><div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.2rem;">${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="Print" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:12px;height:12px;"></i></button>` : ''}${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}</div>` : ''}
         </div>
     `).join('');
 
