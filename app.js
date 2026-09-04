@@ -71,24 +71,6 @@ function refreshIcons() {
 }
 
 /* ==========================================================================
-   MODAL UTILITY FUNCTIONS
-   ========================================================================== */
-
-function openModal(modalId) {
-    const el = document.getElementById(modalId);
-    if (!el) return;
-    el.classList.remove('hidden');
-    el.style.display = 'flex';
-}
-
-function closeModal(modalId) {
-    const el = document.getElementById(modalId);
-    if (!el) return;
-    el.classList.add('hidden');
-    el.style.display = 'none';
-}
-
-/* ==========================================================================
    APP CONTROLLER: Event Handlers & View Management
    ========================================================================== */
 
@@ -2106,9 +2088,12 @@ async function cloneResource(id) {
     }
 }
 
-async function openResourceModal(id) {
+let editingResourceId = null;
+
+async function openResourceModal(id = null) {
     editingResourceId = id;
     let r = null;
+
     if (id) {
         const client = getSupabase();
         const { data } = client ? await client.from('resources').select('*').eq('id', id).single() : { data: null };
@@ -2128,7 +2113,7 @@ async function openResourceModal(id) {
     if (nameInput) nameInput.value = r ? r.name : '';
     if (typeSelect) typeSelect.value = r ? r.type : 'Dog Suite';
     if (modeSelect) modeSelect.value = r?.default_mode || 'all_day';
-    if (seatsInput) seatsInput.value = r?.seats || 1;
+    if (seatsInput) seatsInput.value = r?.seats !== undefined && r?.seats !== null ? r.seats : 1;
     if (blackoutsArea) blackoutsArea.value = r && r.blackouts ? r.blackouts.join('\n') : '';
     if (notesInput) notesInput.value = r ? r.notes || '' : '';
 
@@ -2147,25 +2132,40 @@ async function saveResource(e) {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const id = document.getElementById('res-id')?.value;
-    const rawName = document.getElementById('res-name')?.value || '';
-    
-    // Format name with leading zero for single digits
+    const nameInput = document.getElementById('rm-name');
+    const typeSelect = document.getElementById('rm-type');
+    const modeSelect = document.getElementById('rm-default-mode');
+    const seatsInput = document.getElementById('rm-seats');
+    const blackoutsArea = document.getElementById('rm-blackouts');
+    const notesInput = document.getElementById('rm-notes');
+
+    const rawName = nameInput?.value || '';
+    if (!rawName.trim()) return alert('Resource name is required.');
+
+    // Auto-pad single-digit numbers (e.g. Kennel 1 -> Kennel 01)
     const paddedName = typeof padSingleDigitResourceName === 'function' 
         ? padSingleDigitResourceName(rawName.trim()) 
         : rawName.trim();
 
+    const seatsVal = parseInt(seatsInput?.value, 10);
+    const parsedSeats = isNaN(seatsVal) ? 1 : seatsVal;
+
+    const blackouts = blackoutsArea?.value 
+        ? blackoutsArea.value.split('\n').map(s => s.trim()).filter(Boolean) 
+        : [];
+
     const payload = {
         name: paddedName,
-        type: document.getElementById('res-type')?.value || 'General',
-        default_mode: document.getElementById('res-mode')?.value || 'all_day',
-        seats: parseInt(document.getElementById('res-seats')?.value || '1', 10),
-        notes: document.getElementById('res-notes')?.value || ''
+        type: typeSelect?.value || 'Dog Suite',
+        default_mode: modeSelect?.value || 'all_day',
+        seats: parsedSeats,
+        blackouts: blackouts,
+        notes: notesInput?.value?.trim() || ''
     };
 
     let error;
-    if (id) {
-        ({ error } = await client.from('resources').update(payload).eq('id', id));
+    if (editingResourceId) {
+        ({ error } = await client.from('resources').update(payload).eq('id', editingResourceId));
     } else {
         ({ error } = await client.from('resources').insert([payload]));
     }
@@ -2173,9 +2173,17 @@ async function saveResource(e) {
     if (error) {
         alert('Failed to save resource: ' + error.message);
     } else {
-        closeModal('resource-modal');
+        editingResourceId = null;
+        
+        // Use your existing modal closing function
+        if (typeof closeResourceModal === 'function') {
+            closeResourceModal();
+        } else {
+            document.getElementById('resource-modal')?.classList.add('hidden');
+        }
+
         if (typeof renderResourceList === 'function') {
-            renderResourceList();
+            await renderResourceList();
         }
     }
 }
