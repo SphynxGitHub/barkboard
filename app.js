@@ -4330,6 +4330,102 @@ function setPortalRole(role) {
 }
 
 /* ==========================================================================
+   HELPER & FETCH FUNCTIONS FOR ACTIVITIES & FEED
+   ========================================================================== */
+
+const ACTIVITY_STATUS_OPTIONS = {
+    appointment: ['pending', 'confirmed', 'completed', 'cancelled', 'no-show'],
+    task: ['pending', 'completed'],
+    invoice: ['unpaid', 'paid', 'void']
+};
+
+function activityStatusColor(status) {
+    if (status === 'completed' || status === 'paid' || status === 'void') return 'var(--text-muted)';
+    if (status === 'cancelled' || status === 'no-show' || status === 'unpaid') return '#dc2626';
+    if (status === 'confirmed') return '#16a34a';
+    return 'var(--primary, #2563eb)';
+}
+
+function renderStatusTag(kind, id, currentStatus, onChangeFn) {
+    const options = ACTIVITY_STATUS_OPTIONS[kind] || ['pending'];
+    return `
+        <select onclick="event.stopPropagation();" onchange="event.stopPropagation(); ${onChangeFn}('${kind}', '${id}', this.value)" style="font-size:0.72rem; padding:0.2rem 0.5rem; border-radius:9999px; border:1px solid var(--border); background:var(--bg-card); cursor:pointer; color:${activityStatusColor(currentStatus)}; text-transform:capitalize;">
+            ${options.map(o => `<option value="${o}" ${o === currentStatus ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+    `;
+}
+
+async function fetchActivityItems() {
+    const client = getSupabase();
+    if (!client) return [];
+
+    const items = [];
+
+    // Fetch Appointments (Bookings)
+    const { data: rawBookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name)');
+    const bookings = await attachResourceNames(client, rawBookings || []);
+
+    const invoiceIds = (bookings || []).map(bk => bk.invoice_id).filter(Boolean);
+    const { data: linkedInvoices } = invoiceIds.length
+        ? await client.from('invoices').select('id, status').in('id', invoiceIds)
+        : { data: [] };
+    const invoiceStatusById = {};
+    (linkedInvoices || []).forEach(inv => { invoiceStatusById[inv.id] = inv.status; });
+
+    (bookings || []).forEach(bk => {
+        items.push({
+            kind: 'appointment',
+            id: bk.id,
+            title: bk.service_name || 'Appointment',
+            subtitle: [bk.pets?.name, bk.households?.name, bk.resources?.name].filter(Boolean).join(' · '),
+            date: (bk.check_in || '').slice(0, 10),
+            endDate: (bk.check_out || bk.check_in || '').slice(0, 10),
+            status: bk.status || 'pending',
+            staffName: bk.staff?.name || '',
+            staffId: bk.assigned_staff_id || '',
+            householdId: bk.household_id,
+            resourceAssignments: bk.resourceAssignments || [],
+            resources: bk.resources || null,
+            invoiceId: bk.invoice_id || null,
+            invoiceStatus: bk.invoice_id ? (invoiceStatusById[bk.invoice_id] || null) : null
+        });
+    });
+
+    // Fetch Staff Tasks
+    const { data: tasks } = await client.from('staff_tasks').select('*, staff(name)');
+    (tasks || []).forEach(t => {
+        items.push({
+            kind: 'task',
+            id: t.id,
+            title: t.task_text,
+            subtitle: t.priority ? `Priority: ${t.priority}` : '',
+            date: t.due_date || '',
+            status: t.is_done ? 'completed' : 'pending',
+            staffName: t.staff?.name || '',
+            staffId: t.staff_id || ''
+        });
+    });
+
+    // Fetch Invoices
+    const { data: invoices } = await client.from('invoices').select('*, households(name)').neq('status', 'paid');
+    (invoices || []).forEach(inv => {
+        items.push({
+            kind: 'invoice',
+            id: inv.id,
+            title: `Invoice due: ${inv.description || 'Invoice'}`,
+            subtitle: `${inv.households?.name || ''} · $${Number(inv.amount || 0).toFixed(2)}`,
+            date: inv.due_date || '',
+            status: inv.status || 'pending',
+            staffName: '',
+            staffId: '',
+            householdId: inv.household_id
+        });
+    });
+
+    return items;
+}
+
+/* ==========================================================================
    ACTIVITIES VIEW (DYNAMIC GROUPING, RESOURCES & EXPANDED FILTERS)
    ========================================================================== */
 
@@ -4371,16 +4467,29 @@ async function populateResourceActivityFilter() {
 }
 
 function switchActivitiesView(mode) {
-    document.getElementById('acttab-list')?.classList.toggle('active', mode === 'list');
-    document.getElementById('acttab-calendar')?.classList.toggle('active', mode === 'calendar');
-    document.getElementById('activities-list-view')?.classList.toggle('hidden', mode !== 'list');
-    document.getElementById('activities-calendar-view')?.classList.toggle('hidden', mode !== 'calendar');
-    if (mode === 'calendar') {
+    const isList = mode === 'list';
+    
+    // Toggle active tab buttons
+    document.getElementById('acttab-list')?.classList.toggle('active', isList);
+    document.getElementById('acttab-calendar')?.classList.toggle('active', !isList);
+    
+    // Toggle view containers
+    document.getElementById('activities-list-view')?.classList.toggle('hidden', !isList);
+    document.getElementById('activities-calendar-view')?.classList.toggle('hidden', isList);
+    
+    // Hide/show the Group By dropdown control (list view only)
+    const groupByContainer = document.getElementById('act-group-by-container');
+    if (groupByContainer) {
+        groupByContainer.style.display = isList ? 'block' : 'none';
+    }
+
+    if (!isList) {
         document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
         document.getElementById('actview-' + actCalendarMode)?.classList.add('today');
         renderActivitiesCalendar();
+    } else {
+        renderActivities();
     }
-    else renderActivities();
 }
 
 function activitiesFilters() {
@@ -4423,7 +4532,7 @@ async function renderActivities() {
     const f = activitiesFilters();
     let items = await fetchActivityItems();
 
-    // Map resource IDs & names onto items for resource-based grouping & filtering
+    // Map resource IDs & names onto items
     items.forEach(it => {
         const assigned = it.resourceAssignments || [];
         if (assigned.length) {
@@ -4445,7 +4554,7 @@ async function renderActivities() {
         return;
     }
 
-    // Attach Household names for grouping & displays
+    // Attach Household names
     const client = getSupabase();
     if (client) {
         const hIds = Array.from(new Set(items.map(i => i.householdId).filter(Boolean)));
@@ -4457,7 +4566,36 @@ async function renderActivities() {
         }
     }
 
-    // Grouping Engine
+    const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
+
+    const renderItemRow = (it) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.65rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer; margin-bottom:0.5rem;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+                <i data-lucide="${kindIcon[it.kind]}" style="width:16px;height:16px; color:var(--text-muted);"></i>
+                <div>
+                    <strong>${it.title}</strong>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">
+                        ${it.subtitle ? it.subtitle + ' · ' : ''}${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? '🛏️ ' + it.resourceNames + ' · ' : ''}${it.householdName ? '🏡 ' + it.householdName + ' · ' : ''}${it.staffName ? '👤 ' + it.staffName + ' · ' : ''}${it.date ? '📅 ' + it.date : ''}
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+                ${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="${it.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:15px;height:15px;"></i></button>` : ''}
+                ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
+                ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
+            </div>
+        </div>
+    `;
+
+    // Flow 1: UNGROUPED (Flat List)
+    if (f.groupBy === 'none') {
+        items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        el.innerHTML = items.map(renderItemRow).join('');
+        refreshIcons();
+        return;
+    }
+
+    // Flow 2: GROUPED
     const groups = {};
     items.forEach(it => {
         let key = 'Other';
@@ -4472,9 +4610,6 @@ async function renderActivities() {
         groups[key].push(it);
     });
 
-    const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
-
-    // Render Group Headers + Items
     let html = '';
     Object.keys(groups).forEach(groupName => {
         const groupItems = groups[groupName];
@@ -4484,25 +4619,8 @@ async function renderActivities() {
                     <span>${groupName}</span>
                     <span style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">${groupItems.length} item(s)</span>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:0.5rem;">
-                    ${groupItems.map(it => `
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.65rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
-                            <div style="display:flex; align-items:center; gap:0.6rem;">
-                                <i data-lucide="${kindIcon[it.kind]}" style="width:16px;height:16px; color:var(--text-muted);"></i>
-                                <div>
-                                    <strong>${it.title}</strong>
-                                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">
-                                        ${it.subtitle ? it.subtitle + ' · ' : ''}${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? '🛏️ ' + it.resourceNames + ' · ' : ''}${it.householdName ? '🏡 ' + it.householdName + ' · ' : ''}${it.staffName ? '👤 ' + it.staffName + ' · ' : ''}${it.date ? '📅 ' + it.date : ''}
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:0.5rem;">
-                                ${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="${it.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:15px;height:15px;"></i></button>` : ''}
-                                ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
-                                ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
-                            </div>
-                        </div>
-                    `).join('')}
+                <div style="display:flex; flex-direction:column;">
+                    ${groupItems.map(renderItemRow).join('')}
                 </div>
             </div>
         `;
