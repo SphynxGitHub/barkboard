@@ -4572,6 +4572,30 @@ function filterActivityItems(items, f) {
     });
 }
 
+function openActivityItem(kind, id, householdId) {
+    if (kind === 'appointment') {
+        // Open event edit modal
+        if (typeof openBookingModal === 'function') {
+            openBookingModal(householdId || null, id);
+        }
+    } else if (kind === 'task') {
+        // Open staff task modal
+        if (typeof openStaffTaskModal === 'function') {
+            openStaffTaskModal(id);
+        }
+    } else if (kind === 'invoice') {
+        // Open invoice edit modal or jump to household invoices
+        if (householdId && typeof openInvoiceModal === 'function') {
+            openInvoiceModal(householdId, id);
+        } else if (typeof switchView === 'function') {
+            switchView('biz-view');
+            if (typeof switchBizTab === 'function') {
+                switchBizTab('invoices');
+            }
+        }
+    }
+}
+
 async function renderActivities() {
     const el = document.getElementById('activities-list');
     if (!el) return;
