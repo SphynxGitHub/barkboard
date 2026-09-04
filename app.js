@@ -2680,19 +2680,8 @@ function renderEntitySections(type, data, id) {
         `;
     } else if (type === 'pet') {
         return `
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
-                ${renderEventsCard(data.bookings, data.households?.id || data.household_id, { showPetName: false })}
-
-                <!-- Assigned Staff -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user-cog"></i> Assigned Staff</h3>
-                    ${data.assignedStaff && data.assignedStaff.length ? data.assignedStaff.map(a => `
-                        <div style="padding:0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); margin-bottom:0.4rem; cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('staff', '${a.staff_id}')">
-                            <strong>${a.staff?.name || 'Staff'}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">${a.staff?.role || ''}</span>
-                        </div>
-                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted);">No staff assigned.</p>'}
-                </div>
-
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:start;">
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
@@ -2732,6 +2721,26 @@ function renderEntitySections(type, data, id) {
                     `}
                 </div>
 
+                <!-- Assigned Staff -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user-cog"></i> Assigned Staff</h3>
+                    ${data.assignedStaff && data.assignedStaff.length ? data.assignedStaff.map(a => `
+                        <div style="padding:0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); margin-bottom:0.4rem; cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('staff', '${a.staff_id}')">
+                            <strong>${a.staff?.name || 'Staff'}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">${a.staff?.role || ''}</span>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted);">No staff assigned.</p>'}
+                </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                ${renderEventsCard(data.bookings, data.households?.id || data.household_id, { showPetName: false })}
+
+                <!-- History (placeholder) -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.5rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="clipboard-list"></i> History</h3>
+                    <p style="font-size:0.85rem; color:var(--text-muted);">Progress reports, training assessments, and visit notes will live here. Coming soon.</p>
+                </div>
+                </div>
             </div>
         `;
     } else if (type === 'vet') {
@@ -2943,7 +2952,11 @@ function renderVetClientGroups(clientPets, vetId) {
     });
 
     return Object.values(groups).map(g => `
-        <div style="margin-top:0.5rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+        <div style="margin-top:0.5rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); display:grid; grid-template-columns: 1fr 1fr 1fr; gap:1rem;">
+            <div>
+                <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Household</div>
+                <strong style="font-size:0.85rem; cursor:pointer;" onclick="openFullWidthProfile('household', '${g.pets[0]?.household_id || ''}')"><i data-lucide="home" style="width:13px;height:13px;"></i> ${g.name}</strong>
+            </div>
             <div>
                 <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Pets</div>
                 ${g.pets.map(p => `
@@ -2954,13 +2967,12 @@ function renderVetClientGroups(clientPets, vetId) {
                 `).join('')}
             </div>
             <div>
-                <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Household</div>
-                <strong style="font-size:0.85rem; cursor:pointer;" onclick="openFullWidthProfile('household', '${g.pets[0]?.household_id || ''}')"><i data-lucide="home" style="width:13px;height:13px;"></i> ${g.name}</strong>
+                <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">People</div>
                 ${g.people.length ? g.people.map(person => `
                     <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.3rem;">
                         <i data-lucide="user" style="width:11px;height:11px;"></i> ${personDisplayName(person)}${personDisplayContact(person) ? ' — ' + personDisplayContact(person) : ''}
                     </div>
-                `).join('') : ''}
+                `).join('') : '<span style="font-size:0.78rem; color:var(--text-muted);">—</span>'}
             </div>
         </div>
     `).join('');
