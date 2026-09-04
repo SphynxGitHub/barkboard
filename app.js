@@ -2,11 +2,6 @@
 const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
 
-// PostgREST nested embeds (e.g. bookings(*, resources(name))) have repeatedly
-// broken silently in this project when a referenced FK constraint was recently
-// altered — the whole query returns empty instead of erroring loudly. This
-// attaches resource names manually via a separate lookup instead, so a stale
-// embed cache can never take down an entire page's data.
 async function attachResourceNames(client, bookings) {
     if (!bookings || !bookings.length) return bookings || [];
     const { data: allResources } = await client.from('resources').select('id, name');
@@ -34,6 +29,12 @@ async function attachResourceNames(client, bookings) {
     bookings.forEach(bk => { bk.resourceAssignments = byBooking[bk.id] || []; });
 
     return bookings;
+}
+
+function padSingleDigitResourceName(name) {
+    if (!name) return '';
+    // Replaces standalone single digits or numbers prefixed with space/hash/hyphen
+    return name.replace(/(^|[\s#\-])(\d)(?!\d)/g, '$10$2');
 }
 
 async function attachInvoiceStatuses(client, bookings) {
@@ -2056,9 +2057,7 @@ async function renderResourceList() {
     refreshIcons();
 }
 
-/**
- * Duplicates an existing resource/kennel with a cloned name prefix
- */
+/** Duplicates an existing resource/kennel with a cloned name prefix */
 async function cloneResource(id) {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
@@ -2066,11 +2065,14 @@ async function cloneResource(id) {
     const { data: source } = await client.from('resources').select('*').eq('id', id).single();
     if (!source) return alert('Resource not found.');
 
-    const newName = prompt('Enter name for cloned resource:', `${source.name} (Copy)`);
-    if (!newName) return;
+    const userEnteredName = prompt('Enter name for cloned resource:', `${source.name} (Copy)`);
+    if (!userEnteredName) return;
+
+    // Apply zero padding to user input
+    const paddedName = padSingleDigitResourceName(userEnteredName.trim());
 
     const payload = {
-        name: newName.trim(),
+        name: paddedName,
         type: source.type,
         default_mode: source.default_mode,
         seats: source.seats,
@@ -2121,36 +2123,39 @@ function closeResourceModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-async function saveResource() {
-    const name = document.getElementById('rm-name')?.value.trim();
-    if (!name) return alert('Please enter a resource name.');
-
-    const type = document.getElementById('rm-type')?.value || 'Dog Suite';
-    const defaultMode = document.getElementById('rm-default-mode')?.value || 'all_day';
-    const seats = parseInt(document.getElementById('rm-seats')?.value, 10) || 1;
-    const notes = document.getElementById('rm-notes')?.value.trim() || '';
-    const blackoutsText = document.getElementById('rm-blackouts')?.value || '';
-    const blackouts = blackoutsText.split('\n').map(s => s.trim()).filter(Boolean);
+async function saveResource(e) {
+    if (e) e.preventDefault();
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const payload = { name, type, default_mode: defaultMode, seats, notes, blackouts };
-    let response;
-    if (editingResourceId) {
-        response = await client.from('resources').update(payload).eq('id', editingResourceId);
+    const id = document.getElementById('res-id')?.value;
+    const rawName = document.getElementById('res-name')?.value || '';
+    
+    // Format name with leading zero for single digits
+    const paddedName = padSingleDigitResourceName(rawName.trim());
+
+    const payload = {
+        name: paddedName,
+        type: document.getElementById('res-type')?.value || 'General',
+        default_mode: document.getElementById('res-mode')?.value || 'all_day',
+        seats: parseInt(document.getElementById('res-seats')?.value || '1', 10),
+        notes: document.getElementById('res-notes')?.value || ''
+    };
+
+    let error;
+    if (id) {
+        ({ error } = await client.from('resources').update(payload).eq('id', id));
     } else {
-        response = await client.from('resources').insert([payload]);
+        ({ error } = await client.from('resources').insert([payload]));
     }
 
-    if (response.error) {
-        alert('Failed to save resource: ' + response.error.message);
-        return;
+    if (error) {
+        alert('Failed to save resource: ' + error.message);
+    } else {
+        closeModal('resource-modal');
+        renderResourceList();
     }
-
-    editingResourceId = null;
-    closeResourceModal();
-    renderResourceList();
 }
 
 async function deleteResource(id) {
