@@ -19,6 +19,19 @@ async function attachResourceNames(client, bookings) {
     return bookings;
 }
 
+async function attachInvoiceStatuses(client, bookings) {
+    if (!bookings || !bookings.length) return bookings || [];
+    const invoiceIds = bookings.map(bk => bk.invoice_id).filter(Boolean);
+    if (!invoiceIds.length) return bookings;
+    const { data: invoices } = await client.from('invoices').select('id, status').in('id', invoiceIds);
+    const map = {};
+    (invoices || []).forEach(inv => { map[inv.id] = inv.status; });
+    bookings.forEach(bk => {
+        bk.invoiceStatus = bk.invoice_id ? (map[bk.invoice_id] || null) : null;
+    });
+    return bookings;
+}
+
 function getSupabase() {
     if (!window.supabaseClient) {
         if (!window.supabase || typeof window.supabase.createClient !== 'function') {
@@ -205,9 +218,10 @@ async function renderStaffGuests() {
         <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('pet', '${bk.pet_id}')">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem; flex-wrap:wrap;">
                 <strong><i data-lucide="${bk.pets?.species === 'cat' ? 'cat' : bk.pets?.species === 'other' ? 'rabbit' : 'dog'}" style="width:14px;height:14px;"></i> ${bk.pets?.name || 'Pet'}</strong>
-                <div style="display:flex; gap:0.35rem;">
-                    <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${isActiveNow ? '#16a34a' : 'var(--text-muted)'}; text-transform:capitalize;">${isActiveNow ? 'Checked In' : (bk.status || 'pending')}</span>
-                    ${invoiceStatus ? `<span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${activityStatusColor(invoiceStatus)}; text-transform:capitalize;">${invoiceStatus}</span>` : ''}
+                <div style="display:flex; align-items:center; gap:0.35rem;" onclick="event.stopPropagation();">
+                    ${isActiveNow ? `<span style="font-size:0.7rem; color:#16a34a; font-weight:600;">● Checked In</span>` : ''}
+                    ${renderStatusTag('appointment', bk.id, bk.status || 'pending', 'setStaffFeedAppointmentStatus')}
+                    ${bk.invoice_id ? renderStatusTag('invoice', bk.invoice_id, invoiceStatus || 'unpaid', 'setStaffFeedInvoiceStatus') : ''}
                 </div>
             </div>
             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${bk.service_name || 'Event'} · ${bk.households?.name || ''}</div>
@@ -2979,7 +2993,7 @@ async function openFullWidthProfile(type, id) {
 
     if (type === 'household') {
         const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*), invoices(*)').eq('id', id).single();
-        if (data && data.bookings) data.bookings = await attachResourceNames(client, data.bookings);
+        if (data && data.bookings) { data.bookings = await attachResourceNames(client, data.bookings); data.bookings = await attachInvoiceStatuses(client, data.bookings); }
         payload = data;
         if (payload) {
             payload.vetsById = await fetchVetsForPets(client, payload.pets || []);
@@ -3003,7 +3017,7 @@ async function openFullWidthProfile(type, id) {
         }
         if (payload) {
             const { data: bookings } = await client.from('bookings').select('*').eq('pet_id', id);
-            payload.bookings = await attachResourceNames(client, bookings || []);
+            payload.bookings = await attachResourceNames(client, bookings || []); payload.bookings = await attachInvoiceStatuses(client, payload.bookings);
             const { data: staffAssignments } = await client.from('staff_assignments').select('*, staff(name, role)').eq('pet_id', id);
             payload.assignedStaff = staffAssignments || [];
         }
@@ -3023,7 +3037,7 @@ async function openFullWidthProfile(type, id) {
             const { data: assignments } = await client.from('staff_assignments').select('*, pets(name, species, household_id, households(name))').eq('staff_id', id);
             payload.assignments = assignments || [];
             const { data: events } = await client.from('bookings').select('*, pets(name), households(name)').eq('assigned_staff_id', id).order('check_in');
-            payload.bookings = await attachResourceNames(client, events || []);
+            payload.bookings = await attachResourceNames(client, events || []); payload.bookings = await attachInvoiceStatuses(client, payload.bookings);
             const { data: tasks } = await client.from('staff_tasks').select('*').eq('staff_id', id).order('due_date');
             payload.tasks = tasks || [];
             const { data: timeOff } = await client.from('staff_availability').select('*').eq('staff_id', id).order('start_date');
@@ -3667,6 +3681,44 @@ async function linkPetToVet(petId, vetId, column) {
     openFullWidthProfile('vet', vetId);
 }
 
+async function setBookingStatusInProfile(kind, id, newStatus) {
+    const client = getSupabase();
+    if (!client) return;
+
+    if (kind === 'appointment') {
+        await client.from('bookings').update({ status: newStatus }).eq('id', id);
+    } else if (kind === 'invoice') {
+        await client.from('invoices').update({ status: newStatus }).eq('id', id);
+        if (newStatus === 'paid') showReceipt(id);
+    }
+
+    try {
+        const last = JSON.parse(localStorage.getItem('barkboard-last-profile') || 'null');
+        if (last && last.type && last.id) {
+            openFullWidthProfile(last.type, last.id);
+            return;
+        }
+    } catch (e) { /* storage unavailable, ignore */ }
+    if (typeof renderAllDashboards === 'function') renderAllDashboards();
+}
+
+async function setStaffFeedAppointmentStatus(kind, id, newStatus) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('bookings').update({ status: newStatus }).eq('id', id);
+    renderStaffGuests();
+    if (typeof renderTodaysOverview === 'function') renderTodaysOverview();
+}
+
+async function setStaffFeedInvoiceStatus(kind, id, newStatus) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('invoices').update({ status: newStatus }).eq('id', id);
+    if (newStatus === 'paid') showReceipt(id);
+    renderStaffGuests();
+    if (typeof renderTodaysOverview === 'function') renderTodaysOverview();
+}
+
 function renderEventsCard(bookings, householdId, opts) {
     const { pets = [], showPetName = true } = opts || {};
     const addButton = householdId
@@ -3682,13 +3734,13 @@ function renderEventsCard(bookings, householdId, opts) {
             const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
             const isStay = outDate && outDate !== inDate;
             const when = isStay ? `${inDate} → ${outDate}` : `${inDate}${inTime ? ' at ' + inTime : ''}`;
-            const statusColor = bk.status === 'cancelled' ? 'var(--text-muted)' : bk.status === 'completed' ? 'var(--text-muted)' : 'var(--accent, #2563eb)';
             return `
                 <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
                         <div>
                             <strong>${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
-                            <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${bk.status || 'pending'}</span>
+                            <span onclick="event.stopPropagation();" style="margin-left:0.4rem; display:inline-block;">${renderStatusTag('appointment', bk.id, bk.status || 'pending', 'setBookingStatusInProfile')}</span>
+                            ${bk.invoice_id ? `<span onclick="event.stopPropagation();" style="margin-left:0.3rem; display:inline-block;">${renderStatusTag('invoice', bk.invoice_id, bk.invoiceStatus || 'unpaid', 'setBookingStatusInProfile')}</span>` : ''}
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
                             ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
                             ${bk.resources?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${bk.resources.name}</div>` : ''}
