@@ -14,7 +14,7 @@ async function attachResourceNames(client, bookings) {
 
     // Also pull the new multi-resource assignments so display code can show all of them.
     const bookingIds = bookings.map(bk => bk.id);
-    const { data: assignments } = await client.from('booking_resources').select('*, resources(name, type)').in('booking_id', bookingIds);
+    const { data: assignments } = await client.from('booking_resources').select('*, resources!resource_id(name, type)').in('booking_id', bookingIds);
     const byBooking = {};
     (assignments || []).forEach(a => {
         if (!byBooking[a.booking_id]) byBooking[a.booking_id] = [];
@@ -812,7 +812,7 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
 async function loadExistingBookingResources(bookingId) {
     const client = getSupabase();
     if (!client) return [];
-    const { data, error } = await client.from('booking_resources').select('*, resources(name, type, default_mode)').eq('booking_id', bookingId);
+    const { data, error } = await client.from('booking_resources').select('*, resources!resource_id(name, type, default_mode)').eq('booking_id', bookingId);
     if (error) {
         console.error('Failed to load resource assignments:', error);
         return [];
@@ -2074,6 +2074,35 @@ async function deleteStaffTaskOnProfile(id, staffId) {
     openFullWidthProfile('staff', staffId);
 }
 
+/* Opening/editing a task from a pet's profile — mirrors the staff-profile flow above,
+   but returns to the pet profile afterward and pre-links the task to that pet. */
+let returnToPetProfile = null;
+
+async function openStaffTaskModalForPet(petId, petName) {
+    await openStaffTaskModal(null);
+    selectPetForTask(petId, petName);
+    returnToPetProfile = petId;
+}
+
+async function openStaffTaskModalFromPet(taskId, petId) {
+    await openStaffTaskModal(taskId);
+    returnToPetProfile = petId;
+}
+
+async function toggleStaffTaskOnPetProfile(id, newValue, petId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_tasks').update({ is_done: newValue }).eq('id', id);
+    openFullWidthProfile('pet', petId);
+}
+
+async function deleteStaffTaskOnPetProfile(id, petId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_tasks').delete().eq('id', id);
+    openFullWidthProfile('pet', petId);
+}
+
 let returnToStaffProfile = null;
 
 async function openStaffTaskModal(id) {
@@ -2156,6 +2185,7 @@ function clearTaskPetSelection() {
 
 function closeStaffTaskModal() {
     returnToStaffProfile = null;
+    returnToPetProfile = null;
     editingStaffTaskPetId = null;
     const modal = document.getElementById('staff-task-modal');
     if (modal) modal.classList.add('hidden');
@@ -2187,11 +2217,14 @@ async function saveStaffTask() {
 
     editingStaffTaskId = null;
     editingStaffTaskPetId = null;
+    // Capture these before closeStaffTaskModal() clears them
+    const returnStaffId = returnToStaffProfile;
+    const returnPetId = returnToPetProfile;
     closeStaffTaskModal();
-    if (returnToStaffProfile) {
-        const sid = returnToStaffProfile;
-        returnToStaffProfile = null;
-        openFullWidthProfile('staff', sid);
+    if (returnStaffId) {
+        openFullWidthProfile('staff', returnStaffId);
+    } else if (returnPetId) {
+        openFullWidthProfile('pet', returnPetId);
     } else {
         renderStaffTasks();
     }
@@ -3631,6 +3664,8 @@ async function openFullWidthProfile(type, id) {
             payload.bookings = await attachResourceNames(client, bookings || []); payload.bookings = await attachInvoiceStatuses(client, payload.bookings);
             const { data: staffAssignments } = await client.from('staff_assignments').select('*, staff(name, role)').eq('pet_id', id);
             payload.assignedStaff = staffAssignments || [];
+            const { data: tasks } = await client.from('staff_tasks').select('*, staff(name)').eq('pet_id', id).order('due_date');
+            payload.tasks = tasks || [];
         }
     } else if (type === 'vet') {
         const { data } = await client.from('vets').select('*').eq('id', id).single();
@@ -3972,10 +4007,37 @@ function renderEntitySections(type, data, id) {
                 <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 ${renderEventsCard(data.bookings, data.households?.id || data.household_id, { showPetName: false })}
 
+                <!-- Tasks linked to this pet -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="list-checks"></i> Tasks</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openStaffTaskModalForPet('${id}', '${(data.name || 'Pet').replace(/'/g, "\\'")}')">+ Add Task</button>
+                    </div>
+                    ${data.tasks && data.tasks.length ? data.tasks.map(t => `
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); margin-bottom:0.4rem;">
+                            <div>
+                                <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleStaffTaskOnPetProfile('${t.id}', ${!t.is_done}, '${id}')">
+                                <span style="${t.is_done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.task_text}</span>
+                                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.4rem;">${t.staff?.name ? '· ' + t.staff.name : ''} ${t.due_date ? '· Due ' + t.due_date : ''}</span>
+                            </div>
+                            <div>
+                                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;" onclick="openStaffTaskModalFromPet('${t.id}', '${id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="deleteStaffTaskOnPetProfile('${t.id}', '${id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                            </div>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted);">No tasks for this pet yet.</p>'}
+                </div>
+
+                <!-- Assessments (placeholder — feature not built yet) -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.5rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="clipboard-check"></i> Assessments</h3>
+                    <p style="font-size:0.85rem; color:var(--text-muted);">Behavior and training assessments will live here. Coming soon.</p>
+                </div>
+
                 <!-- History (placeholder) -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin:0 0 0.5rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="clipboard-list"></i> History</h3>
-                    <p style="font-size:0.85rem; color:var(--text-muted);">Progress reports, training assessments, and visit notes will live here. Coming soon.</p>
+                    <p style="font-size:0.85rem; color:var(--text-muted);">Progress reports and visit notes will live here. Coming soon.</p>
                 </div>
                 </div>
             </div>
