@@ -4433,6 +4433,33 @@ async function fetchActivityItems() {
 let actWeekOffset = 0;
 
 async function initActivitiesView() {
+    // 1. Restore saved Group By preference (if set)
+    const savedGroup = localStorage.getItem(ACT_GROUP_BY_KEY);
+    const groupSelect = document.getElementById('act-group-by');
+    if (savedGroup && groupSelect) {
+        groupSelect.value = savedGroup;
+    }
+
+    // 2. Reset filters to defaults on fresh load
+    const categorySelect = document.getElementById('act-category-filter');
+    const staffSelect = document.getElementById('act-staff-filter');
+    const resourceSelect = document.getElementById('act-resource-filter');
+    const householdSelect = document.getElementById('act-household-filter');
+    const statusSelect = document.getElementById('act-status-filter');
+    const dateFromInput = document.getElementById('act-date-from');
+    const dateToInput = document.getElementById('act-date-to');
+    const searchInput = document.getElementById('act-search');
+
+    if (categorySelect) categorySelect.value = 'all';
+    if (staffSelect) staffSelect.value = 'all';
+    if (resourceSelect) resourceSelect.value = 'all';
+    if (householdSelect) householdSelect.value = 'all';
+    if (statusSelect) statusSelect.value = 'all';
+    if (dateFromInput) dateFromInput.value = '';
+    if (dateToInput) dateToInput.value = '';
+    if (searchInput) searchInput.value = '';
+
+    // 3. Populate dropdown options and render
     if (typeof populateStaffSelects === 'function') await populateStaffSelects();
     await populateHouseholdActivityFilter();
     await populateResourceActivityFilter();
@@ -4494,8 +4521,15 @@ function switchActivitiesView(mode) {
 }
 
 function activitiesFilters() {
+    const groupByVal = document.getElementById('act-group-by')?.value || 'date';
+
+    // Store the Group By selection in localStorage
+    try {
+        localStorage.setItem(ACT_GROUP_BY_KEY, groupByVal);
+    } catch (e) { /* storage unavailable, ignore */ }
+
     return {
-        groupBy: document.getElementById('act-group-by')?.value || 'date',
+        groupBy: groupByVal,
         category: document.getElementById('act-category-filter')?.value || 'all',
         staff: document.getElementById('act-staff-filter')?.value || 'all',
         resource: document.getElementById('act-resource-filter')?.value || 'all',
