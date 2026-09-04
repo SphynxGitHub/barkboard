@@ -4735,6 +4735,83 @@ function getActPeriodDates() {
     return { dates, label: `${fmt(dates[0])} — ${fmt(dates[6])}` };
 }
 
+async function computeCalendarDayStatuses(dates) {
+    const client = getSupabase();
+    if (!client || !dates || !dates.length) return {};
+
+    const fmt = d => d.toISOString().slice(0, 10);
+    const rangeStart = fmt(dates[0]);
+    const rangeEnd = fmt(dates[dates.length - 1]);
+
+    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }, { data: resourceUsage }] = await Promise.all([
+        client.from('resources').select('id, type, seats'),
+        client.from('staff').select('id'),
+        client.from('business_closures').select('start_date, end_date'),
+        client.from('bookings').select('id, check_in, check_out, assigned_staff_id, requires_staff_time, status')
+            .neq('status', 'cancelled')
+            .lte('check_in', rangeEnd + 'T23:59:59')
+            .gte('check_out', rangeStart + 'T00:00:00'),
+        client.from('booking_resources').select('resource_id, bookings!inner(id, check_in, check_out, status)')
+            .neq('bookings.status', 'cancelled')
+            .lte('bookings.check_in', rangeEnd + 'T23:59:59')
+            .gte('bookings.check_out', rangeStart + 'T00:00:00')
+    ]);
+
+    // Resource seats and capacity mapping per resource type
+    const resourceTypeCapacity = {};
+    const resourceTypeById = {};
+    (resources || []).forEach(r => {
+        resourceTypeById[r.id] = r.type;
+        resourceTypeCapacity[r.type] = (resourceTypeCapacity[r.type] || 0) + (r.seats || 1);
+    });
+    const totalStaff = (staffList || []).length;
+
+    const result = {};
+    dates.forEach(d => {
+        const key = fmt(d);
+
+        // 1. Business Closed check
+        const closed = (closures || []).some(c => key >= c.start_date && key <= (c.end_date || c.start_date));
+
+        // 2. Staff Fully Booked check
+        const dayBookings = (bookings || []).filter(bk => {
+            const start = (bk.check_in || '').slice(0, 10);
+            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
+            return key >= start && key <= end;
+        });
+
+        const staffBusy = new Set(dayBookings.filter(bk => bk.requires_staff_time && bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
+        const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
+
+        // 3. Resource Seat Full check
+        const dayResourceUsage = (resourceUsage || []).filter(row => {
+            const bk = row.bookings;
+            if (!bk) return false;
+            const start = (bk.check_in || '').slice(0, 10);
+            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
+            return key >= start && key <= end;
+        });
+
+        const usedByType = {};
+        dayResourceUsage.forEach(row => {
+            const type = resourceTypeById[row.resource_id];
+            if (!type) return;
+            usedByType[type] = (usedByType[type] || 0) + 1;
+        });
+        const fullTypes = Object.keys(resourceTypeCapacity).filter(type => usedByType[type] >= resourceTypeCapacity[type]);
+
+        // Prioritize levels: closed > staff-full > resource-full
+        let level = null;
+        if (closed) level = 'closed';
+        else if (staffFull) level = 'staff-full';
+        else if (fullTypes.length) level = 'resource-full';
+
+        result[key] = { level, fullTypes };
+    });
+
+    return result;
+}
+
 async function renderActivitiesCalendar() {
     const thead = document.getElementById('act-cal-thead');
     const tbody = document.getElementById('act-cal-body');
