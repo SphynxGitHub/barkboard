@@ -530,6 +530,78 @@ async function openBookingModal(householdId, bookingId = null) {
     }
 }
 
+async function searchResourcesForBooking(query) {
+    const container = document.getElementById('bk-resource-search-results');
+    if (!container) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const q = (query || '').trim();
+    const type = document.getElementById('bk-type')?.value || 'appointment';
+    const startDate = document.getElementById('bk-start-date')?.value;
+    const startTime = document.getElementById('bk-start-time')?.value || '00:00';
+    const endDate = document.getElementById('bk-end-date')?.value || startDate;
+
+    // Fetch resources matching search query
+    let dbQuery = client.from('resources').select('*').order('name').limit(20);
+    if (q) {
+        dbQuery = dbQuery.or(`name.ilike.%${q}%,type.ilike.%${q}%`);
+    }
+    const { data: allResources } = await dbQuery;
+
+    // Calculate resource seat utilization for the date range
+    let usageCounts = {};
+    if (startDate) {
+        const rangeStart = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
+        const rangeEnd = type === 'stay' ? `${endDate}T23:59:59` : `${startDate}T23:59:59`;
+
+        const { data: bookedRows } = await client.from('booking_resources')
+            .select('resource_id, bookings!inner(id, check_in, check_out, status)')
+            .neq('bookings.status', 'cancelled')
+            .lte('bookings.check_in', rangeEnd)
+            .gte('bookings.check_out', rangeStart);
+
+        (bookedRows || []).forEach(row => {
+            // Ignore the booking currently being edited
+            if (editingBookingId && row.bookings?.id === editingBookingId) return;
+
+            const bkStart = (row.bookings?.check_in || '').slice(0, 10);
+            const bkEnd = (row.bookings?.check_out || bkStart).slice(0, 10);
+
+            // Same-Day Turnover Rule: Check-out day frees the seat for new afternoon check-ins
+            if (bkStart !== bkEnd && bkEnd === startDate) return;
+
+            usageCounts[row.resource_id] = (usageCounts[row.resource_id] || 0) + 1;
+        });
+    }
+
+    if (!allResources || !allResources.length) {
+        container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); padding:0.4rem;">No matching resources found.</div>';
+        return;
+    }
+
+    container.innerHTML = allResources.map(r => {
+        const seats = r.seats || 1;
+        const used = usageCounts[r.id] || 0;
+        const freeSeats = Math.max(0, seats - used);
+        const full = used >= seats;
+
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem; margin-bottom:0.25rem;">
+                <div>
+                    <strong>${r.name}</strong>
+                    <span style="color:var(--text-muted); font-size:0.78rem;">(${r.type || 'General'}${seats > 1 ? ' · ' + freeSeats + '/' + seats + ' seats free' : ''})</span>
+                    ${full ? ' <span style="color:#dc2626; font-weight:600; font-size:0.75rem;">— FULL</span>' : ''}
+                </div>
+                <button type="button" class="btn btn-primary" style="font-size:0.72rem; padding:0.2rem 0.5rem;" ${full ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} onclick="addResourceToBooking('${r.id}', '${r.name.replace(/'/g, "\\'")}', '${(r.type || '').replace(/'/g, "\\'")}', '${r.default_mode || 'all_day'}')">
+                    Add
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
 async function searchServiceTypeForBooking(query) {
     const container = document.getElementById('bk-service-type-results');
     if (!container) return;
