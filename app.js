@@ -814,7 +814,7 @@ async function openStaffAvailModal(id, presetStaffId) {
     returnToStaffProfileFromAvail = presetStaffId || null;
 
     if (typeof populateStaffSelects === 'function') {
-        populateStaffSelects();
+        await populateStaffSelects();
     }
 
     const titleEl = document.getElementById('staff-avail-modal-title');
@@ -1133,7 +1133,7 @@ let returnToStaffProfile = null;
 
 async function openStaffTaskModal(id) {
     editingStaffTaskId = id;
-    if (typeof populateStaffSelects === 'function') populateStaffSelects();
+    if (typeof populateStaffSelects === 'function') await populateStaffSelects();
 
     const titleEl = document.getElementById('staff-task-modal-title');
     if (titleEl) titleEl.textContent = id ? 'Edit Task' : 'Add Task';

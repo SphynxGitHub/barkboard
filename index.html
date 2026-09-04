@@ -266,12 +266,27 @@
                 </div>
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">These show up on payment notices and receipts. Square is listed as an accepted method for now — online payment processing isn't wired up yet.</p>
                 <div style="display:flex; flex-direction:column; gap:0.85rem; max-width:420px;">
-                    <div class="form-group"><label>Business Name</label><input type="text" id="pay-business-name"></div>
-                    <div class="form-group"><label>Venmo Handle</label><input type="text" id="pay-venmo" placeholder="@your-handle"></div>
-                    <div class="form-group"><label>Zelle Info</label><input type="text" id="pay-zelle" placeholder="email or phone"></div>
-                    <div class="form-group"><label>Cash Instructions</label><input type="text" id="pay-cash" placeholder="e.g. Cash accepted at pickup/drop-off"></div>
-                    <div class="form-group"><label>Square Link</label><input type="text" id="pay-square" placeholder="https://square.link/..."></div>
-                    <button class="btn-primary" style="align-self:flex-start;" onclick="saveBusinessPaymentSettings()">Save</button>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Business Name</label>
+                        <input type="text" id="pay-business-name" class="biz-select" style="width:100%; padding:0.5rem;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Venmo Handle</label>
+                        <input type="text" id="pay-venmo" placeholder="@your-handle" class="biz-select" style="width:100%; padding:0.5rem;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Zelle Info</label>
+                        <input type="text" id="pay-zelle" placeholder="email or phone" class="biz-select" style="width:100%; padding:0.5rem;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Cash Instructions</label>
+                        <input type="text" id="pay-cash" placeholder="e.g. Cash accepted at pickup/drop-off" class="biz-select" style="width:100%; padding:0.5rem;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Square Link</label>
+                        <input type="text" id="pay-square" placeholder="https://square.link/..." class="biz-select" style="width:100%; padding:0.5rem;">
+                    </div>
+                    <button class="btn-primary" style="align-self:flex-start; padding:0.5rem 1.25rem;" onclick="saveBusinessPaymentSettings()">Save</button>
                 </div>
             </div>
 
