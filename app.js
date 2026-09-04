@@ -507,7 +507,12 @@ async function openBookingModal(householdId, bookingId = null) {
                     </div>
                 `;
             } else {
-                invoiceInfo.innerHTML = `<button class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}')">+ Create Invoice for this Appointment</button>`;
+                invoiceInfo.innerHTML = `
+                    <input type="text" id="bk-invoice-link-search" placeholder="Type to filter this household's invoices..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onkeyup="searchInvoicesForBooking(this.value, '${existingBooking.id}')">
+                    <div id="bk-invoice-link-results" style="margin-top:0.4rem; display:flex; flex-direction:column; gap:0.3rem; max-height:180px; overflow-y:auto;"></div>
+                    <button class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-top:0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}')">+ Create New Invoice</button>
+                `;
+                await searchInvoicesForBooking('', existingBooking.id);
             }
         }
     }
@@ -631,6 +636,37 @@ async function populateResourceSelect(selectId, resourceType, preserveSelectedId
 function refreshAllResourceAvailability() {
     if (currentBookingResourceType) populateResourceSelect('bk-resource-id', currentBookingResourceType, document.getElementById('bk-resource-id')?.value || null);
     if (currentStaffTimeResourceType) populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, document.getElementById('bk-staff-time-resource-id')?.value || null);
+}
+
+async function searchInvoicesForBooking(query, bookingId) {
+    const container = document.getElementById('bk-invoice-link-results');
+    if (!container) return;
+    const q = query.trim();
+
+    const client = getSupabase();
+    if (!client) return;
+
+    let dbQuery = client.from('invoices').select('id, description, amount, status')
+        .eq('household_id', bookingHouseholdId)
+        .order('due_date', { ascending: false })
+        .limit(20);
+    if (q) dbQuery = dbQuery.ilike('description', `%${q}%`);
+
+    const { data: invoices } = await dbQuery;
+
+    container.innerHTML = (invoices && invoices.length) ? invoices.map(inv => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem;">
+            <span>${inv.description || 'Invoice'} · $${Number(inv.amount || 0).toFixed(2)} · <span style="text-transform:capitalize;">${inv.status || 'unpaid'}</span></span>
+            <button class="btn btn-primary" style="font-size:0.72rem; padding:0.2rem 0.45rem;" onclick="linkBookingToInvoice('${bookingId}', '${inv.id}')">Link</button>
+        </div>
+    `).join('') : '<div style="font-size:0.8rem; color:var(--text-muted);">No existing invoices for this household yet.</div>';
+}
+
+async function linkBookingToInvoice(bookingId, invoiceId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('bookings').update({ invoice_id: invoiceId }).eq('id', bookingId);
+    openBookingModal(bookingHouseholdId, bookingId);
 }
 
 function closeBookingModal() {
@@ -831,8 +867,8 @@ async function openInvoiceModal(householdId, invoiceId = null) {
     if (linkedApptsSection) linkedApptsSection.classList.toggle('hidden', !invoiceId);
     if (invoiceId) {
         await renderLinkedAppointments(invoiceId);
-        document.getElementById('inv-appt-search-results').innerHTML = '';
         document.getElementById('inv-appt-search').value = '';
+        await searchAppointmentsForInvoice('');
     }
 
     const modal = document.getElementById('invoice-modal');
@@ -869,16 +905,18 @@ async function searchAppointmentsForInvoice(query) {
     const container = document.getElementById('inv-appt-search-results');
     if (!container) return;
     const q = query.trim();
-    if (!q) { container.innerHTML = ''; return; }
 
     const client = getSupabase();
     if (!client) return;
 
-    const { data: matches } = await client.from('bookings').select('id, service_name, check_in, check_out, invoice_id')
+    let dbQuery = client.from('bookings').select('id, service_name, check_in, check_out, invoice_id')
         .eq('household_id', invoiceHouseholdId)
-        .ilike('service_name', `%${q}%`)
         .neq('invoice_id', editingInvoiceId || '00000000-0000-0000-0000-000000000000')
-        .limit(8);
+        .order('check_in', { ascending: false })
+        .limit(20);
+    if (q) dbQuery = dbQuery.ilike('service_name', `%${q}%`);
+
+    const { data: matches } = await dbQuery;
 
     // Also include appointments with no invoice at all (the .neq above only excludes rows already on THIS invoice)
     const filtered = (matches || []).filter(bk => bk.invoice_id !== editingInvoiceId);
@@ -891,7 +929,7 @@ async function searchAppointmentsForInvoice(query) {
                 <button class="btn btn-primary" style="font-size:0.72rem; padding:0.2rem 0.45rem;" onclick="addAppointmentToInvoice('${bk.id}', '${editingInvoiceId}')">Add</button>
             </div>
         `;
-    }).join('') : '<div style="font-size:0.8rem; color:var(--text-muted);">No matching appointments for this household.</div>';
+    }).join('') : '<div style="font-size:0.8rem; color:var(--text-muted);">No appointments found for this household.</div>';
 }
 
 async function addAppointmentToInvoice(bookingId, invoiceId) {
