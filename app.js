@@ -4533,7 +4533,7 @@ async function renderActivities() {
     const f = activitiesFilters();
     let items = await fetchActivityItems();
 
-    // Map resource IDs & names onto items
+    // Map resources onto items
     items.forEach(it => {
         const assigned = it.resourceAssignments || [];
         if (assigned.length) {
@@ -4570,21 +4570,28 @@ async function renderActivities() {
     const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
 
     const renderItemRow = (it) => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.65rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer; margin-bottom:0.5rem;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
-            <div style="display:flex; align-items:center; gap:0.6rem;">
-                <i data-lucide="${kindIcon[it.kind]}" style="width:16px;height:16px; color:var(--text-muted);"></i>
+        <div class="activity-row-item" 
+             style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card, #ffffff); cursor:pointer; margin-bottom:0.5rem; transition: background-color 0.15s ease;"
+             onmouseover="this.style.backgroundColor='var(--bg-hover, #f8fafc)'"
+             onmouseout="this.style.backgroundColor='var(--bg-card, #ffffff)'"
+             onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+            
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+                <i data-lucide="${kindIcon[it.kind]}" style="width:18px; height:18px; color:var(--primary, #2563eb);"></i>
                 <div>
-                    <strong>${it.title}</strong>
-                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                    <strong style="font-size:0.95rem; color:var(--text-main, #0f172a);">${it.title}</strong>
+                    <div style="font-size:0.8rem; color:var(--text-muted, #64748b); margin-top:0.2rem; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
                         ${it.subtitle ? `<span>${it.subtitle}</span> · ` : ''}
-                        ${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${it.resourceNames}</span> · ` : ''}
-                        ${it.householdName ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="home" style="width:12px;height:12px;"></i> ${it.householdName}</span> · ` : ''}
-                        ${it.staffName ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="user" style="width:12px;height:12px;"></i> ${it.staffName}</span> · ` : ''}
-                        ${it.date ? `<span style="display:inline-flex; align-items:center; gap:0.2rem;"><i data-lucide="calendar" style="width:12px;height:12px;"></i> ${it.date}</span>` : ''}
+                        ${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? `<span style="display:inline-flex; align-items:center; gap:0.25rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${it.resourceNames}</span> · ` : ''}
+                        ${it.householdName ? `<span style="display:inline-flex; align-items:center; gap:0.25rem;"><i data-lucide="home" style="width:12px;height:12px;"></i> ${it.householdName}</span> · ` : ''}
+                        ${it.staffName ? `<span style="display:inline-flex; align-items:center; gap:0.25rem;"><i data-lucide="user" style="width:12px;height:12px;"></i> ${it.staffName}</span> · ` : ''}
+                        ${it.date ? `<span style="display:inline-flex; align-items:center; gap:0.25rem;"><i data-lucide="calendar" style="width:12px;height:12px;"></i> ${it.date}</span>` : ''}
                     </div>
                 </div>
             </div>
-            <div style="display:flex; align-items:center; gap:0.5rem;">
+
+            <!-- Actions & Status Dropdowns (stopPropagation keeps card click from firing when changing status) -->
+            <div style="display:flex; align-items:center; gap:0.5rem;" onclick="event.stopPropagation();">
                 ${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="${it.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:15px;height:15px;"></i></button>` : ''}
                 ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
                 ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
@@ -4592,7 +4599,7 @@ async function renderActivities() {
         </div>
     `;
 
-    // Flow 1: UNGROUPED (Flat List)
+    // Ungrouped View
     if (f.groupBy === 'none') {
         items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
         el.innerHTML = items.map(renderItemRow).join('');
@@ -4600,7 +4607,7 @@ async function renderActivities() {
         return;
     }
 
-    // Flow 2: GROUPED
+    // Grouped View
     const groups = {};
     items.forEach(it => {
         let key = 'Other';
