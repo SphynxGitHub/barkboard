@@ -4521,14 +4521,6 @@ function switchActivitiesView(mode) {
     }
 }
 
-function setActCalendarMode(mode) {
-    actCalendarMode = mode;
-    actWeekOffset = 0;
-    document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
-    document.getElementById('actview-' + mode)?.classList.add('today');
-    renderActivitiesCalendar();
-}
-
 function activitiesFilters() {
     const groupByVal = document.getElementById('act-group-by')?.value || 'date';
 
@@ -4682,6 +4674,149 @@ async function renderActivities() {
     });
 
     el.innerHTML = html;
+    refreshIcons();
+}
+
+/* ==========================================================================
+   ACTIVITIES CALENDAR RENDERER & PERIOD HELPERS
+   ========================================================================== */
+
+function setActCalendarMode(mode) {
+    actCalendarMode = mode;
+    actWeekOffset = 0;
+    document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
+    document.getElementById('actview-' + mode)?.classList.add('today');
+    renderActivitiesCalendar();
+}
+
+function shiftActPeriod(delta) {
+    actWeekOffset += delta;
+    renderActivitiesCalendar();
+}
+
+function resetActPeriod() {
+    actWeekOffset = 0;
+    renderActivitiesCalendar();
+}
+
+function getActPeriodDates() {
+    const today = new Date();
+    const fmt = d => d.toISOString().slice(0, 10);
+
+    if (actCalendarMode === 'day') {
+        const d = new Date(today);
+        d.setDate(d.getDate() + actWeekOffset);
+        return { dates: [d], label: fmt(d) };
+    }
+
+    if (actCalendarMode === 'month') {
+        const first = new Date(today.getFullYear(), today.getMonth() + actWeekOffset, 1);
+        const startDay = new Date(first);
+        startDay.setDate(startDay.getDate() - startDay.getDay());
+        const dates = [];
+        for (let i = 0; i < 42; i++) {
+            const d = new Date(startDay);
+            d.setDate(startDay.getDate() + i);
+            dates.push(d);
+        }
+        const label = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        return { dates, label, monthAnchor: first.getMonth() };
+    }
+
+    // Default: 'week'
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() - today.getDay() + actWeekOffset * 7);
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + i);
+        dates.push(d);
+    }
+    return { dates, label: `${fmt(dates[0])} — ${fmt(dates[6])}` };
+}
+
+async function renderActivitiesCalendar() {
+    const thead = document.getElementById('act-cal-thead');
+    const tbody = document.getElementById('act-cal-body');
+    const weekLabel = document.getElementById('act-week-label');
+    if (!thead || !tbody) return;
+
+    const { dates, label, monthAnchor } = getActPeriodDates();
+    const fmt = d => d.toISOString().slice(0, 10);
+    if (weekLabel) weekLabel.textContent = label;
+
+    const f = activitiesFilters();
+    let items = await fetchActivityItems();
+    items = filterActivityItems(items, f);
+
+    // Bucket items by date
+    const byDay = {};
+    dates.forEach(d => { byDay[fmt(d)] = []; });
+    items.forEach(it => {
+        const start = it.date;
+        const end = it.endDate || it.date;
+        Object.keys(byDay).forEach(key => {
+            if (key >= start && key <= end) byDay[key].push(it);
+        });
+    });
+
+    const dayStatus = typeof computeCalendarDayStatuses === 'function' 
+        ? await computeCalendarDayStatuses(dates) 
+        : {};
+
+    const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
+    const statusBg = { closed: '#e5e7eb', 'staff-full': '#fecaca', 'resource-full': '#fef08a' };
+
+    const isDayMode = actCalendarMode === 'day';
+
+    const renderCellItems = (key, compact) => (byDay[key] || []).map(it => `
+        <div style="padding:${compact ? '0.2rem 0.3rem' : '0.4rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer;" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.3rem;">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
+            </div>
+            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle || ''}</div><div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.2rem; flex-wrap:wrap;">${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="Print" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:12px;height:12px;"></i></button>` : ''}${isDayMode && it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}</div>` : ''}
+        </div>
+    `).join('');
+
+    const todayKey = fmt(new Date());
+
+    const cellStyle = (key, extra) => {
+        const s = dayStatus[key];
+        const bg = s ? statusBg[s.level] : '';
+        const statusLabel = s ? (s.level === 'closed' ? 'Business closed' : s.level === 'staff-full' ? 'All staff booked' : `Closed to: ${s.fullTypes.join(', ')}`) : '';
+        const todayOutline = key === todayKey ? 'box-shadow: inset 0 0 0 2px #2563eb;' : '';
+        return `style="cursor:pointer; ${bg ? 'background:' + bg + ';' : ''} ${todayOutline} ${extra || ''}" title="${key === todayKey ? 'Today. ' : ''}${statusLabel}"`;
+    };
+
+    if (actCalendarMode === 'day') {
+        thead.innerHTML = `<tr><th>${dates[0].toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</th></tr>`;
+        const key = fmt(dates[0]);
+        tbody.innerHTML = `<tr><td ${cellStyle(key, 'min-height:300px;')} onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false) || '<span style="color:var(--text-muted); font-size:0.85rem;">Click to schedule something on this day.</span>'}</td></tr>`;
+    } else if (actCalendarMode === 'month') {
+        thead.innerHTML = `<tr>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<th>${d}</th>`).join('')}</tr>`;
+        let rows = '';
+        for (let w = 0; w < 6; w++) {
+            rows += '<tr>';
+            for (let d = 0; d < 7; d++) {
+                const date = dates[w * 7 + d];
+                const key = fmt(date);
+                const inMonth = date.getMonth() === monthAnchor;
+                rows += `<td ${cellStyle(key, `opacity:${inMonth ? '1' : '0.4'};`)} onclick="quickScheduleOnDate('${key}')">
+                    <div style="font-size:0.78rem; font-weight:600; margin-bottom:0.2rem;">${date.getDate()}</div>
+                    ${renderCellItems(key, true)}
+                </td>`;
+            }
+            rows += '</tr>';
+        }
+        tbody.innerHTML = rows;
+    } else {
+        thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
+        tbody.innerHTML = `<tr>${dates.map(d => {
+            const key = fmt(d);
+            return `<td ${cellStyle(key)} onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false)}</td>`;
+        }).join('')}</tr>`;
+    }
+
     refreshIcons();
 }
 
