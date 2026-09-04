@@ -2,6 +2,23 @@
 const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
 
+// PostgREST nested embeds (e.g. bookings(*, resources(name))) have repeatedly
+// broken silently in this project when a referenced FK constraint was recently
+// altered — the whole query returns empty instead of erroring loudly. This
+// attaches resource names manually via a separate lookup instead, so a stale
+// embed cache can never take down an entire page's data.
+async function attachResourceNames(client, bookings) {
+    if (!bookings || !bookings.length) return bookings || [];
+    const { data: allResources } = await client.from('resources').select('id, name');
+    const map = {};
+    (allResources || []).forEach(r => { map[r.id] = r; });
+    bookings.forEach(bk => {
+        bk.resources = bk.space_id ? (map[bk.space_id] || null) : null;
+        bk.staff_time_resource = bk.staff_time_resource_id ? (map[bk.staff_time_resource_id] || null) : null;
+    });
+    return bookings;
+}
+
 function getSupabase() {
     if (!window.supabaseClient) {
         if (!window.supabase || typeof window.supabase.createClient !== 'function') {
@@ -34,7 +51,102 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof renderStaffGuests === 'function') {
         renderStaffGuests();
     }
+    if (typeof renderTodaysOverview === 'function') {
+        renderTodaysOverview();
+    }
+    if (typeof renderTodoPanel === 'function') {
+        renderTodoPanel();
+    }
 });
+
+async function renderTodaysOverview() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const todayStart = today + 'T00:00:00';
+    const todayEnd = today + 'T23:59:59';
+
+    const [{ data: resources }, { data: todaysBookings }, { data: pendingInvoices }, { data: openTasks }] = await Promise.all([
+        client.from('resources').select('id'),
+        client.from('bookings').select('space_id, requires_staff_time, status')
+            .neq('status', 'cancelled')
+            .lte('check_in', todayEnd).gte('check_out', todayStart),
+        client.from('invoices').select('id').eq('status', 'unpaid'),
+        client.from('staff_tasks').select('id').eq('is_done', false)
+    ]);
+
+    const totalResources = (resources || []).length;
+    const occupiedResources = new Set((todaysBookings || []).filter(bk => bk.space_id).map(bk => bk.space_id)).size;
+    const trainingSessions = (todaysBookings || []).filter(bk => bk.requires_staff_time).length;
+
+    const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    setText('stat-kennels', `${occupiedResources} / ${totalResources}`);
+    setText('stat-training', String(trainingSessions));
+    setText('stat-invoices', String((pendingInvoices || []).length));
+    setText('stat-tasks', String((openTasks || []).length));
+}
+
+async function renderTodoPanel() {
+    const body = document.getElementById('todo-list-body');
+    const dateLabel = document.getElementById('todo-date-label');
+    const progressLabel = document.getElementById('todo-progress-label');
+    const progressBar = document.getElementById('todo-progress-bar');
+    if (!body) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const today = new Date();
+    const todayKey = today.toISOString().slice(0, 10);
+    if (dateLabel) dateLabel.textContent = today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+    const { data: tasks } = await client.from('staff_tasks').select('*, staff(name)').eq('due_date', todayKey).order('is_done');
+
+    const list = tasks || [];
+    const done = list.filter(t => t.is_done).length;
+
+    if (progressLabel) progressLabel.textContent = `${done} / ${list.length}`;
+    if (progressBar) progressBar.style.width = list.length ? `${Math.round((done / list.length) * 100)}%` : '0%';
+
+    body.innerHTML = list.length ? list.map(t => `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border);">
+            <label style="display:flex; align-items:center; gap:0.5rem; ${t.is_done ? 'color:var(--text-muted); text-decoration:line-through;' : ''}">
+                <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleTodoTask('${t.id}', this.checked)">
+                ${t.task_text}${t.staff?.name ? ' <span style="font-size:0.78rem; color:var(--text-muted);">(' + t.staff.name + ')</span>' : ''}
+            </label>
+        </div>
+    `).join('') : '<div class="biz-empty">No tasks due today.</div>';
+}
+
+async function toggleTodoTask(id, isDone) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_tasks').update({ is_done: isDone }).eq('id', id);
+    renderTodoPanel();
+    renderTodaysOverview();
+}
+
+async function addCustomTask() {
+    const input = document.getElementById('todo-new-input');
+    const text = input?.value.trim();
+    if (!text) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const { error } = await client.from('staff_tasks').insert([{ task_text: text, due_date: today, priority: 'normal', is_done: false }]);
+
+    if (error) {
+        alert('Failed to add task: ' + error.message);
+        return;
+    }
+
+    if (input) input.value = '';
+    renderTodoPanel();
+    renderTodaysOverview();
+}
 
 async function renderStaffGuests() {
     const container = document.getElementById('staff-guests-container');
@@ -89,6 +201,8 @@ function switchView(viewId) {
     // Hooks for view-specific initializations
     if (viewId === 'staff-view' && typeof renderStaffGuests === 'function') {
         renderStaffGuests();
+        if (typeof renderTodaysOverview === 'function') renderTodaysOverview();
+        if (typeof renderTodoPanel === 'function') renderTodoPanel();
     }
     if (viewId === 'staff-mgmt-view') {
         initStaffView();
@@ -182,17 +296,23 @@ let bookingHouseholdId = null;
 function toggleBookingTypeFields() {
     const type = document.getElementById('bk-type')?.value;
     const startLabel = document.getElementById('bk-start-label');
+    const startTimeLabel = document.getElementById('bk-start-time-label');
     const timeField = document.getElementById('bk-time-field');
     const endDateField = document.getElementById('bk-end-date-field');
+    const endTimeField = document.getElementById('bk-end-time-field');
 
     if (type === 'stay') {
         if (startLabel) startLabel.textContent = 'Start Date *';
-        if (timeField) timeField.classList.add('hidden');
+        if (startTimeLabel) startTimeLabel.textContent = 'Drop-off Time';
+        if (timeField) timeField.classList.remove('hidden');
         if (endDateField) endDateField.classList.remove('hidden');
+        if (endTimeField) endTimeField.classList.remove('hidden');
     } else {
         if (startLabel) startLabel.textContent = 'Date *';
+        if (startTimeLabel) startTimeLabel.textContent = 'Time';
         if (timeField) timeField.classList.remove('hidden');
         if (endDateField) endDateField.classList.add('hidden');
+        if (endTimeField) endTimeField.classList.add('hidden');
     }
 }
 
@@ -226,6 +346,7 @@ async function openBookingModal(householdId, bookingId = null) {
     if (startDateInput) startDateInput.value = '';
     if (startTimeInput) startTimeInput.value = '';
     if (endDateInput) endDateInput.value = '';
+    if (document.getElementById('bk-end-time')) document.getElementById('bk-end-time').value = '';
     if (amountInput) amountInput.value = '';
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
@@ -280,13 +401,16 @@ async function openBookingModal(householdId, bookingId = null) {
         const checkInDate = existingBooking.check_in ? existingBooking.check_in.slice(0, 10) : '';
         const checkInTime = existingBooking.check_in ? existingBooking.check_in.slice(11, 16) : '';
         const checkOutDate = existingBooking.check_out ? existingBooking.check_out.slice(0, 10) : '';
+        const checkOutTime = existingBooking.check_out ? existingBooking.check_out.slice(11, 16) : '';
         const isStay = checkOutDate && checkOutDate !== checkInDate;
+        const endTimeInput = document.getElementById('bk-end-time');
 
         if (typeSel) typeSel.value = isStay ? 'stay' : 'appointment';
         if (serviceInput) serviceInput.value = existingBooking.service_name || '';
         if (startDateInput) startDateInput.value = checkInDate;
         if (startTimeInput) startTimeInput.value = checkInTime;
         if (isStay && endDateInput) endDateInput.value = checkOutDate;
+        if (isStay && endTimeInput) endTimeInput.value = checkOutTime;
         if (amountInput) amountInput.value = existingBooking.amount != null ? existingBooking.amount : '';
         if (statusSel) statusSel.value = existingBooking.status || 'pending';
         if (staffSel) staffSel.value = existingBooking.assigned_staff_id || '';
@@ -466,6 +590,7 @@ async function saveBooking() {
     const requiresStaffTime = !document.getElementById('bk-staff-time-field')?.classList.contains('hidden');
     const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
     const staffTimeResourceId = document.getElementById('bk-staff-time-resource-id')?.value || null;
+    const endTime = document.getElementById('bk-end-time')?.value || startTime;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
 
@@ -482,9 +607,9 @@ async function saveBooking() {
     const amount = amountRaw ? parseFloat(amountRaw) : 0;
 
     // check_in/check_out are timestamps: a single appointment has check_in === check_out,
-    // a multi-day stay spans start-of-day to start-of-day across the date range.
-    const checkIn = type === 'stay' ? `${startDate}T00:00:00` : `${startDate}T${startTime}:00`;
-    const checkOut = type === 'stay' ? `${endDate}T00:00:00` : checkIn;
+    // a multi-day stay uses the actual drop-off and pick-up times entered.
+    const checkIn = type === 'stay' ? `${startDate}T${startTime}:00` : `${startDate}T${startTime}:00`;
+    const checkOut = type === 'stay' ? `${endDate}T${endTime}:00` : checkIn;
 
     const basePayload = {
         household_id: bookingHouseholdId,
@@ -1434,9 +1559,10 @@ async function renderCalendar() {
 
     if (weekLabel) weekLabel.textContent = `${start} — ${end}`;
 
-    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name), resources(name)')
+    const { data: rawBookings } = await client.from('bookings').select('*, pets(name), households(name)')
         .neq('status', 'cancelled')
         .lte('check_in', end + 'T23:59:59').gte('check_out', start + 'T00:00:00');
+    const bookings = await attachResourceNames(client, rawBookings || []);
 
     thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
 
@@ -1664,7 +1790,7 @@ async function renderBizDashboard() {
     const labelEl = document.getElementById('biz-date-range-label');
     if (labelEl) labelEl.textContent = from ? `${from} to ${to}` : '';
 
-    const { data: invoices } = await client.from('invoices').select('*, bookings(assigned_staff_id)').gte('due_date', from || '1970-01-01').lte('due_date', to);
+    const { data: invoices } = await client.from('invoices').select('*').gte('due_date', from || '1970-01-01').lte('due_date', to);
     const { data: bookings } = await client.from('bookings').select('*, staff:assigned_staff_id(name)').gte('check_in', from ? from + 'T00:00:00' : '1970-01-01').lte('check_in', to + 'T23:59:59');
 
     const paidInvoices = (invoices || []).filter(i => i.status === 'paid');
@@ -2663,7 +2789,8 @@ async function openFullWidthProfile(type, id) {
     let payload = null;
 
     if (type === 'household') {
-        const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*, resources(name), staff_time_resource:staff_time_resource_id(name)), invoices(*)').eq('id', id).single();
+        const { data } = await client.from('households').select('*, people(*), pets(*), bookings(*), invoices(*)').eq('id', id).single();
+        if (data && data.bookings) data.bookings = await attachResourceNames(client, data.bookings);
         payload = data;
         if (payload) {
             payload.vetsById = await fetchVetsForPets(client, payload.pets || []);
@@ -2686,8 +2813,8 @@ async function openFullWidthProfile(type, id) {
             payload.households.vetsById = await fetchVetsForPets(client, payload.households.pets || []);
         }
         if (payload) {
-            const { data: bookings } = await client.from('bookings').select('*, resources(name), staff_time_resource:staff_time_resource_id(name)').eq('pet_id', id);
-            payload.bookings = bookings || [];
+            const { data: bookings } = await client.from('bookings').select('*').eq('pet_id', id);
+            payload.bookings = await attachResourceNames(client, bookings || []);
             const { data: staffAssignments } = await client.from('staff_assignments').select('*, staff(name, role)').eq('pet_id', id);
             payload.assignedStaff = staffAssignments || [];
         }
@@ -2706,8 +2833,8 @@ async function openFullWidthProfile(type, id) {
         if (payload) {
             const { data: assignments } = await client.from('staff_assignments').select('*, pets(name, species, household_id, households(name))').eq('staff_id', id);
             payload.assignments = assignments || [];
-            const { data: events } = await client.from('bookings').select('*, pets(name), households(name), resources(name), staff_time_resource:staff_time_resource_id(name)').eq('assigned_staff_id', id).order('check_in');
-            payload.bookings = events || [];
+            const { data: events } = await client.from('bookings').select('*, pets(name), households(name)').eq('assigned_staff_id', id).order('check_in');
+            payload.bookings = await attachResourceNames(client, events || []);
             const { data: tasks } = await client.from('staff_tasks').select('*').eq('staff_id', id).order('due_date');
             payload.tasks = tasks || [];
             const { data: timeOff } = await client.from('staff_availability').select('*').eq('staff_id', id).order('start_date');
@@ -3775,7 +3902,8 @@ async function fetchActivityItems() {
 
     const items = [];
 
-    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name), resources(name)');
+    const { data: rawBookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name)');
+    const bookings = await attachResourceNames(client, rawBookings || []);
     (bookings || []).forEach(bk => {
         items.push({
             kind: 'appointment',

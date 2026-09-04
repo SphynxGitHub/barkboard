@@ -960,12 +960,16 @@
                             <input type="date" id="bk-start-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
                         </div>
                         <div id="bk-time-field">
-                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Time</label>
+                            <label id="bk-start-time-label" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Time</label>
                             <input type="time" id="bk-start-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
                         </div>
                         <div id="bk-end-date-field" class="hidden">
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">End Date *</label>
                             <input type="date" id="bk-end-date" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
+                        </div>
+                        <div id="bk-end-time-field" class="hidden">
+                            <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Pick-up Time</label>
+                            <input type="time" id="bk-end-time" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="refreshAllResourceAvailability()">
                         </div>
                     </div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
