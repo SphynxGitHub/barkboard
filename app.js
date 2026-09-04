@@ -71,6 +71,24 @@ function refreshIcons() {
 }
 
 /* ==========================================================================
+   MODAL UTILITY FUNCTIONS
+   ========================================================================== */
+
+function openModal(modalId) {
+    const el = document.getElementById(modalId);
+    if (!el) return;
+    el.classList.remove('hidden');
+    el.style.display = 'flex';
+}
+
+function closeModal(modalId) {
+    const el = document.getElementById(modalId);
+    if (!el) return;
+    el.classList.add('hidden');
+    el.style.display = 'none';
+}
+
+/* ==========================================================================
    APP CONTROLLER: Event Handlers & View Management
    ========================================================================== */
 
@@ -2133,7 +2151,9 @@ async function saveResource(e) {
     const rawName = document.getElementById('res-name')?.value || '';
     
     // Format name with leading zero for single digits
-    const paddedName = padSingleDigitResourceName(rawName.trim());
+    const paddedName = typeof padSingleDigitResourceName === 'function' 
+        ? padSingleDigitResourceName(rawName.trim()) 
+        : rawName.trim();
 
     const payload = {
         name: paddedName,
@@ -2154,7 +2174,9 @@ async function saveResource(e) {
         alert('Failed to save resource: ' + error.message);
     } else {
         closeModal('resource-modal');
-        renderResourceList();
+        if (typeof renderResourceList === 'function') {
+            renderResourceList();
+        }
     }
 }
 
