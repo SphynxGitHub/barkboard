@@ -1452,6 +1452,7 @@ async function renderCalendar() {
 
     const dayStatus = await computeCalendarDayStatuses(dates);
     const statusBg = { closed: '#e5e7eb', 'staff-full': '#fecaca', 'resource-full': '#fef08a' };
+    const todayKey = fmt(new Date());
 
     tbody.innerHTML = `<tr>${dates.map(d => {
         const key = fmt(d);
@@ -1459,8 +1460,9 @@ async function renderCalendar() {
         const s = dayStatus[key];
         const bg = s?.level ? statusBg[s.level] : '';
         const title = s?.level === 'closed' ? 'Business closed' : s?.level === 'staff-full' ? 'All staff booked' : s?.level === 'resource-full' ? `Closed to: ${s.fullTypes.join(', ')}` : '';
+        const todayOutline = key === todayKey ? 'box-shadow: inset 0 0 0 2px #2563eb;' : '';
         return `
-            <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px; ${bg ? 'background:' + bg + ';' : ''}" title="${title}">
+            <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px; ${bg ? 'background:' + bg + ';' : ''} ${todayOutline}" title="${key === todayKey ? 'Today. ' : ''}${title}">
                 ${dayBookings.map(bk => `
                     <div style="padding:0.4rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer;" onclick="openBookingModal('${bk.household_id}', '${bk.id}')">
                         <strong>${bk.check_in ? bk.check_in.slice(11, 16) : ''}</strong> ${bk.service_name || 'Event'}<br>
@@ -4076,11 +4078,14 @@ async function renderActivitiesCalendar() {
         </div>
     `).join('');
 
+    const todayKey = fmt(new Date());
+
     const cellStyle = (key, extra) => {
         const s = dayStatus[key];
         const bg = s ? statusBg[s.level] : '';
         const label = s ? (s.level === 'closed' ? 'Business closed' : s.level === 'staff-full' ? 'All staff booked' : `Closed to: ${s.fullTypes.join(', ')}`) : '';
-        return `style="cursor:pointer; ${bg ? 'background:' + bg + ';' : ''} ${extra || ''}" title="${label}"`;
+        const todayOutline = key === todayKey ? 'box-shadow: inset 0 0 0 2px #2563eb;' : '';
+        return `style="cursor:pointer; ${bg ? 'background:' + bg + ';' : ''} ${todayOutline} ${extra || ''}" title="${key === todayKey ? 'Today. ' : ''}${label}"`;
     };
 
     if (actCalendarMode === 'day') {
