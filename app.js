@@ -1073,19 +1073,17 @@ async function saveInvoice() {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const description = document.getElementById('inv-description')?.value.trim() || '';
-    const bookingId = document.getElementById('inv-booking-id')?.value || null;
-    const amountRaw = document.getElementById('inv-amount')?.value;
+    const amountInput = document.getElementById('inv-amount');
+    const amountRaw = amountInput ? amountInput.value : '0';
     const dueDate = document.getElementById('inv-due-date')?.value || new Date().toISOString().slice(0, 10);
     const status = document.getElementById('inv-status')?.value || 'unpaid';
     const notes = document.getElementById('inv-notes')?.value.trim() || '';
-    const petNames = document.getElementById('inv-pet-names')?.value.trim() || '';
-    const serviceStart = document.getElementById('inv-service-start')?.value || null;
-    const serviceEnd = document.getElementById('inv-service-end')?.value || null;
 
-    if (!description) return alert('Please enter a description.');
     const amount = parseFloat(amountRaw);
-    if (isNaN(amount) || amount < 0) return alert('Please enter a valid amount.');
+    if (isNaN(amount) || amount < 0) return alert('Please enter a valid invoice total.');
+
+    // Description is now generated automatically or defaults cleanly
+    const description = `Invoice for ${dueDate}`;
 
     const payload = {
         household_id: invoiceHouseholdId,
@@ -1093,14 +1091,12 @@ async function saveInvoice() {
         amount: amount,
         due_date: dueDate,
         status: status,
-        notes: notes,
-        pet_names: petNames,
-        service_start_date: serviceStart,
-        service_end_date: serviceEnd
+        notes: notes
     };
 
     let response;
     let savedInvoiceId = editingInvoiceId;
+
     if (editingInvoiceId) {
         response = await client.from('invoices').update(payload).eq('id', editingInvoiceId);
     } else {
@@ -1108,12 +1104,6 @@ async function saveInvoice() {
         if (!response.error && response.data && response.data[0]) {
             savedInvoiceId = response.data[0].id;
         }
-    }
-
-    // The convenience "Linked Event" picker attaches that one appointment now;
-    // more can be added afterward via the Linked Appointments manager when editing.
-    if (!response.error && bookingId && savedInvoiceId) {
-        await client.from('bookings').update({ invoice_id: savedInvoiceId }).eq('id', bookingId);
     }
 
     if (response.error) {
