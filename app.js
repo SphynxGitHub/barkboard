@@ -2050,20 +2050,20 @@ async function renderResourceList() {
         
         grouped[type].forEach(r => {
             html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); margin-bottom:0.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.65rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); margin-bottom:0.5rem;">
                     <div style="cursor:pointer; flex:1;" onclick="openResourceModal('${r.id}')">
-                        <strong>${r.name}</strong>
-                        <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">
+                        <strong style="font-size:0.9rem;">${r.name}</strong>
+                        <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.5rem;">
                             ${(r.seats || 1) > 1 ? (r.seats || 1) + ' seats' : '1 seat'} · ${r.default_mode === 'time_based' ? 'Time-based' : 'All day'}
                         </span>
-                        ${r.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${r.notes}</div>` : ''}
+                        ${r.notes ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.15rem;">${r.notes}</div>` : ''}
                     </div>
-                    <div style="display:flex; gap:0.4rem; align-items:center;">
-                        <button class="btn" style="font-size:0.75rem; padding:0.25rem 0.6rem;" onclick="cloneResource('${r.id}')" title="Duplicate Resource">
-                            <i data-lucide="copy" style="width:13px;height:13px;"></i> Clone
+                    <div style="display:flex; gap:0.25rem; align-items:center;">
+                        <button class="btn-icon" style="background:none; border:none; cursor:pointer; padding:0.25rem; color:var(--text-muted);" onclick="event.stopPropagation(); cloneResource('${r.id}')" title="Duplicate resource">
+                            <i data-lucide="copy" style="width:14px; height:14px;"></i>
                         </button>
-                        <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="event.stopPropagation(); deleteResource('${r.id}')" title="Delete">
-                            <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+                        <button class="btn-icon" style="background:none; border:none; cursor:pointer; padding:0.25rem; color:var(--danger-text);" onclick="event.stopPropagation(); deleteResource('${r.id}')" title="Delete resource">
+                            <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
                         </button>
                     </div>
                 </div>
