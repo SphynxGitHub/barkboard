@@ -957,22 +957,31 @@ async function saveBooking() {
     const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
     const endTime = document.getElementById('bk-end-time')?.value || startTime;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
-    const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
-    const petNames = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.parentElement?.textContent.trim() || '').filter(Boolean);
+    
+    const petCheckboxes = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked'));
+    const petIds = petCheckboxes.map(cb => cb.value);
+    const petNames = petCheckboxes.map(cb => cb.parentElement?.textContent.trim() || '').filter(Boolean);
 
     if (!startDate) return alert('Please choose a date.');
     if (type === 'stay' && !endDate) return alert('Please choose an end date for a multi-day stay.');
     if (petIds.length === 0) return alert('Please select at least one pet.');
 
+    // Fallback: If bookingHouseholdId is empty (global search), resolve from selected pet
+    let targetHouseholdId = bookingHouseholdId;
+    if (!targetHouseholdId && petIds.length) {
+        const { data: petData } = await client.from('pets').select('household_id').eq('id', petIds[0]).single();
+        if (petData?.household_id) targetHouseholdId = petData.household_id;
+    }
+
+    if (!targetHouseholdId) return alert('Could not resolve household for selected pet.');
+
     const amount = amountRaw ? parseFloat(amountRaw) : 0;
 
-    // check_in/check_out are timestamps: a single appointment has check_in === check_out,
-    // a multi-day stay uses the actual drop-off and pick-up times entered.
-    const checkIn = type === 'stay' ? `${startDate}T${startTime}:00` : `${startDate}T${startTime}:00`;
+    const checkIn = `${startDate}T${startTime}:00`;
     const checkOut = type === 'stay' ? `${endDate}T${endTime}:00` : checkIn;
 
     const basePayload = {
-        household_id: bookingHouseholdId,
+        household_id: targetHouseholdId,
         service_name: serviceName,
         check_in: checkIn,
         check_out: checkOut,
@@ -984,17 +993,15 @@ async function saveBooking() {
         notes: notes
     };
 
-    // The bookings table has one pet_id per row, so linking multiple pets means
-    // one row per pet. When editing, the edited row becomes the first selected
-    // pet, and any additional newly-checked pets get their own new rows.
-    // Each pet's own resource assignments (from bkResourcesByPet) apply to its own row.
     let response;
     let firstNewBookingId = null;
     let petIdToBookingId = {};
+
     if (editingBookingId) {
         const [firstPetId, ...extraPetIds] = petIds;
         response = await client.from('bookings').update({ ...basePayload, pet_id: firstPetId }).eq('id', editingBookingId);
         petIdToBookingId[firstPetId] = editingBookingId;
+        
         if (!response.error && extraPetIds.length) {
             const extraRows = extraPetIds.map(pid => ({ ...basePayload, pet_id: pid }));
             const extraResponse = await client.from('bookings').insert(extraRows).select();
@@ -1014,16 +1021,16 @@ async function saveBooking() {
         alert('Failed to save event: ' + response.error.message);
         console.error('Supabase booking error:', response.error);
     } else {
-        // Apply each pet's own resource assignments to its own booking row.
+        // Save resource assignments
         for (const pid of Object.keys(petIdToBookingId)) {
             await saveBookingResources(client, petIdToBookingId[pid], bkResourcesByPet[pid] || []);
         }
 
-        // If this is a brand-new priced event, automatically create the matching invoice.
+        // Auto-generate invoice if new priced event
         if (firstNewBookingId && amount > 0) {
             const when = type === 'stay' ? `${startDate} → ${endDate}` : startDate;
             await client.from('invoices').insert([{
-                household_id: bookingHouseholdId,
+                household_id: targetHouseholdId,
                 booking_id: firstNewBookingId,
                 description: `${serviceName || 'Event'} — ${when}`,
                 amount: amount,
@@ -1035,9 +1042,25 @@ async function saveBooking() {
             }]);
         }
 
-        const refreshId = bookingHouseholdId;
         closeBookingModal();
-        openFullWidthProfile('household', refreshId);
+
+        // 1. Refresh profile view if open
+        if (targetHouseholdId && typeof openFullWidthProfile === 'function' && document.getElementById('crm-list-container')?.querySelector('.full-width-profile-view')) {
+            openFullWidthProfile('household', targetHouseholdId);
+        }
+
+        // 2. Refresh Activities Feed & Calendar
+        if (typeof renderActivities === 'function') {
+            await renderActivities();
+        }
+        if (typeof renderActivitiesCalendar === 'function') {
+            await renderActivitiesCalendar();
+        }
+
+        // 3. Refresh Resource Grid
+        if (typeof renderCalendar === 'function') {
+            await renderCalendar();
+        }
     }
 }
 
@@ -4654,8 +4677,11 @@ async function fetchActivityItems() {
    ACTIVITIES VIEW (DYNAMIC GROUPING, RESOURCES & EXPANDED FILTERS)
    ========================================================================== */
 const ACT_GROUP_BY_KEY = 'barkboard-act-group-by';
+const ACT_VIEW_MODE_KEY = 'barkboard-act-view-mode';        // 'list' | 'calendar'
+const ACT_CAL_MODE_KEY = 'barkboard-act-cal-mode';
+
 let actWeekOffset = 0;
-let actCalendarMode = 'week';
+let actCalendarMode = localStorage.getItem(ACT_CAL_MODE_KEY) || 'month';
 
 function quickScheduleOnDate(dateStr) {
     pendingCalendarDate = dateStr;
@@ -4669,14 +4695,12 @@ function quickScheduleOnDate(dateStr) {
 }
 
 async function initActivitiesView() {
-    // 1. Restore saved Group By preference (if set)
+    // 1. Restore saved Group By selection
     const savedGroup = localStorage.getItem(ACT_GROUP_BY_KEY);
     const groupSelect = document.getElementById('act-group-by');
-    if (savedGroup && groupSelect) {
-        groupSelect.value = savedGroup;
-    }
+    if (savedGroup && groupSelect) groupSelect.value = savedGroup;
 
-    // 2. Reset filters to defaults on fresh load
+    // 2. Reset filters to defaults
     const categorySelect = document.getElementById('act-category-filter');
     const staffSelect = document.getElementById('act-staff-filter');
     const resourceSelect = document.getElementById('act-resource-filter');
@@ -4695,11 +4719,13 @@ async function initActivitiesView() {
     if (dateToInput) dateToInput.value = '';
     if (searchInput) searchInput.value = '';
 
-    // 3. Populate dropdown options and render
     if (typeof populateStaffSelects === 'function') await populateStaffSelects();
     await populateHouseholdActivityFilter();
     await populateResourceActivityFilter();
-    renderActivities();
+
+    // 3. Restore List vs. Calendar view preference (Defaults to 'calendar')
+    const savedViewMode = localStorage.getItem(ACT_VIEW_MODE_KEY) || 'calendar';
+    switchActivitiesView(savedViewMode);
 }
 
 async function populateHouseholdActivityFilter() {
@@ -4733,6 +4759,9 @@ async function populateResourceActivityFilter() {
 function switchActivitiesView(mode) {
     const isList = mode === 'list';
     
+    // Save selection
+    try { localStorage.setItem(ACT_VIEW_MODE_KEY, mode); } catch (e) {}
+
     // Toggle active tab buttons
     document.getElementById('acttab-list')?.classList.toggle('active', isList);
     document.getElementById('acttab-calendar')?.classList.toggle('active', !isList);
@@ -4741,11 +4770,9 @@ function switchActivitiesView(mode) {
     document.getElementById('activities-list-view')?.classList.toggle('hidden', !isList);
     document.getElementById('activities-calendar-view')?.classList.toggle('hidden', isList);
     
-    // Hide/show the Group By dropdown control (list view only)
+    // Show/hide Group By dropdown
     const groupByContainer = document.getElementById('act-group-by-container');
-    if (groupByContainer) {
-        groupByContainer.style.display = isList ? 'block' : 'none';
-    }
+    if (groupByContainer) groupByContainer.style.display = isList ? 'block' : 'none';
 
     if (!isList) {
         document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
@@ -4951,6 +4978,10 @@ async function renderActivities() {
 function setActCalendarMode(mode) {
     actCalendarMode = mode;
     actWeekOffset = 0;
+
+    // Save calendar view selection ('day', 'week', 'month')
+    try { localStorage.setItem(ACT_CAL_MODE_KEY, mode); } catch (e) {}
+
     document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
     document.getElementById('actview-' + mode)?.classList.add('today');
     renderActivitiesCalendar();
