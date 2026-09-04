@@ -1367,3 +1367,30 @@ input.biz-select {
   gap: 0.6rem;
   margin-top: 1rem;
 }
+
+/* ==========================================================================
+   PRINT STYLES (receipts / payment notices)
+   ========================================================================== */
+
+@media print {
+  body > *:not(.doc-overlay-backdrop) {
+    display: none !important;
+  }
+
+  .doc-overlay-backdrop {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .doc-overlay-card {
+    box-shadow: none !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

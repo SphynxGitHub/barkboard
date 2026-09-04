@@ -659,7 +659,8 @@ async function saveBooking() {
                 booking_id: firstNewBookingId,
                 description: `${serviceName || 'Event'} — ${when}`,
                 amount: amount,
-                status: 'unpaid'
+                status: 'unpaid',
+                due_date: startDate
             }]);
         }
 
@@ -1790,7 +1791,7 @@ async function renderBizDashboard() {
     const labelEl = document.getElementById('biz-date-range-label');
     if (labelEl) labelEl.textContent = from ? `${from} to ${to}` : '';
 
-    const { data: invoices } = await client.from('invoices').select('*').gte('due_date', from || '1970-01-01').lte('due_date', to);
+    const { data: invoices } = await client.from('invoices').select('*').gte('created_at', from ? from + 'T00:00:00' : '1970-01-01').lte('created_at', to + 'T23:59:59');
     const { data: bookings } = await client.from('bookings').select('*, staff:assigned_staff_id(name)').gte('check_in', from ? from + 'T00:00:00' : '1970-01-01').lte('check_in', to + 'T23:59:59');
 
     const paidInvoices = (invoices || []).filter(i => i.status === 'paid');
@@ -4662,6 +4663,9 @@ async function loadBusinessPaymentSettings() {
     setVal('pay-zelle', s.zelle_info);
     setVal('pay-cash', s.cash_note);
     setVal('pay-square', s.square_link);
+    setVal('pay-logo-url', s.logo_url);
+    const preview = document.getElementById('pay-logo-preview');
+    if (preview && s.logo_url) { preview.src = s.logo_url; preview.style.display = 'block'; }
 }
 
 async function saveBusinessPaymentSettings() {
@@ -4673,7 +4677,8 @@ async function saveBusinessPaymentSettings() {
         venmo_handle: document.getElementById('pay-venmo')?.value.trim() || '',
         zelle_info: document.getElementById('pay-zelle')?.value.trim() || '',
         cash_note: document.getElementById('pay-cash')?.value.trim() || '',
-        square_link: document.getElementById('pay-square')?.value.trim() || ''
+        square_link: document.getElementById('pay-square')?.value.trim() || '',
+        logo_url: document.getElementById('pay-logo-url')?.value.trim() || ''
     };
 
     const existing = await getBusinessSettings();
@@ -4697,12 +4702,13 @@ function renderDocumentOverlay(html) {
     closeDocumentOverlay();
     const overlay = document.createElement('div');
     overlay.id = 'doc-overlay';
+    overlay.className = 'doc-overlay-backdrop';
     overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center; padding:1rem;';
     overlay.innerHTML = `
-        <div style="background:#fff; border-radius:0.5rem; max-width:480px; width:100%; padding:1.5rem; position:relative;">
-            <button onclick="closeDocumentOverlay()" style="position:absolute; top:0.75rem; right:0.75rem; background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+        <div class="doc-overlay-card" style="background:#fff; border-radius:0.5rem; max-width:480px; width:100%; padding:1.5rem; position:relative;">
+            <button class="no-print" onclick="closeDocumentOverlay()" style="position:absolute; top:0.75rem; right:0.75rem; background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
             ${html}
-            <div style="margin-top:1.25rem; display:flex; gap:0.5rem;">
+            <div class="no-print" style="margin-top:1.25rem; display:flex; gap:0.5rem;">
                 <button class="btn" onclick="closeDocumentOverlay()">Close</button>
                 <button class="btn-primary" onclick="window.print()">Print</button>
             </div>
@@ -4727,6 +4733,7 @@ async function showPaymentNotice(invoiceId) {
     if (settings?.square_link) paymentOptions.push(`<li><strong>Square:</strong> <a href="${settings.square_link}" target="_blank">${settings.square_link}</a></li>`);
 
     renderDocumentOverlay(`
+        ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:60px; margin-bottom:0.75rem;">` : ''}
         <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Payment Notice'}</h2>
         <p style="color:var(--text-muted); margin:0 0 1rem;">Amount Due</p>
         <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
@@ -4746,6 +4753,7 @@ async function showReceipt(invoiceId) {
     const settings = await getBusinessSettings();
 
     renderDocumentOverlay(`
+        ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:60px; margin-bottom:0.75rem;">` : ''}
         <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Receipt'}</h2>
         <p style="color:var(--text-muted); margin:0 0 1rem;">Payment Received</p>
         <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
