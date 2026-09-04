@@ -65,7 +65,7 @@ async function renderStaffGuests() {
         <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('pet', '${bk.pet_id}')">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <strong><i data-lucide="${bk.pets?.species === 'cat' ? 'cat' : bk.pets?.species === 'other' ? 'rabbit' : 'dog'}" style="width:14px;height:14px;"></i> ${bk.pets?.name || 'Pet'}</strong>
-                <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${isActiveNow ? '#16a34a' : 'var(--text-muted)'}; text-transform:capitalize;">${isActiveNow ? 'Checked In' : (bk.status || 'scheduled')}</span>
+                <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${isActiveNow ? '#16a34a' : 'var(--text-muted)'}; text-transform:capitalize;">${isActiveNow ? 'Checked In' : (bk.status || 'pending')}</span>
             </div>
             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${bk.service_name || 'Event'} · ${bk.households?.name || ''}</div>
             <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${(bk.check_in || '').slice(0, 10)}${bk.check_in && bk.check_in.slice(11,16) !== '00:00' ? ' at ' + bk.check_in.slice(11, 16) : ''} → ${(bk.check_out || '').slice(0, 10)}</div>
@@ -98,6 +98,12 @@ function switchView(viewId) {
     }
     if (viewId === 'calendar-view' && typeof renderCalendar === 'function') {
         renderCalendar();
+    }
+    if (viewId === 'activities-view' && typeof initActivitiesView === 'function') {
+        initActivitiesView();
+    }
+    if (viewId === 'templates-view' && typeof switchTemplatesTab === 'function') {
+        switchTemplatesTab('appt');
     }
 }
 
@@ -215,7 +221,7 @@ async function openBookingModal(householdId, bookingId = null) {
     if (startTimeInput) startTimeInput.value = '';
     if (endDateInput) endDateInput.value = '';
     if (amountInput) amountInput.value = '';
-    if (statusSel) statusSel.value = 'scheduled';
+    if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
     if (!bookingId && pendingCalendarDate && startDateInput) {
         startDateInput.value = pendingCalendarDate;
@@ -267,7 +273,7 @@ async function openBookingModal(householdId, bookingId = null) {
         if (startTimeInput) startTimeInput.value = checkInTime;
         if (isStay && endDateInput) endDateInput.value = checkOutDate;
         if (amountInput) amountInput.value = existingBooking.amount != null ? existingBooking.amount : '';
-        if (statusSel) statusSel.value = existingBooking.status || 'scheduled';
+        if (statusSel) statusSel.value = existingBooking.status || 'pending';
         if (staffSel) staffSel.value = existingBooking.assigned_staff_id || '';
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
@@ -297,7 +303,7 @@ async function saveBooking() {
     const startTime = document.getElementById('bk-start-time')?.value || '00:00';
     const endDate = document.getElementById('bk-end-date')?.value || '';
     const amountRaw = document.getElementById('bk-amount')?.value;
-    const status = document.getElementById('bk-status')?.value || 'scheduled';
+    const status = document.getElementById('bk-status')?.value || 'pending';
     const staffId = document.getElementById('bk-staff-id')?.value || null;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const petIds = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked')).map(cb => cb.value);
@@ -551,6 +557,11 @@ async function populateStaffSelects() {
     const filterSel = document.getElementById('staff-task-filter');
     if (filterSel) {
         filterSel.innerHTML = '<option value="all">All staff</option>' + opts;
+    }
+
+    const actFilterSel = document.getElementById('act-staff-filter');
+    if (actFilterSel) {
+        actFilterSel.innerHTML = '<option value="all">All Team Members</option>' + opts;
     }
 }
 
@@ -1575,7 +1586,7 @@ function openBizDetail(kind) {
         heading = 'Scheduled Events';
         html = cache.bookings.length ? cache.bookings.map(bk => `
             <div style="display:flex; justify-content:space-between; padding:0.5rem; border-bottom:1px solid var(--border);">
-                <span>${bk.service_name || 'Event'}</span><span>${(bk.check_in || '').slice(0, 10)} · ${bk.status || 'scheduled'}</span>
+                <span>${bk.service_name || 'Event'}</span><span>${(bk.check_in || '').slice(0, 10)} · ${bk.status || 'pending'}</span>
             </div>`).join('') : '<div class="biz-empty">No events in this range.</div>';
     }
 
@@ -3194,7 +3205,7 @@ function renderEventsCard(bookings, householdId, opts) {
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
                         <div>
                             <strong>${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
-                            <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${bk.status || 'scheduled'}</span>
+                            <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${bk.status || 'pending'}</span>
                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
                             ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
                             ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
@@ -3551,4 +3562,538 @@ function setPortalRole(role) {
     }
 
     refreshIcons();
+}
+
+/* ==========================================================================
+   ACTIVITIES VIEW (merged appointments + tasks + invoice due dates)
+   ========================================================================== */
+
+let actWeekOffset = 0;
+
+async function initActivitiesView() {
+    if (typeof populateStaffSelects === 'function') await populateStaffSelects();
+    renderActivities();
+}
+
+function switchActivitiesView(mode) {
+    document.getElementById('acttab-list')?.classList.toggle('active', mode === 'list');
+    document.getElementById('acttab-calendar')?.classList.toggle('active', mode === 'calendar');
+    document.getElementById('activities-list-view')?.classList.toggle('hidden', mode !== 'list');
+    document.getElementById('activities-calendar-view')?.classList.toggle('hidden', mode !== 'calendar');
+    if (mode === 'calendar') renderActivitiesCalendar();
+    else renderActivities();
+}
+
+function activitiesFilters() {
+    return {
+        category: document.getElementById('act-category-filter')?.value || 'all',
+        staff: document.getElementById('act-staff-filter')?.value || 'all',
+        status: document.getElementById('act-status-filter')?.value || 'all',
+        from: document.getElementById('act-date-from')?.value || '',
+        to: document.getElementById('act-date-to')?.value || '',
+        query: (document.getElementById('act-search')?.value || '').trim().toLowerCase()
+    };
+}
+
+async function fetchActivityItems() {
+    const client = getSupabase();
+    if (!client) return [];
+
+    const items = [];
+
+    const { data: bookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name)');
+    (bookings || []).forEach(bk => {
+        items.push({
+            kind: 'appointment',
+            id: bk.id,
+            title: bk.service_name || 'Appointment',
+            subtitle: `${bk.pets?.name || ''}${bk.pets?.name && bk.households?.name ? ' · ' : ''}${bk.households?.name || ''}`,
+            date: (bk.check_in || '').slice(0, 10),
+            status: bk.status || 'pending',
+            staffName: bk.staff?.name || '',
+            staffId: bk.assigned_staff_id || '',
+            householdId: bk.household_id
+        });
+    });
+
+    const { data: tasks } = await client.from('staff_tasks').select('*, staff(name)');
+    (tasks || []).forEach(t => {
+        items.push({
+            kind: 'task',
+            id: t.id,
+            title: t.task_text,
+            subtitle: t.priority ? `Priority: ${t.priority}` : '',
+            date: t.due_date || '',
+            status: t.is_done ? 'completed' : 'pending',
+            staffName: t.staff?.name || '',
+            staffId: t.staff_id || ''
+        });
+    });
+
+    const { data: invoices } = await client.from('invoices').select('*, households(name)').neq('status', 'paid');
+    (invoices || []).forEach(inv => {
+        items.push({
+            kind: 'invoice',
+            id: inv.id,
+            title: `Invoice due: ${inv.description || 'Invoice'}`,
+            subtitle: `${inv.households?.name || ''} · $${Number(inv.amount || 0).toFixed(2)}`,
+            date: inv.due_date || '',
+            status: inv.status || 'pending',
+            staffName: '',
+            staffId: '',
+            householdId: inv.household_id
+        });
+    });
+
+    return items;
+}
+
+function filterActivityItems(items, f) {
+    return items.filter(it => {
+        if (f.category !== 'all' && it.kind !== f.category) return false;
+        if (f.staff !== 'all' && it.staffId !== f.staff) return false;
+        if (f.status !== 'all' && it.status !== f.status) return false;
+        if (f.from && it.date && it.date < f.from) return false;
+        if (f.to && it.date && it.date > f.to) return false;
+        if (f.query && !(it.title.toLowerCase().includes(f.query) || it.subtitle.toLowerCase().includes(f.query))) return false;
+        return true;
+    });
+}
+
+const ACTIVITY_STATUS_CYCLE = { pending: 'confirmed', confirmed: 'completed', completed: 'cancelled', cancelled: 'no-show', 'no-show': 'pending' };
+const TASK_STATUS_CYCLE = { pending: 'completed', completed: 'pending' };
+
+function activityStatusColor(status) {
+    if (status === 'completed') return 'var(--text-muted)';
+    if (status === 'cancelled' || status === 'no-show') return '#dc2626';
+    if (status === 'confirmed') return '#16a34a';
+    return 'var(--accent, #2563eb)';
+}
+
+async function cycleActivityStatus(kind, id, currentStatus) {
+    const client = getSupabase();
+    if (!client) return;
+
+    if (kind === 'appointment') {
+        const next = ACTIVITY_STATUS_CYCLE[currentStatus] || 'pending';
+        await client.from('bookings').update({ status: next }).eq('id', id);
+    } else if (kind === 'task') {
+        const next = TASK_STATUS_CYCLE[currentStatus] || 'pending';
+        await client.from('staff_tasks').update({ is_done: next === 'completed' }).eq('id', id);
+    } else {
+        // Invoice status changes go through the invoice modal / mark-paid flow, not the cycle tag.
+        return;
+    }
+
+    if (document.getElementById('activities-calendar-view')?.classList.contains('hidden')) {
+        renderActivities();
+    } else {
+        renderActivitiesCalendar();
+    }
+}
+
+function openActivityItem(kind, id, householdId) {
+    if (kind === 'appointment') {
+        openBookingModal(householdId, id);
+    } else if (kind === 'task') {
+        openStaffTaskModal(id);
+    } else if (kind === 'invoice') {
+        switchView('crm-view');
+        openFullWidthProfile('household', householdId);
+    }
+}
+
+async function renderActivities() {
+    const el = document.getElementById('activities-list');
+    if (!el) return;
+
+    const f = activitiesFilters();
+    let items = await fetchActivityItems();
+    items = filterActivityItems(items, f);
+    items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    if (!items.length) {
+        el.innerHTML = '<div class="biz-empty">No activities match this filter.</div>';
+        return;
+    }
+
+    const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
+
+    el.innerHTML = items.map(it => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+                <i data-lucide="${kindIcon[it.kind]}" style="width:16px;height:16px; color:var(--text-muted);"></i>
+                <div>
+                    <strong>${it.title}</strong>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${it.subtitle}${it.staffName ? ' · ' + it.staffName : ''} ${it.date ? '· ' + it.date : ''}</div>
+                </div>
+            </div>
+            <button onclick="event.stopPropagation(); cycleActivityStatus('${it.kind}', '${it.id}', '${it.status}')" title="Click to change status" style="font-size:0.72rem; padding:0.2rem 0.55rem; border-radius:9999px; border:1px solid var(--border); background:none; cursor:${it.kind === 'invoice' ? 'default' : 'pointer'}; color:${activityStatusColor(it.status)}; text-transform:capitalize;">${it.status}</button>
+        </div>
+    `).join('');
+    refreshIcons();
+}
+
+function shiftActWeek(delta) {
+    actWeekOffset += delta;
+    renderActivitiesCalendar();
+}
+
+function resetActWeek() {
+    actWeekOffset = 0;
+    renderActivitiesCalendar();
+}
+
+async function renderActivitiesCalendar() {
+    const thead = document.getElementById('act-cal-thead');
+    const tbody = document.getElementById('act-cal-body');
+    const weekLabel = document.getElementById('act-week-label');
+    if (!thead || !tbody) return;
+
+    const today = new Date();
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() - today.getDay() + actWeekOffset * 7);
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + i);
+        dates.push(d);
+    }
+    const fmt = d => d.toISOString().slice(0, 10);
+    if (weekLabel) weekLabel.textContent = `${fmt(dates[0])} — ${fmt(dates[6])}`;
+
+    const f = activitiesFilters();
+    let items = await fetchActivityItems();
+    items = filterActivityItems(items, f);
+
+    thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
+
+    const byDay = {};
+    dates.forEach(d => { byDay[fmt(d)] = []; });
+    items.forEach(it => { if (byDay[it.date]) byDay[it.date].push(it); });
+
+    const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
+
+    tbody.innerHTML = `<tr>${dates.map(d => {
+        const key = fmt(d);
+        return `
+            <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px;">
+                ${byDay[key].map(it => `
+                    <div style="padding:0.4rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
+                        </div>
+                        <div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div>
+                        <button onclick="event.stopPropagation(); cycleActivityStatus('${it.kind}', '${it.id}', '${it.status}')" style="margin-top:0.2rem; font-size:0.68rem; padding:0.1rem 0.4rem; border-radius:9999px; border:1px solid var(--border); background:none; cursor:${it.kind === 'invoice' ? 'default' : 'pointer'}; color:${activityStatusColor(it.status)}; text-transform:capitalize;">${it.status}</button>
+                    </div>
+                `).join('')}
+            </td>
+        `;
+    }).join('')}</tr>`;
+
+    refreshIcons();
+}
+
+/* ==========================================================================
+   TEMPLATES VIEW (appointment types, task templates, assessment templates)
+   ========================================================================== */
+
+function switchTemplatesTab(tab) {
+    document.querySelectorAll('[id^="tmpltab-"]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('[id^="tmplsec-"]').forEach(s => s.classList.remove('active'));
+
+    const targetTab = document.getElementById('tmpltab-' + tab);
+    const targetSec = document.getElementById('tmplsec-' + tab);
+    if (targetTab) targetTab.classList.add('active');
+    if (targetSec) targetSec.classList.add('active');
+
+    if (tab === 'appt') renderApptTypeList();
+    if (tab === 'task') renderTaskTemplateList();
+    if (tab === 'assess') renderAssessmentTemplateList();
+}
+
+// ---- Appointment Type Templates ----
+
+let editingApptTypeId = null;
+
+async function renderApptTypeList() {
+    const el = document.getElementById('appt-type-list');
+    if (!el) return;
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: list } = await client.from('appointment_type_templates').select('*').order('name');
+    if (!list || !list.length) {
+        el.innerHTML = '<div class="biz-empty">No appointment types yet.</div>';
+        return;
+    }
+
+    el.innerHTML = list.map(t => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+            <div>
+                <strong>${t.name}</strong>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''}</span>
+                ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.notes}</div>` : ''}
+            </div>
+            <div style="display:flex; gap:0.4rem;">
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;" onclick="openApptTypeModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="deleteApptType('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+            </div>
+        </div>
+    `).join('');
+    refreshIcons();
+}
+
+async function openApptTypeModal(id) {
+    editingApptTypeId = id;
+    const titleEl = document.getElementById('appt-type-modal-title');
+    if (titleEl) titleEl.textContent = id ? 'Edit Appointment Type' : 'Add Appointment Type';
+
+    const nameInput = document.getElementById('att-name');
+    const priceInput = document.getElementById('att-price');
+    const durationInput = document.getElementById('att-duration');
+    const notesInput = document.getElementById('att-notes');
+
+    let t = null;
+    if (id) {
+        const client = getSupabase();
+        const { data } = client ? await client.from('appointment_type_templates').select('*').eq('id', id).single() : { data: null };
+        t = data;
+    }
+
+    if (nameInput) nameInput.value = t?.name || '';
+    if (priceInput) priceInput.value = t?.default_price != null ? t.default_price : '';
+    if (durationInput) durationInput.value = t?.default_duration_minutes || '';
+    if (notesInput) notesInput.value = t?.notes || '';
+
+    document.getElementById('appt-type-modal')?.classList.remove('hidden');
+}
+
+function closeApptTypeModal() {
+    document.getElementById('appt-type-modal')?.classList.add('hidden');
+}
+
+async function saveApptType() {
+    const name = document.getElementById('att-name')?.value.trim();
+    if (!name) return alert('Please enter a name.');
+
+    const price = document.getElementById('att-price')?.value;
+    const duration = document.getElementById('att-duration')?.value;
+    const notes = document.getElementById('att-notes')?.value.trim() || '';
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const payload = {
+        name,
+        default_price: price ? parseFloat(price) : null,
+        default_duration_minutes: duration ? parseInt(duration, 10) : null,
+        notes
+    };
+
+    let response;
+    if (editingApptTypeId) {
+        response = await client.from('appointment_type_templates').update(payload).eq('id', editingApptTypeId);
+    } else {
+        response = await client.from('appointment_type_templates').insert([payload]);
+    }
+
+    if (response.error) return alert('Failed to save: ' + response.error.message);
+
+    editingApptTypeId = null;
+    closeApptTypeModal();
+    renderApptTypeList();
+}
+
+async function deleteApptType(id) {
+    if (!confirm('Remove this appointment type?')) return;
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('appointment_type_templates').delete().eq('id', id);
+    renderApptTypeList();
+}
+
+// ---- Task Templates ----
+
+let editingTaskTemplateId = null;
+
+async function renderTaskTemplateList() {
+    const el = document.getElementById('task-template-list');
+    if (!el) return;
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: list } = await client.from('task_templates').select('*').order('name');
+    if (!list || !list.length) {
+        el.innerHTML = '<div class="biz-empty">No task templates yet.</div>';
+        return;
+    }
+
+    el.innerHTML = list.map(t => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+            <div>
+                <strong>${t.name}</strong>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem; text-transform:capitalize;">${t.default_priority || 'normal'} priority</span>
+                ${t.description ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.description}</div>` : ''}
+            </div>
+            <div style="display:flex; gap:0.4rem;">
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;" onclick="openTaskTemplateModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="deleteTaskTemplate('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+            </div>
+        </div>
+    `).join('');
+    refreshIcons();
+}
+
+async function openTaskTemplateModal(id) {
+    editingTaskTemplateId = id;
+    const titleEl = document.getElementById('task-template-modal-title');
+    if (titleEl) titleEl.textContent = id ? 'Edit Task Template' : 'Add Task Template';
+
+    const nameInput = document.getElementById('ttm-name');
+    const descInput = document.getElementById('ttm-description');
+    const prioritySel = document.getElementById('ttm-priority');
+
+    let t = null;
+    if (id) {
+        const client = getSupabase();
+        const { data } = client ? await client.from('task_templates').select('*').eq('id', id).single() : { data: null };
+        t = data;
+    }
+
+    if (nameInput) nameInput.value = t?.name || '';
+    if (descInput) descInput.value = t?.description || '';
+    if (prioritySel) prioritySel.value = t?.default_priority || 'normal';
+
+    document.getElementById('task-template-modal')?.classList.remove('hidden');
+}
+
+function closeTaskTemplateModal() {
+    document.getElementById('task-template-modal')?.classList.add('hidden');
+}
+
+async function saveTaskTemplate() {
+    const name = document.getElementById('ttm-name')?.value.trim();
+    if (!name) return alert('Please enter a name.');
+
+    const description = document.getElementById('ttm-description')?.value.trim() || '';
+    const priority = document.getElementById('ttm-priority')?.value || 'normal';
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const payload = { name, description, default_priority: priority };
+    let response;
+    if (editingTaskTemplateId) {
+        response = await client.from('task_templates').update(payload).eq('id', editingTaskTemplateId);
+    } else {
+        response = await client.from('task_templates').insert([payload]);
+    }
+
+    if (response.error) return alert('Failed to save: ' + response.error.message);
+
+    editingTaskTemplateId = null;
+    closeTaskTemplateModal();
+    renderTaskTemplateList();
+}
+
+async function deleteTaskTemplate(id) {
+    if (!confirm('Remove this task template?')) return;
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('task_templates').delete().eq('id', id);
+    renderTaskTemplateList();
+}
+
+// ---- Assessment Templates ----
+
+let editingAssessmentTemplateId = null;
+
+async function renderAssessmentTemplateList() {
+    const el = document.getElementById('assessment-template-list');
+    if (!el) return;
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: list } = await client.from('assessment_templates').select('*').order('name');
+    if (!list || !list.length) {
+        el.innerHTML = '<div class="biz-empty">No assessment templates yet.</div>';
+        return;
+    }
+
+    el.innerHTML = list.map(t => `
+        <div style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>${t.name}</strong>
+                <div style="display:flex; gap:0.4rem;">
+                    <button class="btn-icon" style="background:none;border:none;cursor:pointer;" onclick="openAssessmentTemplateModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                    <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="deleteAssessmentTemplate('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                </div>
+            </div>
+            ${t.criteria && t.criteria.length ? `<ul style="margin:0.4rem 0 0; padding-left:1.2rem; font-size:0.82rem; color:var(--text-muted);">${t.criteria.map(c => `<li>${c}</li>`).join('')}</ul>` : ''}
+            ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.3rem;">${t.notes}</div>` : ''}
+        </div>
+    `).join('');
+    refreshIcons();
+}
+
+async function openAssessmentTemplateModal(id) {
+    editingAssessmentTemplateId = id;
+    const titleEl = document.getElementById('assessment-template-modal-title');
+    if (titleEl) titleEl.textContent = id ? 'Edit Assessment Template' : 'Add Assessment Template';
+
+    const nameInput = document.getElementById('atm-name');
+    const criteriaInput = document.getElementById('atm-criteria');
+    const notesInput = document.getElementById('atm-notes');
+
+    let t = null;
+    if (id) {
+        const client = getSupabase();
+        const { data } = client ? await client.from('assessment_templates').select('*').eq('id', id).single() : { data: null };
+        t = data;
+    }
+
+    if (nameInput) nameInput.value = t?.name || '';
+    if (criteriaInput) criteriaInput.value = t?.criteria ? t.criteria.join('\n') : '';
+    if (notesInput) notesInput.value = t?.notes || '';
+
+    document.getElementById('assessment-template-modal')?.classList.remove('hidden');
+}
+
+function closeAssessmentTemplateModal() {
+    document.getElementById('assessment-template-modal')?.classList.add('hidden');
+}
+
+async function saveAssessmentTemplate() {
+    const name = document.getElementById('atm-name')?.value.trim();
+    if (!name) return alert('Please enter a name.');
+
+    const criteriaText = document.getElementById('atm-criteria')?.value || '';
+    const criteria = criteriaText.split('\n').map(s => s.trim()).filter(Boolean);
+    const notes = document.getElementById('atm-notes')?.value.trim() || '';
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const payload = { name, criteria, notes };
+    let response;
+    if (editingAssessmentTemplateId) {
+        response = await client.from('assessment_templates').update(payload).eq('id', editingAssessmentTemplateId);
+    } else {
+        response = await client.from('assessment_templates').insert([payload]);
+    }
+
+    if (response.error) return alert('Failed to save: ' + response.error.message);
+
+    editingAssessmentTemplateId = null;
+    closeAssessmentTemplateModal();
+    renderAssessmentTemplateList();
+}
+
+async function deleteAssessmentTemplate(id) {
+    if (!confirm('Remove this assessment template?')) return;
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('assessment_templates').delete().eq('id', id);
+    renderAssessmentTemplateList();
 }

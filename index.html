@@ -22,6 +22,8 @@
             <button onclick="switchView('staff-view')" class="nav-btn active">Staff Feed</button>
             <button onclick="switchView('staff-mgmt-view')" class="nav-btn">Staff</button>
             <button onclick="switchView('crm-view')" class="nav-btn">People & Pets</button>
+            <button onclick="switchView('activities-view')" class="nav-btn">Activities</button>
+            <button onclick="switchView('templates-view')" class="nav-btn">Templates</button>
             <button onclick="switchView('calendar-view')" class="nav-btn">Availability</button>
             <button onclick="switchView('biz-view')" class="nav-btn">Business</button>
         </nav>
@@ -451,6 +453,140 @@
         </div>
 
         <!-- ═══ CALENDAR ═══ -->
+        <!-- ═══ ACTIVITIES ═══ -->
+        <section id="activities-view" class="view-panel hidden">
+            <div class="section-header-row" style="margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem;">
+                <h2 style="margin:0;">Activities</h2>
+                <div style="display:flex; gap:0.5rem;">
+                    <button class="biz-tab active" id="acttab-list" onclick="switchActivitiesView('list')"><i data-lucide="layout-list"></i> List</button>
+                    <button class="biz-tab" id="acttab-calendar" onclick="switchActivitiesView('calendar')"><i data-lucide="calendar"></i> Calendar</button>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
+                <select id="act-category-filter" class="biz-select" onchange="renderActivities()">
+                    <option value="all">All Categories</option>
+                    <option value="appointment">Appointments</option>
+                    <option value="task">Tasks</option>
+                    <option value="invoice">Invoice Due Dates</option>
+                </select>
+                <select id="act-staff-filter" class="biz-select" onchange="renderActivities()">
+                    <option value="all">All Team Members</option>
+                </select>
+                <select id="act-status-filter" class="biz-select" onchange="renderActivities()">
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="no-show">No-show</option>
+                </select>
+                <input type="date" id="act-date-from" class="biz-select" onchange="renderActivities()">
+                <input type="date" id="act-date-to" class="biz-select" onchange="renderActivities()">
+                <input type="text" id="act-search" class="biz-select" placeholder="Search..." onkeyup="renderActivities()" style="flex:1; min-width:180px;">
+            </div>
+
+            <div id="activities-list-view">
+                <div id="activities-list" style="display:flex; flex-direction:column; gap:0.6rem;"></div>
+            </div>
+
+            <div id="activities-calendar-view" class="hidden">
+                <div class="cal-toolbar">
+                    <div class="cal-nav">
+                        <button class="cal-nav-btn" onclick="shiftActWeek(-1)">← Prev</button>
+                        <button class="cal-nav-btn today" onclick="resetActWeek()">Today</button>
+                        <button class="cal-nav-btn" onclick="shiftActWeek(1)">Next →</button>
+                    </div>
+                    <span class="cal-week-label" id="act-week-label"></span>
+                </div>
+                <div class="table-wrap cal-table-wrap">
+                    <table class="calendar-table">
+                        <thead id="act-cal-thead"></thead>
+                        <tbody id="act-cal-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ TEMPLATES ═══ -->
+        <section id="templates-view" class="view-panel hidden">
+            <div class="biz-subnav">
+                <button class="biz-tab active" id="tmpltab-appt" onclick="switchTemplatesTab('appt')"><i data-lucide="calendar-plus"></i> Appointment Types</button>
+                <button class="biz-tab" id="tmpltab-task" onclick="switchTemplatesTab('task')"><i data-lucide="list-checks"></i> Task Templates</button>
+                <button class="biz-tab" id="tmpltab-assess" onclick="switchTemplatesTab('assess')"><i data-lucide="clipboard-check"></i> Assessment Templates</button>
+            </div>
+
+            <div id="tmplsec-appt" class="biz-section active">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Appointment type presets</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openApptTypeModal(null)">+ Add appointment type</button>
+                </div>
+                <div id="appt-type-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <div id="tmplsec-task" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Task templates</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openTaskTemplateModal(null)">+ Add task template</button>
+                </div>
+                <div id="task-template-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <div id="tmplsec-assess" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Assessment templates</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openAssessmentTemplateModal(null)">+ Add assessment template</button>
+                </div>
+                <div id="assessment-template-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+        </section>
+
+        <!-- Appointment type template modal -->
+        <div id="appt-type-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:480px;">
+                <h3 id="appt-type-modal-title" style="margin:0 0 1rem;">Add Appointment Type</h3>
+                <div class="form-group"><label>Name</label><input type="text" id="att-name" placeholder="e.g. Agility Training"></div>
+                <div class="form-group"><label>Default Price ($)</label><input type="number" step="0.01" id="att-price" placeholder="50.00"></div>
+                <div class="form-group"><label>Default Duration (minutes)</label><input type="number" id="att-duration" placeholder="60"></div>
+                <div class="form-group"><label>Notes</label><textarea id="att-notes" rows="2"></textarea></div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeApptTypeModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveApptType()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task template modal -->
+        <div id="task-template-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:480px;">
+                <h3 id="task-template-modal-title" style="margin:0 0 1rem;">Add Task Template</h3>
+                <div class="form-group"><label>Name</label><input type="text" id="ttm-name" placeholder="e.g. Post-training report"></div>
+                <div class="form-group"><label>Description</label><textarea id="ttm-description" rows="2"></textarea></div>
+                <div class="form-group"><label>Default Priority</label>
+                    <select id="ttm-priority"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option></select>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeTaskTemplateModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveTaskTemplate()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assessment template modal -->
+        <div id="assessment-template-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:480px;">
+                <h3 id="assessment-template-modal-title" style="margin:0 0 1rem;">Add Assessment Template</h3>
+                <div class="form-group"><label>Name</label><input type="text" id="atm-name" placeholder="e.g. Puppy Obedience Assessment"></div>
+                <div class="form-group"><label>Criteria (one per line)</label><textarea id="atm-criteria" rows="4" placeholder="Sit on command&#10;Stay for 30 seconds&#10;Loose-leash walking"></textarea></div>
+                <div class="form-group"><label>Notes</label><textarea id="atm-notes" rows="2"></textarea></div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeAssessmentTemplateModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveAssessmentTemplate()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ AVAILABILITY / CALENDAR ═══ -->
         <section id="calendar-view" class="view-panel hidden">
 
             <!-- Cal sub-nav -->
@@ -768,9 +904,11 @@
                         <div>
                             <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Status</label>
                             <select id="bk-status" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;">
-                                <option value="scheduled">Scheduled</option>
+                                <option value="pending">Pending</option>
+                                <option value="confirmed">Confirmed</option>
                                 <option value="completed">Completed</option>
                                 <option value="cancelled">Cancelled</option>
+                                <option value="no-show">No-show</option>
                             </select>
                         </div>
                     </div>
