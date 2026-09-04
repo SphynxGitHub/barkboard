@@ -378,7 +378,7 @@ function toggleBookingTypeFields() {
     }
 }
 
-async function openBookingModal(householdId, bookingId = null) {
+async function openBookingModal(householdId = null, bookingId = null) {
     editingBookingId = bookingId;
     bookingHouseholdId = householdId;
 
@@ -393,7 +393,6 @@ async function openBookingModal(householdId, bookingId = null) {
     const staffSel = document.getElementById('bk-staff-id');
     const notesInput = document.getElementById('bk-notes');
     const petBox = document.getElementById('bk-pet-checkboxes');
-    const resourcesSection = document.getElementById('bk-resources-section');
     const staffTimeField = document.getElementById('bk-staff-time-field');
     const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
 
@@ -414,6 +413,7 @@ async function openBookingModal(householdId, bookingId = null) {
     if (staffTimeMinutesInput) staffTimeMinutesInput.value = '';
     document.getElementById('bk-invoice-section')?.classList.add('hidden');
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
+
     if (!bookingId && pendingCalendarDate && startDateInput) {
         startDateInput.value = pendingCalendarDate;
     }
@@ -423,10 +423,7 @@ async function openBookingModal(householdId, bookingId = null) {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    // Load this household's pets as checkboxes
-    const { data: pets } = await client.from('pets').select('id, name, species').eq('household_id', householdId).order('name');
-
-    // Load staff for optional assignment
+    // Load staff dropdown options
     const { data: staff } = await client.from('staff').select('id, name, role').order('name');
     if (staffSel) {
         const staffOptions = (staff || []).map(s => `<option value="${s.id}">${s.name}${s.role ? ' · ' + s.role : ''}</option>`).join('');
@@ -435,63 +432,56 @@ async function openBookingModal(householdId, bookingId = null) {
 
     let selectedPetIds = [];
     let existingBooking = null;
+
     if (bookingId) {
         const { data: bk } = await client.from('bookings').select('*').eq('id', bookingId).single();
         existingBooking = bk;
+        if (bk?.household_id) bookingHouseholdId = bk.household_id;
         if (bk?.pet_id) selectedPetIds = [bk.pet_id];
     }
 
+    // PET SELECTION & GLOBAL SEARCH RENDERER
     if (petBox) {
-        petBox.innerHTML = (pets && pets.length)
-            ? pets.map(p => `
-                <div>
-                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem;">
-                        <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" ${selectedPetIds.includes(p.id) ? 'checked' : ''} onchange="onBkPetToggle('${p.id}', this.checked)">
-                        ${p.name} (${p.species})
-                    </label>
-                    <div id="bk-pet-resources-${p.id}" class="${selectedPetIds.includes(p.id) ? '' : 'hidden'}" style="margin:0.4rem 0 0.5rem 1.4rem; padding:0.5rem; border:1px dashed var(--border); border-radius:0.25rem;">
-                        <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); margin-bottom:0.3rem;">Resources for ${p.name}</div>
-                        <div id="bk-pet-resources-list-${p.id}" style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.35rem;"></div>
-                        <input type="text" placeholder="Type to filter resources to add..." style="width:100%; padding:0.4rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.8rem;" onkeyup="searchResourcesForPet('${p.id}', this.value)" onfocus="searchResourcesForPet('${p.id}', this.value)">
-                        <div id="bk-pet-resource-search-results-${p.id}" style="margin-top:0.3rem; display:flex; flex-direction:column; gap:0.25rem;"></div>
-                    </div>
+        if (bookingHouseholdId) {
+            const { data: pets } = await client.from('pets').select('id, name, species').eq('household_id', bookingHouseholdId).order('name');
+            renderPetSelectionCheckboxes(pets || [], selectedPetIds);
+        } else {
+            petBox.innerHTML = `
+                <div style="margin-bottom:0.5rem;">
+                    <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Search Pet across All Households</label>
+                    <input type="text" id="bk-global-pet-search" placeholder="Type pet name or owner..." class="biz-select" style="width:100%; padding:0.4rem; font-size:0.85rem;" onkeyup="searchGlobalPetsForBooking(this.value)" onfocus="searchGlobalPetsForBooking(this.value)">
+                    <div id="bk-global-pet-results" style="margin-top:0.35rem; display:flex; flex-direction:column; gap:0.3rem; max-height:160px; overflow-y:auto;"></div>
                 </div>
-            `).join('')
-            : '<span style="font-size:0.8rem; color:var(--text-muted);">No pets on file for this household yet.</span>';
-
-        bkResourcesByPet = {};
-        if (selectedPetIds.length && existingBooking) {
-            for (const pid of selectedPetIds) {
-                bkResourcesByPet[pid] = await loadExistingBookingResources(existingBooking.id);
-                renderBkResourcesList(pid);
-            }
+                <div id="bk-selected-pets-container"></div>
+            `;
+            searchGlobalPetsForBooking('');
         }
     }
 
+    // Populate existing booking details if editing
     if (existingBooking) {
         const checkInDate = existingBooking.check_in ? existingBooking.check_in.slice(0, 10) : '';
         const checkInTime = existingBooking.check_in ? existingBooking.check_in.slice(11, 16) : '';
         const checkOutDate = existingBooking.check_out ? existingBooking.check_out.slice(0, 10) : '';
         const checkOutTime = existingBooking.check_out ? existingBooking.check_out.slice(11, 16) : '';
         const isStay = checkOutDate && checkOutDate !== checkInDate;
-        const endTimeInput = document.getElementById('bk-end-time');
 
         if (typeSel) typeSel.value = isStay ? 'stay' : 'appointment';
         if (serviceInput) serviceInput.value = existingBooking.service_name || '';
         if (startDateInput) startDateInput.value = checkInDate;
         if (startTimeInput) startTimeInput.value = checkInTime;
         if (isStay && endDateInput) endDateInput.value = checkOutDate;
-        if (isStay && endTimeInput) endTimeInput.value = checkOutTime;
+        if (isStay && document.getElementById('bk-end-time')) document.getElementById('bk-end-time').value = checkOutTime;
         if (amountInput) amountInput.value = existingBooking.amount != null ? existingBooking.amount : '';
         if (statusSel) statusSel.value = existingBooking.status || 'pending';
         if (staffSel) staffSel.value = existingBooking.assigned_staff_id || '';
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
 
-        // Load this booking's resource assignments from the new multi-resource model
+        // Load multi-resource assignments
         bkSelectedResources = await loadExistingBookingResources(existingBooking.id);
         document.getElementById('bk-resources-section')?.classList.remove('hidden');
-        renderBkResourcesList();
+        if (typeof renderBkResourcesList === 'function') renderBkResourcesList();
 
         const needsStaffTime = existingBooking.requires_staff_time || false;
         if (needsStaffTime) {
@@ -499,7 +489,7 @@ async function openBookingModal(householdId, bookingId = null) {
             if (staffTimeMinutesInput) staffTimeMinutesInput.value = existingBooking.staff_time_minutes || '';
         }
 
-        // Show the linked invoice (if any) with a jump-to-edit button, or a quick way to create one.
+        // Show linked invoice section
         const invoiceSection = document.getElementById('bk-invoice-section');
         const invoiceInfo = document.getElementById('bk-invoice-info');
         if (invoiceSection && invoiceInfo) {
@@ -509,14 +499,14 @@ async function openBookingModal(householdId, bookingId = null) {
                 invoiceInfo.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0.65rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.85rem;">
                         <span>${linkedInv?.description || 'Invoice'} · $${Number(linkedInv?.amount || 0).toFixed(2)} · <span style="text-transform:capitalize;">${linkedInv?.status || 'unpaid'}</span></span>
-                        <button class="btn" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}', '${existingBooking.invoice_id}')">View / Edit</button>
+                        <button type="button" class="btn" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}', '${existingBooking.invoice_id}')">View / Edit</button>
                     </div>
                 `;
             } else {
                 invoiceInfo.innerHTML = `
                     <input type="text" id="bk-invoice-link-search" placeholder="Type to filter this household's invoices..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onkeyup="searchInvoicesForBooking(this.value, '${existingBooking.id}')">
                     <div id="bk-invoice-link-results" style="margin-top:0.4rem; display:flex; flex-direction:column; gap:0.3rem; max-height:180px; overflow-y:auto;"></div>
-                    <button class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-top:0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}')">+ Create New Invoice</button>
+                    <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-top:0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}')">+ Create New Invoice</button>
                 `;
                 await searchInvoicesForBooking('', existingBooking.id);
             }
@@ -528,6 +518,112 @@ async function openBookingModal(householdId, bookingId = null) {
         modal.classList.remove('hidden');
         refreshIcons();
     }
+}
+
+/* Helper to render household pet checkboxes */
+function renderPetSelectionCheckboxes(pets, selectedIds = []) {
+    const petBox = document.getElementById('bk-pet-checkboxes');
+    if (!petBox) return;
+
+    petBox.innerHTML = (pets && pets.length)
+        ? pets.map(p => `
+            <div>
+                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem;">
+                    <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" ${selectedIds.includes(p.id) ? 'checked' : ''} onchange="onBkPetToggle('${p.id}', this.checked)">
+                    ${p.name} (${p.species})
+                </label>
+                <div id="bk-pet-resources-${p.id}" class="${selectedIds.includes(p.id) ? '' : 'hidden'}" style="margin:0.4rem 0 0.5rem 1.4rem; padding:0.5rem; border:1px dashed var(--border); border-radius:0.25rem;">
+                    <div style="font-size:0.75rem; font-weight:600; color:var(--text-muted); margin-bottom:0.3rem;">Resources for ${p.name}</div>
+                    <div id="bk-pet-resources-list-${p.id}" style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.35rem;"></div>
+                    <input type="text" placeholder="Type to filter resources to add..." style="width:100%; padding:0.4rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.8rem;" onkeyup="searchResourcesForPet('${p.id}', this.value)" onfocus="searchResourcesForPet('${p.id}', this.value)">
+                    <div id="bk-pet-resource-search-results-${p.id}" style="margin-top:0.3rem; display:flex; flex-direction:column; gap:0.25rem;"></div>
+                </div>
+            </div>
+        `).join('')
+        : '<span style="font-size:0.8rem; color:var(--text-muted);">No pets found.</span>';
+}
+
+/* Searches ALL pets across BarkBoard when starting an appointment from Activities */
+async function searchGlobalPetsForBooking(query) {
+    const container = document.getElementById('bk-global-pet-results');
+    if (!container) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const q = (query || '').trim().toLowerCase();
+    let dbQuery = client.from('pets').select('id, name, species, household_id, households(name)').order('name').limit(15);
+    if (q) {
+        dbQuery = dbQuery.or(`name.ilike.%${q}%,species.ilike.%${q}%`);
+    }
+
+    const { data: pets } = await dbQuery;
+
+    if (!pets || !pets.length) {
+        container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); padding:0.3rem;">No matching pets found.</div>';
+        return;
+    }
+
+    container.innerHTML = pets.map(p => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem; cursor:pointer;" onclick="selectGlobalPetForBooking('${p.id}', '${p.household_id}')">
+            <span><strong>${p.name}</strong> (${p.species}) ${p.households?.name ? '· ' + p.households.name : ''}</span>
+            <button type="button" class="btn btn-primary" style="font-size:0.7rem; padding:0.15rem 0.45rem;">Select</button>
+        </div>
+    `).join('');
+}
+
+/* Selecting a pet automatically binds its household and populates all household pets */
+async function selectGlobalPetForBooking(petId, householdId) {
+    bookingHouseholdId = householdId;
+    const client = getSupabase();
+    if (!client || !householdId) return;
+
+    const { data: pets } = await client.from('pets').select('id, name, species').eq('household_id', householdId).order('name');
+    renderPetSelectionCheckboxes(pets || [], [petId]);
+    onBkPetToggle(petId, true);
+}
+
+/* Calculates Total Amount based on Service Per-Day / Per-Service Rate × Days */
+let activeServicePerDayRate = null;
+
+function calculateBookingTotalAmount() {
+    if (activeServicePerDayRate == null) return;
+
+    const type = document.getElementById('bk-type')?.value || 'appointment';
+    const startDateStr = document.getElementById('bk-start-date')?.value;
+    const endDateStr = document.getElementById('bk-end-date')?.value;
+    const amountInput = document.getElementById('bk-amount');
+
+    if (!amountInput) return;
+
+    let days = 1;
+    if (type === 'stay' && startDateStr && endDateStr) {
+        const start = new Date(startDateStr);
+        const end = new Date(endDateStr);
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        days = diffDays > 0 ? diffDays : 1;
+    }
+
+    const totalAmount = activeServicePerDayRate * days;
+    amountInput.value = totalAmount.toFixed(2);
+}
+
+/* Updated template selection helper to store per-day rate and re-calculate amount */
+function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType) {
+    const serviceInput = document.getElementById('bk-service-type');
+    if (serviceInput) serviceInput.value = name;
+    document.getElementById('bk-service-type-results')?.classList.add('hidden');
+
+    const staffTimeField = document.getElementById('bk-staff-time-field');
+    const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
+
+    if (staffTimeField) staffTimeField.classList.toggle('hidden', !requiresStaffTime);
+    if (staffTimeMinutesInput && requiresStaffTime) staffTimeMinutesInput.value = staffTimeMinutes || '';
+
+    // Bind price per day/service and calculate total
+    activeServicePerDayRate = price != null ? parseFloat(price) : null;
+    calculateBookingTotalAmount();
 }
 
 async function searchResourcesForBooking(query) {
