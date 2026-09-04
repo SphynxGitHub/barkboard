@@ -975,6 +975,7 @@ async function renderLinkedAppointments(invoiceId) {
     const client = getSupabase();
     if (!client) return;
 
+    // Pull linked appointments with service names, dates, amounts, and pet details
     const { data: linked } = await client
         .from('bookings')
         .select('id, service_name, check_in, check_out, amount, pets(name)')
@@ -982,6 +983,7 @@ async function renderLinkedAppointments(invoiceId) {
         .order('check_in');
 
     let calculatedTotal = 0;
+    const appointmentTitles = [];
 
     if (linked && linked.length) {
         el.innerHTML = linked.map(bk => {
@@ -990,7 +992,11 @@ async function renderLinkedAppointments(invoiceId) {
             const when = outDate && outDate !== inDate ? `${inDate} → ${outDate}` : inDate;
             const petName = bk.pets?.name ? ` (${bk.pets.name})` : '';
             const itemAmount = Number(bk.amount || 0);
+            
             calculatedTotal += itemAmount;
+            if (bk.service_name) {
+                appointmentTitles.push(bk.service_name);
+            }
 
             return `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.82rem; margin-bottom:0.35rem;">
@@ -1002,11 +1008,21 @@ async function renderLinkedAppointments(invoiceId) {
             `;
         }).join('');
 
-        // Automatically update invoice total from linked appointments
+        // Generate combined description from appointment titles
+        const dynamicDescription = appointmentTitles.length 
+            ? Array.from(new Set(appointmentTitles)).join(' & ') 
+            : 'Invoice';
+
+        // Auto-update total amount and description in Supabase
         if (amountInput) {
             amountInput.value = calculatedTotal.toFixed(2);
-            autoSaveField('invoices', invoiceId, 'amount', calculatedTotal.toString());
         }
+
+        await client.from('invoices').update({
+            amount: calculatedTotal,
+            description: dynamicDescription
+        }).eq('id', invoiceId);
+
     } else {
         el.innerHTML = '<p style="font-size:0.82rem; color:var(--text-muted);">No appointments linked to this invoice.</p>';
     }
@@ -1082,12 +1098,25 @@ async function saveInvoice() {
     const amount = parseFloat(amountRaw);
     if (isNaN(amount) || amount < 0) return alert('Please enter a valid invoice total.');
 
-    // Description is now generated automatically or defaults cleanly
-    const description = `Invoice for ${dueDate}`;
+    // Fetch titles of currently linked appointments to form description
+    let dynamicDescription = 'Invoice';
+    if (editingInvoiceId) {
+        const { data: linkedAppts } = await client
+            .from('bookings')
+            .select('service_name')
+            .eq('invoice_id', editingInvoiceId);
+            
+        if (linkedAppts && linkedAppts.length) {
+            const names = linkedAppts.map(a => a.service_name).filter(Boolean);
+            if (names.length) {
+                dynamicDescription = Array.from(new Set(names)).join(' & ');
+            }
+        }
+    }
 
     const payload = {
         household_id: invoiceHouseholdId,
-        description: description,
+        description: dynamicDescription,
         amount: amount,
         due_date: dueDate,
         status: status,
@@ -1095,15 +1124,10 @@ async function saveInvoice() {
     };
 
     let response;
-    let savedInvoiceId = editingInvoiceId;
-
     if (editingInvoiceId) {
         response = await client.from('invoices').update(payload).eq('id', editingInvoiceId);
     } else {
         response = await client.from('invoices').insert([payload]).select();
-        if (!response.error && response.data && response.data[0]) {
-            savedInvoiceId = response.data[0].id;
-        }
     }
 
     if (response.error) {
