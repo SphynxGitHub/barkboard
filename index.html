@@ -327,9 +327,24 @@
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Let customers request an appointment directly, without calling or emailing. Submissions land in your Activities feed with "Pending" status for you to confirm or decline — nothing goes on the calendar automatically.</p>
 
                 <div style="display:flex; flex-direction:column; gap:0.85rem; max-width:480px;">
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Business Name</label>
+                        <input type="text" id="pb-business-name" placeholder="Your Business Name" class="biz-select" style="width:100%; padding:0.5rem;">
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Shown as the heading at the top of your public booking page.</p>
+                    </div>
+
                     <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
                         <input type="checkbox" id="pb-enabled"> Enable public booking page
                     </label>
+
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Booking Page URL</label>
+                        <div style="display:flex; align-items:center; gap:0.35rem;">
+                            <span id="pb-slug-prefix" style="font-size:0.82rem; color:var(--text-muted); white-space:nowrap;"></span>
+                            <input type="text" id="pb-slug" placeholder="your-business-name" class="biz-select" style="flex:1; padding:0.5rem;" oninput="previewPublicBookingSlug()">
+                        </div>
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Letters, numbers, and hyphens only — this becomes part of your public link below.</p>
+                    </div>
 
                     <div id="pb-link-box" class="hidden" style="padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
                         <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.35rem;">Your booking link</label>

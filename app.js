@@ -6056,7 +6056,7 @@ async function loadPublicBookingSettings() {
     if (!client) return;
 
     const { data: business, error } = await client.from('businesses')
-        .select('slug, public_booking_enabled, logo_url, accent_color, welcome_message')
+        .select('name, slug, public_booking_enabled, logo_url, accent_color, welcome_message')
         .eq('id', currentBusinessId)
         .single();
 
@@ -6065,11 +6065,14 @@ async function loadPublicBookingSettings() {
         return;
     }
 
+    document.getElementById('pb-business-name').value = business.name || '';
     const enabledChk = document.getElementById('pb-enabled');
     if (enabledChk) enabledChk.checked = !!business.public_booking_enabled;
     document.getElementById('pb-welcome').value = business.welcome_message || '';
     document.getElementById('pb-logo-url').value = business.logo_url || '';
     document.getElementById('pb-accent-color').value = business.accent_color || '#4f46e5';
+    document.getElementById('pb-slug').value = business.slug || '';
+    document.getElementById('pb-slug-prefix').textContent = `${window.location.origin}/book.html?biz=`;
 
     const linkBox = document.getElementById('pb-link-box');
     const linkInput = document.getElementById('pb-link');
@@ -6082,19 +6085,73 @@ async function loadPublicBookingSettings() {
     }
 }
 
+/* Converts free-typed text into a URL-safe slug: lowercase, spaces/underscores
+   become hyphens, anything else not a letter/number/hyphen is stripped, and
+   repeated or edge hyphens are collapsed/trimmed. */
+function slugify(text) {
+    return (text || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[\s_]+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
+/* Live-updates the link box as the person types a slug, so they can see
+   exactly what their link will look like before saving. */
+function previewPublicBookingSlug() {
+    const raw = document.getElementById('pb-slug')?.value || '';
+    const linkInput = document.getElementById('pb-link');
+    const linkBox = document.getElementById('pb-link-box');
+    const enabled = document.getElementById('pb-enabled')?.checked;
+    const slug = slugify(raw);
+    if (enabled && slug) {
+        linkInput.value = `${window.location.origin}/book.html?biz=${encodeURIComponent(slug)}`;
+        linkBox.classList.remove('hidden');
+    } else {
+        linkBox.classList.add('hidden');
+    }
+}
+
 async function savePublicBookingSettings() {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
+    const slug = slugify(document.getElementById('pb-slug')?.value || '');
+    const enabled = document.getElementById('pb-enabled')?.checked || false;
+    const businessName = document.getElementById('pb-business-name')?.value.trim() || '';
+
+    if (enabled && !slug) {
+        return alert('Please enter a booking page URL before enabling the public booking page.');
+    }
+    if (!businessName) {
+        return alert('Please enter a business name.');
+    }
+
     const payload = {
-        public_booking_enabled: document.getElementById('pb-enabled')?.checked || false,
+        name: businessName,
+        public_booking_enabled: enabled,
         welcome_message: document.getElementById('pb-welcome')?.value.trim() || null,
         logo_url: document.getElementById('pb-logo-url')?.value.trim() || null,
         accent_color: document.getElementById('pb-accent-color')?.value || '#4f46e5'
     };
+    // slug is NOT NULL in the schema — only include it in the update if there's
+    // actually a value, so an empty field never tries to null it out (which
+    // would fail the constraint) and instead just leaves the existing slug alone.
+    if (slug) payload.slug = slug;
 
     const { error } = await client.from('businesses').update(payload).eq('id', currentBusinessId);
-    if (error) return alert('Failed to save: ' + error.message);
+    if (error) {
+        // Postgres unique_violation — someone (or you, previously) already has this slug
+        if (error.code === '23505') {
+            return alert(`"${slug}" is already taken. Please choose a different booking page URL.`);
+        }
+        return alert('Failed to save: ' + error.message);
+    }
+
+    // Reflect the slugified version back into the field so what's shown matches what saved
+    document.getElementById('pb-slug').value = slug;
 
     alert('Public booking settings saved.');
     loadPublicBookingSettings(); // refresh the link box now that enabled/slug state may have changed
