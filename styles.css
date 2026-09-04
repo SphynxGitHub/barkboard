@@ -1394,3 +1394,114 @@ input.biz-select {
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   AUTH GATE (login screen)
+   ========================================================================== */
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px -12px rgba(79, 70, 229, 0.18), 0 4px 12px rgba(15, 23, 42, 0.06);
+  padding: 2.25rem 2rem 2rem;
+}
+
+.auth-card-brand {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.auth-card-logo {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--primary), #7c74f2);
+  box-shadow: 0 8px 20px -6px rgba(79, 70, 229, 0.5);
+}
+
+.auth-card-brand h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.auth-card-brand p {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+#auth-login-form .form-group {
+  margin-bottom: 1.1rem;
+}
+
+#auth-login-form label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+#auth-login-form input {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 0.92rem;
+  font-family: var(--font-sans);
+  background: #fbfbfe;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+#auth-login-form input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+}
+
+.auth-error-box {
+  background: var(--danger);
+  color: var(--danger-text);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.auth-submit-btn {
+  width: 100%;
+  padding: 0.7rem;
+  border: none;
+  border-radius: 9px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.auth-submit-btn:hover {
+  background: var(--primary-hover);
+}
+
+.auth-submit-btn:active {
+  transform: translateY(1px);
+}
+
+.auth-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
