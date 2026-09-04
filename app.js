@@ -4419,18 +4419,23 @@ async function fetchActivityItems() {
     });
 
     // Fetch Invoices
-    const { data: invoices } = await client.from('invoices').select('*, households(name)').neq('status', 'paid');
+    const { data: invoices } = await client
+        .from('invoices')
+        .select('*, households(name)')
+        .eq('status', 'unpaid'); // Excludes paid and void invoices from activities feed & calendar
+    
     (invoices || []).forEach(inv => {
         items.push({
             kind: 'invoice',
             id: inv.id,
-            title: `Invoice due: ${inv.description || 'Invoice'}`,
-            subtitle: `${inv.households?.name || ''} · $${Number(inv.amount || 0).toFixed(2)}`,
+            title: inv.description || 'Invoice',
+            subtitle: `${inv.households?.name || 'Unassigned'} · $${Number(inv.amount || 0).toFixed(2)}`,
             date: inv.due_date || '',
-            status: inv.status || 'pending',
+            status: inv.status || 'unpaid',
             staffName: '',
             staffId: '',
-            householdId: inv.household_id
+            householdId: inv.household_id,
+            householdName: inv.households?.name || 'Unassigned Household'
         });
     });
 
@@ -4847,23 +4852,34 @@ async function computeCalendarDayStatuses(dates) {
     return result;
 }
 
-function getServiceIcon(item) {
+function getServiceIcons(item) {
+    if (item.kind === 'task') {
+        return ['check-square'];
+    }
+
     const text = (item.title || item.subtitle || '').toLowerCase();
     const resType = (item.resourceNames || '').toLowerCase();
+    const icons = [];
 
-    if (text.includes('board') || text.includes('stay') || resType.includes('suite') || resType.includes('run') || resType.includes('kennel')) {
-        return 'bed-double';
+    const isBoarding = text.includes('board') || text.includes('stay') || resType.includes('suite') || resType.includes('run') || resType.includes('kennel');
+    const isTraining = text.includes('train') || text.includes('agility') || text.includes('class');
+    const isGrooming = text.includes('groom') || text.includes('bath') || text.includes('wash');
+    const isDaycare = text.includes('daycare') || text.includes('play');
+
+    if (isBoarding) icons.push('bed-double');
+    if (isTraining) icons.push('dumbbell');
+    if (isGrooming) icons.push('scissors');
+    if (isDaycare) icons.push('sun');
+
+    // Fallback if no specific service category matched
+    if (!icons.length) icons.push('calendar');
+
+    // Prepend dollar-sign for invoices
+    if (item.kind === 'invoice') {
+        return ['dollar-sign', ...icons];
     }
-    if (text.includes('train') || text.includes('agility') || text.includes('class')) {
-        return 'dumbbell';
-    }
-    if (text.includes('groom') || text.includes('bath') || text.includes('wash')) {
-        return 'scissors';
-    }
-    if (text.includes('daycare') || text.includes('play')) {
-        return 'sun';
-    }
-    return 'calendar'; // Fallback
+
+    return icons;
 }
 
 async function renderActivitiesCalendar() {
@@ -4900,20 +4916,34 @@ async function renderActivitiesCalendar() {
 
     const isDayMode = actCalendarMode === 'day';
 
+    // Inside renderActivitiesCalendar():
     const renderCellItems = (key, compact) => (byDay[key] || []).map(it => {
-        const icon = getServiceIcon(it);
+        const icons = getServiceIcons(it);
         
-        // Extract pet name from subtitle or title
-        const petLabel = it.subtitle ? it.subtitle.split('·')[0].trim() : (it.title || 'Event');
+        // Determine label display: Invoices -> Household Name, Tasks -> Task Text, Appointments -> Pet/Event
+        let displayLabel = it.title || 'Event';
+        if (it.kind === 'invoice') {
+            displayLabel = it.householdName || (it.subtitle ? it.subtitle.split('·')[0].trim() : 'Unpaid Invoice');
+        } else if (it.kind === 'task') {
+            displayLabel = it.title;
+        } else if (it.subtitle) {
+            displayLabel = it.subtitle.split('·')[0].trim();
+        }
+    
+        const iconHtml = icons
+            .map(icon => `<i data-lucide="${icon}" style="width:13px; height:13px; color:var(--primary,#2563eb); flex-shrink:0;"></i>`)
+            .join('');
     
         return `
             <div style="padding:${compact ? '0.2rem 0.3rem' : '0.35rem 0.45rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer; border:1px solid var(--border);" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
                 <div style="display:flex; align-items:center; gap:0.35rem; font-weight:600; color:var(--text-main,#0f172a);">
-                    <i data-lucide="${icon}" style="width:13px; height:13px; color:var(--primary,#2563eb); flex-shrink:0;"></i>
-                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${petLabel}</span>
+                    <span style="display:inline-flex; gap:0.15rem; align-items:center;">${iconHtml}</span>
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${displayLabel}</span>
                 </div>
                 ${!compact ? `
                     <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem; display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
+                        ${it.kind === 'task' ? `<span>${it.staffName ? '👤 ' + it.staffName : 'Task'}</span>` : ''}
+                        ${it.kind === 'invoice' ? `<span>$${it.subtitle ? (it.subtitle.split('·')[1] || '').trim() : ''}</span>` : ''}
                         ${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? `<span>${it.resourceNames}</span>` : ''}
                         ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();" style="margin-left:auto;">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
                     </div>
