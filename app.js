@@ -43,31 +43,35 @@ async function renderStaffGuests() {
     const client = getSupabase();
     if (!client) return;
 
-    const todayStart = new Date().toISOString().slice(0, 10) + 'T00:00:00';
-    const todayEnd = new Date().toISOString().slice(0, 10) + 'T23:59:59';
+    const now = new Date();
+    const todayStart = now.toISOString().slice(0, 10) + 'T00:00:00';
+    const weekOut = new Date(now); weekOut.setDate(weekOut.getDate() + 14);
+    const windowEnd = weekOut.toISOString().slice(0, 10) + 'T23:59:59';
 
     const { data: bookings } = await client.from('bookings')
         .select('*, pets(name, species), households(name)')
-        .lte('check_in', todayEnd).gte('check_out', todayStart)
+        .gte('check_out', todayStart).lte('check_in', windowEnd)
         .neq('status', 'cancelled')
         .order('check_in');
 
     if (!bookings || !bookings.length) {
-        container.innerHTML = '<div class="biz-empty">No active guests today.</div>';
+        container.innerHTML = '<div class="biz-empty">No active or upcoming guests in the next two weeks.</div>';
         return;
     }
 
-    container.innerHTML = bookings.map(bk => `
+    container.innerHTML = bookings.map(bk => {
+        const isActiveNow = bk.check_in <= (now.toISOString()) && bk.check_out >= (now.toISOString());
+        return `
         <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('pet', '${bk.pet_id}')">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>${bk.pets?.name || 'Pet'}</strong>
-                <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:var(--text-muted); text-transform:capitalize;">${bk.status || 'scheduled'}</span>
+                <strong><i data-lucide="${bk.pets?.species === 'cat' ? 'cat' : bk.pets?.species === 'other' ? 'rabbit' : 'dog'}" style="width:14px;height:14px;"></i> ${bk.pets?.name || 'Pet'}</strong>
+                <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${isActiveNow ? '#16a34a' : 'var(--text-muted)'}; text-transform:capitalize;">${isActiveNow ? 'Checked In' : (bk.status || 'scheduled')}</span>
             </div>
             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${bk.service_name || 'Event'} · ${bk.households?.name || ''}</div>
             <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${(bk.check_in || '').slice(0, 10)}${bk.check_in && bk.check_in.slice(11,16) !== '00:00' ? ' at ' + bk.check_in.slice(11, 16) : ''} → ${(bk.check_out || '').slice(0, 10)}</div>
             ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
         </div>
-    `).join('');
+    `;}).join('');
     refreshIcons();
 }
 
@@ -577,26 +581,24 @@ async function renderStaffRoster() {
         return;
     }
 
-    // Render cards with clickable names that trigger openStaffModal
+    // Render cards: clicking opens the full staff profile, matching household/person/pet/vet
     el.innerHTML = staff.map(s => `
         <div class="staff-card">
             <div class="staff-avatar">${s.initials || s.name.slice(0, 2).toUpperCase()}</div>
-            <div class="staff-info">
-                <h4 class="clickable-profile-zone" 
-                    onclick="openStaffModal('${s.id}')" 
-                    title="Click to edit ${s.name}" 
-                    style="cursor:pointer; display:inline-block;">
-                    ${s.name}
-                </h4>
-                <p>${s.role} ${s.contact ? '· ' + s.contact : ''}</p>
+            <div class="staff-info clickable-profile-zone"
+                onclick="switchView('crm-view'); openFullWidthProfile('staff', '${s.id}')"
+                title="Click to open ${s.name}"
+                style="cursor:pointer;">
+                <h4 style="margin:0;">${s.name}</h4>
+                <p>${s.role || ''} ${s.contact ? '· ' + s.contact : ''}</p>
                 ${s.notes ? `<p style="font-size:0.78rem;color:var(--text-muted);">${s.notes}</p>` : ''}
             </div>
             <div class="staff-actions">
-                <button class="btn" onclick="openStaffModal('${s.id}')">Edit</button>
-                <button class="btn" style="color:var(--danger-text);" onclick="deleteStaff('${s.id}')">Remove</button>
+                <button class="btn-icon" style="background:none; border:none; cursor:pointer; color:var(--danger-text);" onclick="event.stopPropagation(); deleteStaff('${s.id}')" title="Remove"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
             </div>
         </div>
     `).join('');
+    refreshIcons();
 }
 
 function switchStaffTab(tab) {
@@ -610,8 +612,6 @@ function switchStaffTab(tab) {
     if (targetSec) targetSec.classList.add('active');
     
     if (tab === 'roster' && typeof renderStaffRoster === 'function') renderStaffRoster();
-    if (tab === 'availability' && typeof renderStaffAvailability === 'function') renderStaffAvailability();
-    if (tab === 'assignments' && typeof renderStaffAssignments === 'function') renderStaffAssignments();
     if (tab === 'tasks' && typeof renderStaffTasks === 'function') renderStaffTasks();
 }
 
@@ -965,7 +965,7 @@ async function renderStaffAssignments() {
         group.items.forEach(a => {
             html += `
                 <div class="assignment-item" style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem;border-bottom:1px solid var(--border);">
-                    <span>${a.pets?.species === 'cat' ? '🐈' : '🐕'} <strong>${a.pets?.name || 'Unknown pet'}</strong>${a.role ? ' (' + a.role + ')' : ''}</span>
+                    <span><i data-lucide="${a.pets?.species === 'cat' ? 'cat' : 'dog'}" style="width:12px;height:12px;"></i> <strong>${a.pets?.name || 'Unknown pet'}</strong>${a.role ? ' (' + a.role + ')' : ''}</span>
                     <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.55rem;color:var(--danger-text);" onclick="removeAssignment('${a.id}')">Remove</button>
                 </div>`;
         });
@@ -1056,16 +1056,39 @@ async function renderStaffTasks() {
             <div>
                 <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleStaffTask('${t.id}', ${!t.is_done})">
                 <strong style="${t.is_done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.task_text}</strong>
-                <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;">👤 ${t.staff?.name || 'Unassigned'} · Due ${t.due_date || 'no date'}</span>
+                <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;"><i data-lucide="user" style="width:11px;height:11px;"></i> ${t.staff?.name || 'Unassigned'} · Due ${t.due_date || 'no date'}</span>
             </div>
             <div>
-                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openStaffTaskModal('${t.id}')">Edit</button>
-                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteStaffTask('${t.id}')">✕</button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;" onclick="openStaffTaskModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="deleteStaffTask('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
             </div>
         </div>
     `).join('');
     refreshIcons();
 }
+
+async function openStaffTaskModalFor(staffId) {
+    await openStaffTaskModal(null);
+    const whoSel = document.getElementById('stsk-who');
+    if (whoSel) whoSel.value = staffId;
+    returnToStaffProfile = staffId;
+}
+
+async function toggleStaffTaskOnProfile(id, newValue, staffId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_tasks').update({ is_done: newValue }).eq('id', id);
+    openFullWidthProfile('staff', staffId);
+}
+
+async function deleteStaffTaskOnProfile(id, staffId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('staff_tasks').delete().eq('id', id);
+    openFullWidthProfile('staff', staffId);
+}
+
+let returnToStaffProfile = null;
 
 async function openStaffTaskModal(id) {
     editingStaffTaskId = id;
@@ -1099,6 +1122,7 @@ async function openStaffTaskModal(id) {
 }
 
 function closeStaffTaskModal() {
+    returnToStaffProfile = null;
     const modal = document.getElementById('staff-task-modal');
     if (modal) modal.classList.add('hidden');
 }
@@ -1129,7 +1153,13 @@ async function saveStaffTask() {
 
     editingStaffTaskId = null;
     closeStaffTaskModal();
-    renderStaffTasks();
+    if (returnToStaffProfile) {
+        const sid = returnToStaffProfile;
+        returnToStaffProfile = null;
+        openFullWidthProfile('staff', sid);
+    } else {
+        renderStaffTasks();
+    }
 }
 
 async function toggleStaffTask(id, newValue) {
@@ -1286,8 +1316,8 @@ async function renderResourceList() {
                 ${r.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${r.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
-                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;" onclick="openResourceModal('${r.id}')">Edit</button>
-                <button class="btn" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger-text);" onclick="deleteResource('${r.id}')">✕</button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;" onclick="openResourceModal('${r.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="deleteResource('${r.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
             </div>
         </div>
     `).join('');
@@ -1554,8 +1584,8 @@ async function renderAvailabilityList() {
                 </div>
                 <div style="display:flex;gap:0.4rem;align-items:center;">
                     <span class="closure-type-pill ${c.closure_type}" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:9999px;font-weight:600;">${c.closure_type === 'closure' ? 'Closed' : c.closure_type === 'reduced' ? 'Reduced' : 'Holiday'}</span>
-                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;" onclick="openAvailabilityModal('${c.id}')">Edit</button>
-                    <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.65rem;color:var(--danger-text);" onclick="deleteClosure('${c.id}')">Remove</button>
+                    <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;" onclick="openAvailabilityModal('${c.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                    <button class="btn-icon" style="background:none;border:none;cursor:pointer;padding:0.25rem;color:var(--danger-text);" onclick="deleteClosure('${c.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
                 </div>
             </div>`;
     }).join('');
@@ -2366,6 +2396,8 @@ async function openFullWidthProfile(type, id) {
         if (payload) {
             const { data: bookings } = await client.from('bookings').select('*').eq('pet_id', id);
             payload.bookings = bookings || [];
+            const { data: staffAssignments } = await client.from('staff_assignments').select('*, staff(name, role)').eq('pet_id', id);
+            payload.assignedStaff = staffAssignments || [];
         }
     } else if (type === 'vet') {
         const { data } = await client.from('vets').select('*').eq('id', id).single();
@@ -2376,11 +2408,22 @@ async function openFullWidthProfile(type, id) {
             window.__vetClientPetsCache = window.__vetClientPetsCache || {};
             window.__vetClientPetsCache[id] = payload.clientPets;
         }
+    } else if (type === 'staff') {
+        const { data } = await client.from('staff').select('*').eq('id', id).single();
+        payload = data;
+        if (payload) {
+            const { data: assignments } = await client.from('staff_assignments').select('*, pets(name, species, household_id, households(name))').eq('staff_id', id);
+            payload.assignments = assignments || [];
+            const { data: events } = await client.from('bookings').select('*, pets(name), households(name)').eq('assigned_staff_id', id).order('check_in');
+            payload.bookings = events || [];
+            const { data: tasks } = await client.from('staff_tasks').select('*').eq('staff_id', id).order('due_date');
+            payload.tasks = tasks || [];
+        }
     }
 
     if (!payload) return;
 
-    const iconName = type === 'household' ? 'home' : type === 'person' ? 'user' : type === 'pet' ? 'dog' : 'stethoscope';
+    const iconName = type === 'household' ? 'home' : type === 'person' ? 'user' : type === 'pet' ? 'dog' : type === 'staff' ? 'briefcase' : 'stethoscope';
 
     container.innerHTML = `
         <div class="full-width-profile-view" style="width:100%; background:var(--bg-card, #ffffff); border:1px solid var(--border); border-radius:0.5rem; padding:1.5rem; margin-top:0.5rem;">
@@ -2399,12 +2442,85 @@ async function openFullWidthProfile(type, id) {
                 </div>
             </div>
 
+            ${renderDetailsStrip(type, id, payload)}
+
             <!-- CONTENT SECTIONS -->
             ${renderEntitySections(type, payload, id)}
         </div>
     `;
 
     refreshIcons();
+}
+
+function detailField(label, value) {
+    return `<div><span style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em;">${label}</span><div style="font-size:0.9rem; margin-top:0.1rem;">${value || '—'}</div></div>`;
+}
+
+function renderDetailsStrip(type, id, data) {
+    const key = `${type}-${id}`;
+    let viewFields = '';
+    let editFields = '';
+
+    if (type === 'household') {
+        viewFields = detailField('Address', data.address) + detailField('Notes', data.note);
+        editFields = `
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Household Name</label><input type="text" value="${data.name || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('households', '${id}', 'name', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Address</label><input type="text" value="${data.address || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('households', '${id}', 'address', this.value)"></div>
+            <div style="flex:1; min-width:200px;"><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Notes</label><textarea class="biz-select" style="padding:0.4rem; width:100%;" rows="1" onchange="autoSaveField('households', '${id}', 'note', this.value)">${data.note || ''}</textarea></div>
+        `;
+    } else if (type === 'person') {
+        viewFields = detailField('Role', data.role || 'Member') + detailField('Category', (data.category || 'member') === 'other' ? 'Other Contact' : 'Household Member')
+            + detailField('Email', data.email ? (data.preferred_contact === 'email' ? '★ ' : '') + data.email : null)
+            + detailField('Phone', data.phone ? (data.preferred_contact === 'phone' ? '★ ' : '') + data.phone : null)
+            + detailField('Notes', data.notes);
+        editFields = `
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">First Name</label><input id="person-first-name" type="text" value="${data.first_name || ''}" class="biz-select" style="padding:0.4rem;" onchange="savePersonNameField('${id}', 'first_name', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Last Name</label><input id="person-last-name" type="text" value="${data.last_name || ''}" class="biz-select" style="padding:0.4rem;" onchange="savePersonNameField('${id}', 'last_name', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Role</label><select class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('people', '${id}', 'role', this.value)">${['Primary', 'Backup', 'Member', 'Emergency Contact', 'Relative', 'Other'].map(r => `<option value="${r}" ${data.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Category</label><select class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('people', '${id}', 'category', this.value)"><option value="member" ${(data.category || 'member') === 'member' ? 'selected' : ''}>Household Member</option><option value="other" ${data.category === 'other' ? 'selected' : ''}>Other Contact</option></select></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Email</label><div style="display:flex; gap:0.3rem;"><input type="email" value="${data.email || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('people', '${id}', 'email', this.value)"><button onclick="setPreferredContact('${id}', 'email', ${data.preferred_contact === 'email' ? 'true' : 'false'})" style="background:none; border:none; cursor:pointer; color:${data.preferred_contact === 'email' ? '#eab308' : 'var(--text-muted)'};">★</button></div></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Phone</label><div style="display:flex; gap:0.3rem;"><input type="tel" value="${data.phone || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('people', '${id}', 'phone', this.value)"><button onclick="setPreferredContact('${id}', 'phone', ${data.preferred_contact === 'phone' ? 'true' : 'false'})" style="background:none; border:none; cursor:pointer; color:${data.preferred_contact === 'phone' ? '#eab308' : 'var(--text-muted)'};">★</button></div></div>
+            <div style="flex:1; min-width:200px;"><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Notes</label><textarea class="biz-select" style="padding:0.4rem; width:100%;" rows="1" onchange="autoSaveField('people', '${id}', 'notes', this.value)">${data.notes || ''}</textarea></div>
+        `;
+    } else if (type === 'pet') {
+        viewFields = detailField('Species', speciesLabel(data)) + detailField('Vaccine Status', data.vaccine_status) + detailField('Allergies', data.allergies) + detailField('Diet & Food', data.food) + detailField('Behavioral Details', data.details);
+        editFields = `
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Pet Name</label><input type="text" value="${data.name || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('pets', '${id}', 'name', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Species</label><select class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('pets', '${id}', 'species', this.value); document.getElementById('pet-species-other-${id}').style.display = this.value === 'other' ? 'block' : 'none';"><option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option><option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option><option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option></select></div>
+            <div id="pet-species-other-${id}" style="display:${data.species === 'other' ? 'block' : 'none'};"><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Specify Species</label><input type="text" value="${data.species_other || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('pets', '${id}', 'species_other', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Vaccine Status</label><select class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('pets', '${id}', 'vaccine_status', this.value)"><option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option><option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending</option><option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option></select></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Allergies</label><input type="text" value="${data.allergies || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('pets', '${id}', 'allergies', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Diet & Food</label><input type="text" value="${data.food || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('pets', '${id}', 'food', this.value)"></div>
+            <div style="flex:1; min-width:200px;"><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Behavioral Details</label><textarea class="biz-select" style="padding:0.4rem; width:100%;" rows="1" onchange="autoSaveField('pets', '${id}', 'details', this.value)">${data.details || ''}</textarea></div>
+        `;
+    } else if (type === 'vet') {
+        viewFields = detailField('Clinic', data.clinic) + detailField('Phone', data.phone) + detailField('Email', data.email) + detailField('Hours', data.hours) + detailField('Notes', data.notes);
+        editFields = `
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Doctor / Vet Name</label><input type="text" value="${data.name || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('vets', '${id}', 'name', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Clinic</label><input type="text" value="${data.clinic || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Phone</label><input type="tel" value="${data.phone || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('vets', '${id}', 'phone', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Email</label><input type="email" value="${data.email || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('vets', '${id}', 'email', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Hours</label><input type="text" value="${data.hours || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('vets', '${id}', 'hours', this.value)"></div>
+            <div style="flex:1; min-width:200px;"><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Notes</label><textarea class="biz-select" style="padding:0.4rem; width:100%;" rows="1" onchange="autoSaveField('vets', '${id}', 'notes', this.value)">${data.notes || ''}</textarea></div>
+        `;
+    } else if (type === 'staff') {
+        viewFields = detailField('Role', data.role) + detailField('Qualifications', data.qualifications) + detailField('Contact', data.contact) + detailField('Notes', data.notes);
+        editFields = `
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Name</label><input type="text" value="${data.name || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('staff', '${id}', 'name', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Role</label><input type="text" value="${data.role || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('staff', '${id}', 'role', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Qualifications</label><input type="text" value="${data.qualifications || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('staff', '${id}', 'qualifications', this.value)"></div>
+            <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Contact</label><input type="text" value="${data.contact || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('staff', '${id}', 'contact', this.value)"></div>
+            <div style="flex:1; min-width:200px;"><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Notes</label><textarea class="biz-select" style="padding:0.4rem; width:100%;" rows="1" onchange="autoSaveField('staff', '${id}', 'notes', this.value)">${data.notes || ''}</textarea></div>
+        `;
+    }
+
+    return `
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding-bottom:1.25rem; margin-bottom:1.5rem; border-bottom:1px solid var(--border);">
+            <div id="details-view-${key}" style="display:flex; flex-wrap:wrap; gap:1.5rem; flex:1;">${viewFields}</div>
+            <div id="details-edit-${key}" class="hidden" style="display:flex; flex-wrap:wrap; gap:1rem; flex:1;">${editFields}</div>
+            <button class="btn-icon" onclick="toggleDetailsEdit('${key}')" title="Edit" style="background:none; border:none; cursor:pointer; flex-shrink:0;"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>
+        </div>
+    `;
 }
 
 /* ==========================================================================
@@ -2416,35 +2532,6 @@ function renderEntitySections(type, data, id) {
         return `
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:start;">
                 <div style="display:flex; flex-direction:column; gap:1.5rem;">
-                <!-- Household Details -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                            <i data-lucide="info"></i> Household Details
-                        </h3>
-                        <button class="btn-icon" onclick="toggleDetailsEdit('household-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
-                    </div>
-                    <div id="details-view-household-${id}" style="display:flex; flex-direction:column; gap:0.6rem;">
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Household Name</span><div style="font-size:0.92rem;">${data.name || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Address</span><div style="font-size:0.92rem;">${data.address || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Notes</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.note || '—'}</div></div>
-                    </div>
-                    <div id="details-edit-household-${id}" class="hidden" style="display:flex; flex-direction:column; gap:0.85rem;">
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Household Name</label>
-                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'name', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
-                            <input type="text" value="${data.address || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('households', '${id}', 'address', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
-                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="3" onchange="autoSaveField('households', '${id}', 'note', this.value)">${data.note || ''}</textarea>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Household Members -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
@@ -2465,26 +2552,6 @@ function renderEntitySections(type, data, id) {
                     <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('person', '${id}', 'household')">+ Add Member</button>
                 </div>
 
-                <!-- Other Contacts -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
-                            <i data-lucide="user-round"></i> Other Contacts
-                        </h3>
-                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('person-other', '${id}', 'household')">
-                            <i data-lucide="search" style="width:14px;height:14px;"></i> Add Contact
-                        </button>
-                    </div>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.75rem;">Emergency contacts, relatives, and other relationships.</p>
-
-                    <div id="search-panel-person-other-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
-                        <input type="text" placeholder="Type contact name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('person-other', '${id}', this.value, 'household')">
-                        <div id="search-results-person-other-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
-                    </div>
-
-                    ${(data.people || []).filter(p => p.category === 'other').length ? (data.people || []).filter(p => p.category === 'other').map(p => renderPersonRow(p, 'household', id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No other contacts.</p>'}
-                </div>
-
                 <!-- Pets -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
@@ -2503,6 +2570,26 @@ function renderEntitySections(type, data, id) {
 
                     ${data.pets && data.pets.length ? data.pets.map(p => renderPetRow(p, { vetsById: data.vetsById || {}, refreshType: 'household', refreshId: id })).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets attached.</p>'}
                     <button class="btn" style="width:100%; font-size:0.78rem; padding:0.35rem; margin-top:0.75rem; border:1px dashed var(--border);" onclick="toggleInlineSearchPanel('pet', '${id}', 'household')">+ Add Pet</button>
+                </div>
+
+                <!-- Other Contacts -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="user-round"></i> Other Contacts
+                        </h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('person-other', '${id}', 'household')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Add Contact
+                        </button>
+                    </div>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.75rem;">Emergency contacts, relatives, and other relationships.</p>
+
+                    <div id="search-panel-person-other-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type contact name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('person-other', '${id}', this.value, 'household')">
+                        <div id="search-results-person-other-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+
+                    ${(data.people || []).filter(p => p.category === 'other').length ? (data.people || []).filter(p => p.category === 'other').map(p => renderPersonRow(p, 'household', id)).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No other contacts.</p>'}
                 </div>
 
                 </div>
@@ -2555,66 +2642,6 @@ function renderEntitySections(type, data, id) {
     } else if (type === 'person') {
         return `
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
-                <!-- Person Details -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user"></i> Contact Details</h3>
-                        <button class="btn-icon" onclick="toggleDetailsEdit('person-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
-                    </div>
-                    <div id="details-view-person-${id}" style="display:flex; flex-direction:column; gap:0.6rem;">
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Name</span><div style="font-size:0.92rem;">${personDisplayName(data) || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Role / Category</span><div style="font-size:0.92rem;">${data.role || 'Member'} · ${(data.category || 'member') === 'other' ? 'Other Contact' : 'Household Member'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Email</span><div style="font-size:0.92rem;">${data.email ? (data.preferred_contact === 'email' ? '★ ' : '') + data.email : '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Phone</span><div style="font-size:0.92rem;">${data.phone ? (data.preferred_contact === 'phone' ? '★ ' : '') + data.phone : '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Notes</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.notes || '—'}</div></div>
-                    </div>
-                    <div id="details-edit-person-${id}" class="hidden" style="display:flex; flex-direction:column; gap:0.85rem;">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.85rem;">
-                            <div>
-                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">First Name</label>
-                                <input id="person-first-name" type="text" value="${data.first_name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePersonNameField('${id}', 'first_name', this.value)">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Last Name</label>
-                                <input id="person-last-name" type="text" value="${data.last_name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePersonNameField('${id}', 'last_name', this.value)">
-                            </div>
-                        </div>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.85rem;">
-                            <div>
-                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Role</label>
-                                <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'role', this.value)">
-                                    ${['Primary', 'Backup', 'Member', 'Emergency Contact', 'Relative', 'Other'].map(r => `<option value="${r}" ${data.role === r ? 'selected' : ''}>${r}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div>
-                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Category</label>
-                                <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'category', this.value)">
-                                    <option value="member" ${(data.category || 'member') === 'member' ? 'selected' : ''}>Household Member</option>
-                                    <option value="other" ${data.category === 'other' ? 'selected' : ''}>Other Contact</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Email</label>
-                            <div style="display:flex; align-items:center; gap:0.4rem;">
-                                <input type="email" value="${data.email || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'email', this.value)">
-                                <button onclick="setPreferredContact('${id}', 'email', ${data.preferred_contact === 'email' ? 'true' : 'false'})" title="Preferred contact method" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:${data.preferred_contact === 'email' ? '#eab308' : 'var(--text-muted)'};">★</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone</label>
-                            <div style="display:flex; align-items:center; gap:0.4rem;">
-                                <input type="tel" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('people', '${id}', 'phone', this.value)">
-                                <button onclick="setPreferredContact('${id}', 'phone', ${data.preferred_contact === 'phone' ? 'true' : 'false'})" title="Preferred contact method" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:${data.preferred_contact === 'phone' ? '#eab308' : 'var(--text-muted)'};">★</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
-                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="2" onchange="autoSaveField('people', '${id}', 'notes', this.value)">${data.notes || ''}</textarea>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="home"></i> Household</h3>
@@ -2654,61 +2681,17 @@ function renderEntitySections(type, data, id) {
     } else if (type === 'pet') {
         return `
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
-                <!-- Pet Profile & Medical Details -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="dog"></i> Pet Profile & Medical Details</h3>
-                        <button class="btn-icon" onclick="toggleDetailsEdit('pet-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
-                    </div>
-                    <div id="details-view-pet-${id}" style="display:flex; flex-direction:column; gap:0.6rem;">
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Pet Name</span><div style="font-size:0.92rem;">${data.name || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Species</span><div style="font-size:0.92rem;">${speciesLabel(data) || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Vaccine Status</span><div style="font-size:0.92rem; text-transform:capitalize;">${data.vaccine_status || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Allergies</span><div style="font-size:0.92rem;">${data.allergies || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Diet & Food Notes</span><div style="font-size:0.92rem;">${data.food || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Behavioral & General Details</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.details || '—'}</div></div>
-                    </div>
-                    <div id="details-edit-pet-${id}" class="hidden" style="display:flex; flex-direction:column; gap:0.85rem;">
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Pet Name</label>
-                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'name', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Species</label>
-                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'species', this.value); document.getElementById('pet-species-other-${id}').style.display = this.value === 'other' ? 'block' : 'none';">
-                                <option value="dog" ${data.species === 'dog' ? 'selected' : ''}>Dog</option>
-                                <option value="cat" ${data.species === 'cat' ? 'selected' : ''}>Cat</option>
-                                <option value="other" ${data.species === 'other' ? 'selected' : ''}>Other</option>
-                            </select>
-                        </div>
-                        <div id="pet-species-other-${id}" style="display:${data.species === 'other' ? 'block' : 'none'};">
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Specify Species</label>
-                            <input type="text" placeholder="e.g. Rabbit, Bird, Hamster" value="${data.species_other || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'species_other', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Vaccine Status</label>
-                            <select class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'vaccine_status', this.value)">
-                                <option value="current" ${data.vaccine_status === 'current' ? 'selected' : ''}>Current</option>
-                                <option value="pending" ${data.vaccine_status === 'pending' ? 'selected' : ''}>Pending Verification</option>
-                                <option value="expired" ${data.vaccine_status === 'expired' ? 'selected' : ''}>Expired</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Allergies</label>
-                            <input type="text" value="${data.allergies || ''}" placeholder="e.g. Chicken, Bee stings" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'allergies', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Diet & Food Notes</label>
-                            <input type="text" value="${data.food || ''}" placeholder="e.g. 2 cups kibble morning & night" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('pets', '${id}', 'food', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Behavioral & General Details</label>
-                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="3" onchange="autoSaveField('pets', '${id}', 'details', this.value)">${data.details || ''}</textarea>
-                        </div>
-                    </div>
-                </div>
-
                 ${renderEventsCard(data.bookings, data.households?.id || data.household_id, { showPetName: false })}
+
+                <!-- Assigned Staff -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <h3 style="margin:0 0 0.75rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="user-cog"></i> Assigned Staff</h3>
+                    ${data.assignedStaff && data.assignedStaff.length ? data.assignedStaff.map(a => `
+                        <div style="padding:0.6rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); margin-bottom:0.4rem; cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('staff', '${a.staff_id}')">
+                            <strong>${a.staff?.name || 'Staff'}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">${a.staff?.role || ''}</span>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted);">No staff assigned.</p>'}
+                </div>
 
                 <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
@@ -2754,48 +2737,6 @@ function renderEntitySections(type, data, id) {
     } else if (type === 'vet') {
         return `
             <div style="display:flex; flex-direction:column; gap:1.5rem;">
-                <!-- Vet Details -->
-                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="stethoscope"></i> Vet Details</h3>
-                        <button class="btn-icon" onclick="toggleDetailsEdit('vet-${id}')" title="Edit" style="background:none; border:none; cursor:pointer;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>
-                    </div>
-                    <div id="details-view-vet-${id}" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.75rem;">
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Doctor / Vet Name</span><div style="font-size:0.92rem;">${data.name || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Clinic Name</span><div style="font-size:0.92rem;">${data.clinic || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Phone</span><div style="font-size:0.92rem;">${data.phone || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Email</span><div style="font-size:0.92rem;">${data.email || '—'}</div></div>
-                        <div><span style="font-size:0.75rem; color:var(--text-muted);">Hours of Operation</span><div style="font-size:0.92rem;">${data.hours || '—'}</div></div>
-                        <div style="grid-column: 1 / -1;"><span style="font-size:0.75rem; color:var(--text-muted);">Notes</span><div style="font-size:0.92rem; white-space:pre-wrap;">${data.notes || '—'}</div></div>
-                    </div>
-                    <div id="details-edit-vet-${id}" class="hidden" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem;">
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Doctor / Vet Name</label>
-                            <input type="text" value="${data.name || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'name', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Clinic Name</label>
-                            <input type="text" value="${data.clinic || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'clinic', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Phone</label>
-                            <input type="tel" value="${data.phone || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'phone', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Email</label>
-                            <input type="email" value="${data.email || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'email', this.value)">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Hours of Operation</label>
-                            <input type="text" placeholder="e.g. Mon-Fri 8am-6pm" value="${data.hours || ''}" class="biz-select" style="width:100%; padding:0.5rem;" onchange="autoSaveField('vets', '${id}', 'hours', this.value)">
-                        </div>
-                        <div style="grid-column: 1 / -1;">
-                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
-                            <textarea class="biz-select" style="width:100%; padding:0.5rem;" rows="2" onchange="autoSaveField('vets', '${id}', 'notes', this.value)">${data.notes || ''}</textarea>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Vet Client Pets -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
                     <h3 style="margin:0 0 0.5rem 0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="building"></i> Client Pets</h3>
@@ -2805,6 +2746,57 @@ function renderEntitySections(type, data, id) {
                     <div id="vet-pet-search-results-${id}" style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.75rem;"></div>
 
                     <div id="vet-client-groups-${id}">${renderVetClientGroups(data.clientPets || [], id)}</div>
+                </div>
+            </div>
+        `;
+    } else if (type === 'staff') {
+        return `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:start;">
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                <!-- Assigned Pets -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="paw-print"></i> Assigned Pets</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="toggleInlineSearchPanel('staff-pet', '${id}', 'staff')">
+                            <i data-lucide="search" style="width:14px;height:14px;"></i> Assign Pet
+                        </button>
+                    </div>
+                    <div id="search-panel-staff-pet-${id}" class="inline-search-panel hidden" style="margin-bottom:1rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb);">
+                        <input type="text" placeholder="Type pet name..." class="biz-select" style="width:100%; padding:0.4rem;" onkeyup="executeLiveSearch('staff-pet', '${id}', this.value, 'staff')">
+                        <div id="search-results-staff-pet-${id}" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.35rem;"></div>
+                    </div>
+                    ${data.assignments && data.assignments.length ? data.assignments.map(a => `
+                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openFullWidthProfile('pet', '${a.pets?.id || a.pet_id}')">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong><i data-lucide="${a.pets?.species === 'cat' ? 'cat' : a.pets?.species === 'other' ? 'rabbit' : 'dog'}" style="width:15px;height:15px;"></i> ${a.pets?.name || 'Pet'}</strong>
+                                <button class="btn-icon" onclick="event.stopPropagation(); removeAssignment('${a.id}')" title="Unassign" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+                            </div>
+                            ${a.pets?.households?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${a.pets.households.name}</div>` : ''}
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No pets assigned.</p>'}
+                </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                ${renderEventsCard(data.bookings, null, { showPetName: true })}
+
+                <!-- Tasks -->
+                <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="list-checks"></i> Tasks</h3>
+                        <button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openStaffTaskModalFor('${id}')">+ Add Task</button>
+                    </div>
+                    ${data.tasks && data.tasks.length ? data.tasks.map(t => `
+                        <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleStaffTaskOnProfile('${t.id}', ${!t.is_done}, '${id}')">
+                                <span style="${t.is_done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.task_text}</span>
+                                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem; margin-left:1.5rem;">Due ${t.due_date || 'no date'}</div>
+                            </div>
+                            <button class="btn-icon" onclick="deleteStaffTaskOnProfile('${t.id}', '${id}')" title="Delete" style="background:none; border:none; cursor:pointer; color:var(--danger-text);"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+                        </div>
+                    `).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No tasks assigned.</p>'}
+                </div>
                 </div>
             </div>
         `;
@@ -2955,8 +2947,8 @@ function renderVetClientGroups(clientPets, vetId) {
             <div>
                 <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.35rem;">Pets</div>
                 ${g.pets.map(p => `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.25rem; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
-                        <span style="font-size:0.85rem;"><i data-lucide="${p.species === 'cat' ? 'cat' : p.species === 'other' ? 'rabbit' : 'dog'}" style="width:13px;height:13px;"></i> ${p.name}</span>
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem; cursor:pointer;" onclick="openFullWidthProfile('pet', '${p.id}')">
+                        <span style="font-size:0.85rem;"><i data-lucide="${p.species === 'cat' ? 'cat' : p.species === 'other' ? 'rabbit' : 'dog'}" style="width:13px;height:13px;"></i> ${p.name} (${speciesLabel(p)})</span>
                         <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:var(--text-muted);">${p.vet_id === vetId ? 'Regular' : 'Emergency'}</span>
                     </div>
                 `).join('')}
@@ -3126,8 +3118,8 @@ async function executeLiveSearch(targetType, sourceId, query, sourceType) {
     const client = getSupabase();
     if (!client) return;
 
-    const tableMap = { person: 'people', 'person-other': 'people', pet: 'pets', vet: 'vets', household: 'households', 'vet-regular': 'vets', 'vet-emergency': 'vets' };
-    const labelMap = { person: 'Person', 'person-other': 'Contact', pet: 'Pet', vet: 'Vet', household: 'Household', 'vet-regular': 'Vet', 'vet-emergency': 'Vet' };
+    const tableMap = { person: 'people', 'person-other': 'people', pet: 'pets', vet: 'vets', household: 'households', 'vet-regular': 'vets', 'vet-emergency': 'vets', 'staff-pet': 'pets' };
+    const labelMap = { person: 'Person', 'person-other': 'Contact', pet: 'Pet', vet: 'Vet', household: 'Household', 'vet-regular': 'Vet', 'vet-emergency': 'Vet', 'staff-pet': 'Pet' };
     const table = tableMap[targetType];
 
     let dbQuery = client.from(table).select('*').limit(5);
@@ -3178,6 +3170,13 @@ async function linkEntities(targetType, targetId, sourceId, sourceType) {
         await client.from('pets').update({ emergency_vet_id: targetId }).eq('id', sourceId);
     } else if (targetType === 'person-other') {
         await client.from('people').update({ household_id: sourceId, category: 'other' }).eq('id', targetId);
+    } else if (targetType === 'staff-pet') {
+        const { data: existing } = await client.from('staff_assignments').select('id').eq('staff_id', sourceId).eq('pet_id', targetId).limit(1);
+        if (existing && existing.length) {
+            alert('This pet is already assigned to this staff member.');
+        } else {
+            await client.from('staff_assignments').insert([{ staff_id: sourceId, pet_id: targetId }]);
+        }
     } else {
         await client.from(targetType === 'person' ? 'people' : 'pets').update({ household_id: sourceId }).eq('id', targetId);
     }
