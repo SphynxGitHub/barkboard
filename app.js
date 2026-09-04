@@ -1951,14 +1951,25 @@ async function renderCalendar() {
         const bg = s?.level ? statusBg[s.level] : '';
         const title = s?.level === 'closed' ? 'Business closed' : s?.level === 'staff-full' ? 'All staff booked' : s?.level === 'resource-full' ? `Closed to: ${s.fullTypes.join(', ')}` : '';
         const todayOutline = key === todayKey ? 'box-shadow: inset 0 0 0 2px #2563eb;' : '';
+        
         return `
             <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px; ${bg ? 'background:' + bg + ';' : ''} ${todayOutline}" title="${key === todayKey ? 'Today. ' : ''}${title}">
-                ${dayBookings.map(bk => `
-                    <div style="padding:0.4rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer;" onclick="openBookingModal('${bk.household_id}', '${bk.id}')">
-                        <strong>${bk.check_in ? bk.check_in.slice(11, 16) : ''}</strong> ${bk.service_name || 'Event'}<br>
-                        <span style="color:var(--text-muted);">${bk.pets?.name || ''}${bk.pets?.name && bk.households?.name ? ' · ' : ''}${bk.households?.name || ''}${bk.resources?.name ? ' · ' + bk.resources.name : ''}</span>
-                    </div>
-                `).join('')}
+                ${dayBookings.map(bk => {
+                    const icon = (bk.service_name || '').toLowerCase().includes('train') ? 'dumbbell' : 'bed-double';
+                    const petName = bk.pets?.name || 'Pet';
+                    
+                    return `
+                        <div style="padding:0.35rem 0.45rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer; border:1px solid var(--border);" onclick="openBookingModal('${bk.household_id}', '${bk.id}')">
+                            <div style="display:flex; align-items:center; gap:0.35rem; font-weight:600;">
+                                <i data-lucide="${icon}" style="width:13px; height:13px; color:var(--primary,#2563eb);"></i>
+                                <span>${petName}</span>
+                            </div>
+                            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem;">
+                                ${bk.resources?.name ? bk.resources.name : (bk.service_name || '')}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
                 <button class="btn" style="width:100%; font-size:0.72rem; padding:0.3rem; border:1px dashed var(--border);" onclick="scheduleFromCalendar('${key}')">+ Schedule</button>
             </td>
         `;
@@ -4812,6 +4823,25 @@ async function computeCalendarDayStatuses(dates) {
     return result;
 }
 
+function getServiceIcon(item) {
+    const text = (item.title || item.subtitle || '').toLowerCase();
+    const resType = (item.resourceNames || '').toLowerCase();
+
+    if (text.includes('board') || text.includes('stay') || resType.includes('suite') || resType.includes('run') || resType.includes('kennel')) {
+        return 'bed-double';
+    }
+    if (text.includes('train') || text.includes('agility') || text.includes('class')) {
+        return 'dumbbell';
+    }
+    if (text.includes('groom') || text.includes('bath') || text.includes('wash')) {
+        return 'scissors';
+    }
+    if (text.includes('daycare') || text.includes('play')) {
+        return 'sun';
+    }
+    return 'calendar'; // Fallback
+}
+
 async function renderActivitiesCalendar() {
     const thead = document.getElementById('act-cal-thead');
     const tbody = document.getElementById('act-cal-body');
@@ -4846,14 +4876,27 @@ async function renderActivitiesCalendar() {
 
     const isDayMode = actCalendarMode === 'day';
 
-    const renderCellItems = (key, compact) => (byDay[key] || []).map(it => `
-        <div style="padding:${compact ? '0.2rem 0.3rem' : '0.4rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer;" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.3rem;">
-                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
+    const renderCellItems = (key, compact) => (byDay[key] || []).map(it => {
+        const icon = getServiceIcon(it);
+        
+        // Extract pet name from subtitle or title
+        const petLabel = it.subtitle ? it.subtitle.split('·')[0].trim() : (it.title || 'Event');
+    
+        return `
+            <div style="padding:${compact ? '0.2rem 0.3rem' : '0.35rem 0.45rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer; border:1px solid var(--border);" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+                <div style="display:flex; align-items:center; gap:0.35rem; font-weight:600; color:var(--text-main,#0f172a);">
+                    <i data-lucide="${icon}" style="width:13px; height:13px; color:var(--primary,#2563eb); flex-shrink:0;"></i>
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${petLabel}</span>
+                </div>
+                ${!compact ? `
+                    <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem; display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
+                        ${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? `<span>${it.resourceNames}</span>` : ''}
+                        ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();" style="margin-left:auto;">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
+                    </div>
+                ` : ''}
             </div>
-            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle || ''}</div><div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.2rem; flex-wrap:wrap;">${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="Print" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:12px;height:12px;"></i></button>` : ''}${isDayMode && it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}</div>` : ''}
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     const todayKey = fmt(new Date());
 
