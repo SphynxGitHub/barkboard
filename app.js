@@ -609,7 +609,32 @@ function calculateBookingTotalAmount() {
     amountInput.value = totalAmount.toFixed(2);
 }
 
-/* Updated template selection helper to store per-day rate and re-calculate amount */
+/* Stores per-day rate and triggers total stay amount calculation */
+let activeServicePerDayRate = null;
+
+function calculateBookingTotalAmount() {
+    if (activeServicePerDayRate == null) return;
+
+    const type = document.getElementById('bk-type')?.value || 'appointment';
+    const startDateStr = document.getElementById('bk-start-date')?.value;
+    const endDateStr = document.getElementById('bk-end-date')?.value;
+    const amountInput = document.getElementById('bk-amount');
+
+    if (!amountInput) return;
+
+    let days = 1;
+    if (type === 'stay' && startDateStr && endDateStr) {
+        const start = new Date(startDateStr);
+        const end = new Date(endDateStr);
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        days = diffDays > 0 ? diffDays : 1;
+    }
+
+    const totalAmount = activeServicePerDayRate * days;
+    amountInput.value = totalAmount.toFixed(2);
+}
+
 function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType) {
     const serviceInput = document.getElementById('bk-service-type');
     if (serviceInput) serviceInput.value = name;
@@ -735,26 +760,6 @@ function addResourceToBooking(resourceId, name, type, defaultMode) {
     if (resultsContainer) resultsContainer.innerHTML = '';
 }
 
-async function saveBookingResources(client, bookingId, resourceList) {
-    if (!client || !bookingId) return;
-
-    // Clear old assignments for this booking
-    await client.from('booking_resources').delete().eq('booking_id', bookingId);
-    
-    if (!resourceList || !resourceList.length) return;
-
-    // Format rows for Supabase insertion
-    const rows = resourceList.map(r => ({
-        booking_id: bookingId,
-        resource_id: r.resourceId,
-        all_day: r.allDay !== false,
-        start_time: r.allDay ? null : (r.startTime || null),
-        end_time: r.allDay ? null : (r.endTime || null)
-    }));
-
-    await client.from('booking_resources').insert(rows);
-}
-
 async function searchServiceTypeForBooking(query) {
     const container = document.getElementById('bk-service-type-results');
     if (!container) return;
@@ -867,14 +872,23 @@ function removeResourceFromPet(petId, idx) {
 function addResourceToPet(petId, resourceId, name, type, defaultMode) {
     if (!bkResourcesByPet[petId]) bkResourcesByPet[petId] = [];
     if (bkResourcesByPet[petId].some(r => r.resourceId === resourceId)) return;
+    
     bkResourcesByPet[petId].push({
-        resourceId, name, type, defaultMode,
+        resourceId: resourceId, // Explicit key mapping
+        name: name,
+        type: type,
+        defaultMode: defaultMode,
         allDay: defaultMode !== 'time_based',
-        startTime: '', endTime: ''
+        startTime: '',
+        endTime: ''
     });
+
     const searchInput = document.querySelector(`#bk-pet-resources-${petId} input[type="text"]`);
     if (searchInput) searchInput.value = '';
-    document.getElementById(`bk-pet-resource-search-results-${petId}`).innerHTML = '';
+    
+    const results = document.getElementById(`bk-pet-resource-search-results-${petId}`);
+    if (results) results.innerHTML = '';
+    
     renderBkResourcesList(petId);
 }
 
@@ -983,6 +997,26 @@ function closeBookingModal() {
     bookingHouseholdId = null;
     const modal = document.getElementById('booking-modal');
     if (modal) modal.classList.add('hidden');
+}
+
+async function saveBookingResources(client, bookingId, resourceList) {
+    if (!client || !bookingId) return;
+
+    // Clear old assignments for this booking
+    await client.from('booking_resources').delete().eq('booking_id', bookingId);
+    
+    if (!resourceList || !resourceList.length) return;
+
+    // Format rows for Supabase insertion
+    const rows = resourceList.map(r => ({
+        booking_id: bookingId,
+        resource_id: r.resourceId,
+        all_day: r.allDay !== false,
+        start_time: r.allDay ? null : (r.startTime || null),
+        end_time: r.allDay ? null : (r.endTime || null)
+    }));
+
+    await client.from('booking_resources').insert(rows);
 }
 
 async function saveBooking() {
