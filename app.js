@@ -1026,10 +1026,12 @@ async function saveBooking() {
             await saveBookingResources(client, petIdToBookingId[pid], bkResourcesByPet[pid] || []);
         }
 
-        // Auto-generate invoice if new priced event
+        // AUTO-GENERATE & LINK INVOICE
         if (firstNewBookingId && amount > 0) {
             const when = type === 'stay' ? `${startDate} → ${endDate}` : startDate;
-            await client.from('invoices').insert([{
+            
+            // 1. Insert Invoice and get returned ID
+            const { data: createdInvoices, error: invErr } = await client.from('invoices').insert([{
                 household_id: targetHouseholdId,
                 booking_id: firstNewBookingId,
                 description: `${serviceName || 'Event'} — ${when}`,
@@ -1039,7 +1041,17 @@ async function saveBooking() {
                 service_start_date: startDate,
                 service_end_date: type === 'stay' ? endDate : startDate,
                 pet_names: petNames.join(', ')
-            }]);
+            }]).select();
+
+            // 2. Link created Invoice back to all generated booking rows
+            if (!invErr && createdInvoices && createdInvoices.length) {
+                const newInvoiceId = createdInvoices[0].id;
+                const allBookingIds = Object.values(petIdToBookingId);
+                
+                await client.from('bookings')
+                    .update({ invoice_id: newInvoiceId })
+                    .in('id', allBookingIds);
+            }
         }
 
         closeBookingModal();
