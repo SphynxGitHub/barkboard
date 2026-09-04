@@ -45,7 +45,26 @@ function refreshIcons() {
 
 document.addEventListener('DOMContentLoaded', () => {
     refreshIcons();
-    if (typeof renderAllDashboards === 'function') {
+
+    let restoredProfile = false;
+    try {
+        const lastView = localStorage.getItem('barkboard-last-view');
+        if (lastView && document.getElementById(lastView) && document.getElementById(lastView).classList.contains('view-panel')) {
+            switchView(lastView);
+        }
+        if (lastView === 'crm-view') {
+            const lastProfileRaw = localStorage.getItem('barkboard-last-profile');
+            if (lastProfileRaw) {
+                const { type, id } = JSON.parse(lastProfileRaw);
+                if (type && id) {
+                    openFullWidthProfile(type, id);
+                    restoredProfile = true;
+                }
+            }
+        }
+    } catch (e) { /* storage unavailable, ignore */ }
+
+    if (!restoredProfile && typeof renderAllDashboards === 'function') {
         renderAllDashboards();
     }
     if (typeof renderStaffGuests === 'function') {
@@ -171,13 +190,25 @@ async function renderStaffGuests() {
         return;
     }
 
+    // Pull in whichever invoices are linked to these bookings so payment status can show alongside appointment status.
+    const invoiceIds = bookings.map(bk => bk.invoice_id).filter(Boolean);
+    const { data: linkedInvoices } = invoiceIds.length
+        ? await client.from('invoices').select('id, status').in('id', invoiceIds)
+        : { data: [] };
+    const invoiceStatusById = {};
+    (linkedInvoices || []).forEach(inv => { invoiceStatusById[inv.id] = inv.status; });
+
     container.innerHTML = bookings.map(bk => {
         const isActiveNow = bk.check_in <= (now.toISOString()) && bk.check_out >= (now.toISOString());
+        const invoiceStatus = bk.invoice_id ? invoiceStatusById[bk.invoice_id] : null;
         return `
         <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('pet', '${bk.pet_id}')">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem; flex-wrap:wrap;">
                 <strong><i data-lucide="${bk.pets?.species === 'cat' ? 'cat' : bk.pets?.species === 'other' ? 'rabbit' : 'dog'}" style="width:14px;height:14px;"></i> ${bk.pets?.name || 'Pet'}</strong>
-                <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${isActiveNow ? '#16a34a' : 'var(--text-muted)'}; text-transform:capitalize;">${isActiveNow ? 'Checked In' : (bk.status || 'pending')}</span>
+                <div style="display:flex; gap:0.35rem;">
+                    <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${isActiveNow ? '#16a34a' : 'var(--text-muted)'}; text-transform:capitalize;">${isActiveNow ? 'Checked In' : (bk.status || 'pending')}</span>
+                    ${invoiceStatus ? `<span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${activityStatusColor(invoiceStatus)}; text-transform:capitalize;">${invoiceStatus}</span>` : ''}
+                </div>
             </div>
             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${bk.service_name || 'Event'} · ${bk.households?.name || ''}</div>
             <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${(bk.check_in || '').slice(0, 10)}${bk.check_in && bk.check_in.slice(11,16) !== '00:00' ? ' at ' + bk.check_in.slice(11, 16) : ''} → ${(bk.check_out || '').slice(0, 10)}</div>
@@ -197,6 +228,8 @@ function switchView(viewId) {
     const activeBtn = Array.from(document.querySelectorAll('#admin-nav .nav-btn'))
         .find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(viewId));
     if (activeBtn) activeBtn.classList.add('active');
+
+    try { localStorage.setItem('barkboard-last-view', viewId); } catch (e) { /* storage unavailable, ignore */ }
 
     // Hooks for view-specific initializations
     if (viewId === 'staff-view' && typeof renderStaffGuests === 'function') {
@@ -356,6 +389,7 @@ async function openBookingModal(householdId, bookingId = null) {
     if (staffTimeMinutesInput) staffTimeMinutesInput.value = '';
     if (staffTimeResourceField) staffTimeResourceField.classList.add('hidden');
     if (staffTimeResourceSel) staffTimeResourceSel.innerHTML = '<option value="">Unassigned</option>';
+    document.getElementById('bk-invoice-section')?.classList.add('hidden');
     currentBookingResourceType = null;
     currentStaffTimeResourceType = null;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
@@ -442,6 +476,24 @@ async function openBookingModal(householdId, bookingId = null) {
             if (currentStaffTimeResourceType) {
                 if (staffTimeResourceField) staffTimeResourceField.classList.remove('hidden');
                 await populateResourceSelect('bk-staff-time-resource-id', currentStaffTimeResourceType, existingBooking.staff_time_resource_id);
+            }
+        }
+
+        // Show the linked invoice (if any) with a jump-to-edit button, or a quick way to create one.
+        const invoiceSection = document.getElementById('bk-invoice-section');
+        const invoiceInfo = document.getElementById('bk-invoice-info');
+        if (invoiceSection && invoiceInfo) {
+            invoiceSection.classList.remove('hidden');
+            if (existingBooking.invoice_id) {
+                const { data: linkedInv } = await client.from('invoices').select('*').eq('id', existingBooking.invoice_id).single();
+                invoiceInfo.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0.65rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.85rem;">
+                        <span>${linkedInv?.description || 'Invoice'} · $${Number(linkedInv?.amount || 0).toFixed(2)} · <span style="text-transform:capitalize;">${linkedInv?.status || 'unpaid'}</span></span>
+                        <button class="btn" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}', '${existingBooking.invoice_id}')">View / Edit</button>
+                    </div>
+                `;
+            } else {
+                invoiceInfo.innerHTML = `<button class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}')">+ Create Invoice for this Appointment</button>`;
             }
         }
     }
@@ -761,11 +813,88 @@ async function openInvoiceModal(householdId, invoiceId = null) {
         if (serviceEndInput) serviceEndInput.value = existingInvoice.service_end_date || '';
     }
 
+    const linkedApptsSection = document.getElementById('inv-linked-appts-section');
+    if (linkedApptsSection) linkedApptsSection.classList.toggle('hidden', !invoiceId);
+    if (invoiceId) {
+        await renderLinkedAppointments(invoiceId);
+        document.getElementById('inv-appt-search-results').innerHTML = '';
+        document.getElementById('inv-appt-search').value = '';
+    }
+
     const modal = document.getElementById('invoice-modal');
     if (modal) {
         modal.classList.remove('hidden');
         refreshIcons();
     }
+}
+
+async function renderLinkedAppointments(invoiceId) {
+    const el = document.getElementById('inv-linked-appts-list');
+    if (!el) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: linked } = await client.from('bookings').select('id, service_name, check_in, check_out, amount').eq('invoice_id', invoiceId).order('check_in');
+
+    el.innerHTML = (linked && linked.length) ? linked.map(bk => {
+        const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
+        const outDate = bk.check_out ? bk.check_out.slice(0, 10) : '';
+        const when = outDate && outDate !== inDate ? `${inDate} → ${outDate}` : inDate;
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-hover,#f9fafb); font-size:0.82rem;">
+                <span>${bk.service_name || 'Event'} · ${when}${bk.amount ? ' · $' + Number(bk.amount).toFixed(2) : ''}</span>
+                <button class="btn-icon" onclick="removeAppointmentFromInvoice('${bk.id}', '${invoiceId}')" title="Unlink" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
+            </div>
+        `;
+    }).join('') : '<p style="font-size:0.82rem; color:var(--text-muted);">No appointments linked yet.</p>';
+    refreshIcons();
+}
+
+async function searchAppointmentsForInvoice(query) {
+    const container = document.getElementById('inv-appt-search-results');
+    if (!container) return;
+    const q = query.trim();
+    if (!q) { container.innerHTML = ''; return; }
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: matches } = await client.from('bookings').select('id, service_name, check_in, check_out, invoice_id')
+        .eq('household_id', invoiceHouseholdId)
+        .ilike('service_name', `%${q}%`)
+        .neq('invoice_id', editingInvoiceId || '00000000-0000-0000-0000-000000000000')
+        .limit(8);
+
+    // Also include appointments with no invoice at all (the .neq above only excludes rows already on THIS invoice)
+    const filtered = (matches || []).filter(bk => bk.invoice_id !== editingInvoiceId);
+
+    container.innerHTML = filtered.length ? filtered.map(bk => {
+        const inDate = bk.check_in ? bk.check_in.slice(0, 10) : '';
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); font-size:0.82rem;">
+                <span>${bk.service_name || 'Event'} · ${inDate}${bk.invoice_id ? ' <span style="color:#dc2626;">(already on another invoice)</span>' : ''}</span>
+                <button class="btn btn-primary" style="font-size:0.72rem; padding:0.2rem 0.45rem;" onclick="addAppointmentToInvoice('${bk.id}', '${editingInvoiceId}')">Add</button>
+            </div>
+        `;
+    }).join('') : '<div style="font-size:0.8rem; color:var(--text-muted);">No matching appointments for this household.</div>';
+}
+
+async function addAppointmentToInvoice(bookingId, invoiceId) {
+    const client = getSupabase();
+    if (!client) return;
+    // Reassigning here is intentional: each appointment can only be on one invoice at a time.
+    await client.from('bookings').update({ invoice_id: invoiceId }).eq('id', bookingId);
+    document.getElementById('inv-appt-search').value = '';
+    document.getElementById('inv-appt-search-results').innerHTML = '';
+    renderLinkedAppointments(invoiceId);
+}
+
+async function removeAppointmentFromInvoice(bookingId, invoiceId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('bookings').update({ invoice_id: null }).eq('id', bookingId);
+    renderLinkedAppointments(invoiceId);
 }
 
 function closeInvoiceModal() {
@@ -795,7 +924,6 @@ async function saveInvoice() {
 
     const payload = {
         household_id: invoiceHouseholdId,
-        booking_id: bookingId || null,
         description: description,
         amount: amount,
         due_date: dueDate,
@@ -807,10 +935,20 @@ async function saveInvoice() {
     };
 
     let response;
+    let savedInvoiceId = editingInvoiceId;
     if (editingInvoiceId) {
         response = await client.from('invoices').update(payload).eq('id', editingInvoiceId);
     } else {
-        response = await client.from('invoices').insert([payload]);
+        response = await client.from('invoices').insert([payload]).select();
+        if (!response.error && response.data && response.data[0]) {
+            savedInvoiceId = response.data[0].id;
+        }
+    }
+
+    // The convenience "Linked Event" picker attaches that one appointment now;
+    // more can be added afterward via the Linked Appointments manager when editing.
+    if (!response.error && bookingId && savedInvoiceId) {
+        await client.from('bookings').update({ invoice_id: savedInvoiceId }).eq('id', bookingId);
     }
 
     if (response.error) {
@@ -834,6 +972,23 @@ async function deleteInvoice(id, householdId) {
     } else {
         openFullWidthProfile('household', householdId);
     }
+}
+
+function renderHouseholdInvoiceStatusTag(invoiceId, currentStatus, householdId) {
+    const options = ['unpaid', 'paid', 'void'];
+    return `
+        <select onclick="event.stopPropagation();" onchange="event.stopPropagation(); setHouseholdInvoiceStatus('${invoiceId}', this.value, '${householdId}')" style="font-size:0.72rem; padding:0.2rem 0.5rem; border-radius:9999px; border:1px solid var(--border); background:var(--bg-card); cursor:pointer; color:${activityStatusColor(currentStatus)}; text-transform:capitalize;">
+            ${options.map(o => `<option value="${o}" ${o === currentStatus ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+    `;
+}
+
+async function setHouseholdInvoiceStatus(invoiceId, newStatus, householdId) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+    if (newStatus === 'paid') showReceipt(invoiceId);
+    openFullWidthProfile('household', householdId);
 }
 
 async function markInvoicePaid(id, householdId) {
@@ -2660,6 +2815,8 @@ async function renderAllDashboards() {
     const container = document.getElementById('crm-list-container');
     if (!container) return;
 
+    try { localStorage.removeItem('barkboard-last-profile'); } catch (e) { /* storage unavailable, ignore */ }
+
     const client = getSupabase();
     if (!client) return;
 
@@ -2812,6 +2969,8 @@ async function fetchVetsForPets(client, pets) {
 async function openFullWidthProfile(type, id) {
     const container = document.getElementById('crm-list-container');
     if (!container) return;
+
+    try { localStorage.setItem('barkboard-last-profile', JSON.stringify({ type, id })); } catch (e) { /* storage unavailable, ignore */ }
 
     const client = getSupabase();
     if (!client) return;
@@ -3058,13 +3217,12 @@ function renderEntitySections(type, data, id) {
                         .slice()
                         .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
                         .map(inv => {
-                            const statusColor = inv.status === 'paid' ? 'var(--text-muted)' : inv.status === 'void' ? 'var(--text-muted)' : '#dc2626';
                             return `
                                 <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
                                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
                                         <div>
                                             <strong>${inv.description || 'Invoice'}</strong>
-                                            <span style="font-size:0.72rem; padding:0.1rem 0.45rem; border-radius:9999px; border:1px solid var(--border); color:${statusColor}; margin-left:0.4rem; text-transform:capitalize;">${inv.status || 'unpaid'}</span>
+                                            <span style="margin-left:0.4rem;">${renderHouseholdInvoiceStatusTag(inv.id, inv.status || 'unpaid', id)}</span>
                                             <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">$${Number(inv.amount || 0).toFixed(2)}${inv.due_date ? ' · Due ' + inv.due_date : ''}</div>
                                             ${inv.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${inv.notes}</div>` : ''}
                                         </div>
@@ -3934,6 +4092,14 @@ async function fetchActivityItems() {
 
     const { data: rawBookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name)');
     const bookings = await attachResourceNames(client, rawBookings || []);
+
+    const invoiceIds = (bookings || []).map(bk => bk.invoice_id).filter(Boolean);
+    const { data: linkedInvoices } = invoiceIds.length
+        ? await client.from('invoices').select('id, status').in('id', invoiceIds)
+        : { data: [] };
+    const invoiceStatusById = {};
+    (linkedInvoices || []).forEach(inv => { invoiceStatusById[inv.id] = inv.status; });
+
     (bookings || []).forEach(bk => {
         items.push({
             kind: 'appointment',
@@ -3945,7 +4111,9 @@ async function fetchActivityItems() {
             status: bk.status || 'pending',
             staffName: bk.staff?.name || '',
             staffId: bk.assigned_staff_id || '',
-            householdId: bk.household_id
+            householdId: bk.household_id,
+            invoiceId: bk.invoice_id || null,
+            invoiceStatus: bk.invoice_id ? (invoiceStatusById[bk.invoice_id] || null) : null
         });
     });
 
@@ -4029,8 +4197,8 @@ async function setActivityStatus(kind, id, newStatus) {
 }
 
 function activityStatusColor(status) {
-    if (status === 'completed') return 'var(--text-muted)';
-    if (status === 'cancelled' || status === 'no-show') return '#dc2626';
+    if (status === 'completed' || status === 'paid' || status === 'void') return 'var(--text-muted)';
+    if (status === 'cancelled' || status === 'no-show' || status === 'unpaid') return '#dc2626';
     if (status === 'confirmed') return '#16a34a';
     return 'var(--accent, #2563eb)';
 }
@@ -4043,6 +4211,19 @@ function openActivityItem(kind, id, householdId) {
     } else if (kind === 'invoice') {
         switchView('crm-view');
         openFullWidthProfile('household', householdId);
+    }
+}
+
+async function setAppointmentInvoiceStatus(kind, invoiceId, newStatus) {
+    const client = getSupabase();
+    if (!client) return;
+    await client.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+    if (newStatus === 'paid') showReceipt(invoiceId);
+
+    if (document.getElementById('activities-calendar-view')?.classList.contains('hidden')) {
+        renderActivities();
+    } else {
+        renderActivitiesCalendar();
     }
 }
 
@@ -4073,6 +4254,7 @@ async function renderActivities() {
             </div>
             <div style="display:flex; align-items:center; gap:0.5rem;">
                 ${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="${it.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:15px;height:15px;"></i></button>` : ''}
+                ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
                 ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
             </div>
         </div>
@@ -4230,12 +4412,14 @@ async function renderActivitiesCalendar() {
     const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
     const statusBg = { closed: '#e5e7eb', 'staff-full': '#fecaca', 'resource-full': '#fef08a' };
 
+    const isDayMode = actCalendarMode === 'day';
+
     const renderCellItems = (key, compact) => (byDay[key] || []).map(it => `
         <div style="padding:${compact ? '0.2rem 0.3rem' : '0.4rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer;" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:0.3rem;">
                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
             </div>
-            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div><div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.2rem;">${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="Print" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:12px;height:12px;"></i></button>` : ''}${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}</div>` : ''}
+            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div><div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.2rem; flex-wrap:wrap;">${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="Print" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:12px;height:12px;"></i></button>` : ''}${isDayMode && it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}</div>` : ''}
         </div>
     `).join('');
 

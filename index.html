@@ -1006,6 +1006,10 @@
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
                         <textarea id="bk-notes" placeholder="Special instructions..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem; height:60px;"></textarea>
                     </div>
+                    <div id="bk-invoice-section" class="hidden" style="border-top:1px solid var(--border); padding-top:0.6rem;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Invoice</label>
+                        <div id="bk-invoice-info"></div>
+                    </div>
                 </div>
                 <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
                     <button class="btn" onclick="closeBookingModal()">Cancel</button>
@@ -1067,6 +1071,12 @@
                     <div>
                         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.25rem;">Notes</label>
                         <textarea id="inv-notes" placeholder="Payment method, special terms..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem; height:60px;"></textarea>
+                    </div>
+                    <div id="inv-linked-appts-section" class="hidden" style="border-top:1px solid var(--border); padding-top:0.75rem;">
+                        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Linked Appointments</label>
+                        <div id="inv-linked-appts-list" style="display:flex; flex-direction:column; gap:0.4rem; margin-bottom:0.5rem;"></div>
+                        <input type="text" id="inv-appt-search" placeholder="Search this household's appointments to add..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onkeyup="searchAppointmentsForInvoice(this.value)">
+                        <div id="inv-appt-search-results" style="margin-top:0.4rem; display:flex; flex-direction:column; gap:0.3rem;"></div>
                     </div>
                 </div>
                 <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
