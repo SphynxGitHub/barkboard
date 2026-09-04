@@ -3580,7 +3580,11 @@ function switchActivitiesView(mode) {
     document.getElementById('acttab-calendar')?.classList.toggle('active', mode === 'calendar');
     document.getElementById('activities-list-view')?.classList.toggle('hidden', mode !== 'list');
     document.getElementById('activities-calendar-view')?.classList.toggle('hidden', mode !== 'calendar');
-    if (mode === 'calendar') renderActivitiesCalendar();
+    if (mode === 'calendar') {
+        document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
+        document.getElementById('actview-' + actCalendarMode)?.classList.add('today');
+        renderActivitiesCalendar();
+    }
     else renderActivities();
 }
 
@@ -3744,23 +3748,51 @@ async function renderActivities() {
     refreshIcons();
 }
 
-function shiftActWeek(delta) {
+let actCalendarMode = 'week'; // 'day' | 'week' | 'month'
+
+function setActCalendarMode(mode) {
+    actCalendarMode = mode;
+    actWeekOffset = 0;
+    document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
+    document.getElementById('actview-' + mode)?.classList.add('today');
+    renderActivitiesCalendar();
+}
+
+function shiftActPeriod(delta) {
     actWeekOffset += delta;
     renderActivitiesCalendar();
 }
 
-function resetActWeek() {
+function resetActPeriod() {
     actWeekOffset = 0;
     renderActivitiesCalendar();
 }
 
-async function renderActivitiesCalendar() {
-    const thead = document.getElementById('act-cal-thead');
-    const tbody = document.getElementById('act-cal-body');
-    const weekLabel = document.getElementById('act-week-label');
-    if (!thead || !tbody) return;
-
+function getActPeriodDates() {
     const today = new Date();
+    const fmt = d => d.toISOString().slice(0, 10);
+
+    if (actCalendarMode === 'day') {
+        const d = new Date(today);
+        d.setDate(d.getDate() + actWeekOffset);
+        return { dates: [d], label: fmt(d) };
+    }
+
+    if (actCalendarMode === 'month') {
+        const first = new Date(today.getFullYear(), today.getMonth() + actWeekOffset, 1);
+        const startDay = new Date(first);
+        startDay.setDate(startDay.getDate() - startDay.getDay());
+        const dates = [];
+        for (let i = 0; i < 42; i++) {
+            const d = new Date(startDay);
+            d.setDate(startDay.getDate() + i);
+            dates.push(d);
+        }
+        const label = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        return { dates, label, monthAnchor: first.getMonth() };
+    }
+
+    // week
     const sunday = new Date(today);
     sunday.setDate(today.getDate() - today.getDay() + actWeekOffset * 7);
     const dates = [];
@@ -3769,39 +3801,101 @@ async function renderActivitiesCalendar() {
         d.setDate(sunday.getDate() + i);
         dates.push(d);
     }
+    return { dates, label: `${fmt(dates[0])} — ${fmt(dates[6])}` };
+}
+
+async function renderActivitiesCalendar() {
+    const thead = document.getElementById('act-cal-thead');
+    const tbody = document.getElementById('act-cal-body');
+    const weekLabel = document.getElementById('act-week-label');
+    if (!thead || !tbody) return;
+
+    const { dates, label, monthAnchor } = getActPeriodDates();
     const fmt = d => d.toISOString().slice(0, 10);
-    if (weekLabel) weekLabel.textContent = `${fmt(dates[0])} — ${fmt(dates[6])}`;
+    if (weekLabel) weekLabel.textContent = label;
 
     const f = activitiesFilters();
     let items = await fetchActivityItems();
     items = filterActivityItems(items, f);
 
-    thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
-
     const byDay = {};
-    dates.forEach(d => { byDay[fmt(d)] = []; });
-    items.forEach(it => { if (byDay[it.date]) byDay[it.date].push(it); });
+    items.forEach(it => { if (!byDay[it.date]) byDay[it.date] = []; byDay[it.date].push(it); });
 
     const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
 
-    tbody.innerHTML = `<tr>${dates.map(d => {
-        const key = fmt(d);
-        return `
-            <td style="vertical-align:top; padding:0.5rem; border:1px solid var(--border); min-width:140px;">
-                ${byDay[key].map(it => `
-                    <div style="padding:0.4rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
-                        </div>
-                        <div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div>
-                        ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
-                    </div>
-                `).join('')}
-            </td>
-        `;
-    }).join('')}</tr>`;
+    const renderCellItems = (key, compact) => (byDay[key] || []).map(it => `
+        <div style="padding:${compact ? '0.2rem 0.3rem' : '0.4rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer;" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.3rem;">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
+            </div>
+            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div>${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}` : ''}
+        </div>
+    `).join('');
+
+    if (actCalendarMode === 'day') {
+        thead.innerHTML = `<tr><th>${dates[0].toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</th></tr>`;
+        const key = fmt(dates[0]);
+        tbody.innerHTML = `<tr><td style="cursor:pointer; min-height:300px;" onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false) || '<span style="color:var(--text-muted); font-size:0.85rem;">Click to schedule something on this day.</span>'}</td></tr>`;
+    } else if (actCalendarMode === 'month') {
+        thead.innerHTML = `<tr>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<th>${d}</th>`).join('')}</tr>`;
+        let rows = '';
+        for (let w = 0; w < 6; w++) {
+            rows += '<tr>';
+            for (let d = 0; d < 7; d++) {
+                const date = dates[w * 7 + d];
+                const key = fmt(date);
+                const inMonth = date.getMonth() === monthAnchor;
+                rows += `<td style="cursor:pointer; opacity:${inMonth ? '1' : '0.4'};" onclick="quickScheduleOnDate('${key}')">
+                    <div style="font-size:0.78rem; font-weight:600; margin-bottom:0.2rem;">${date.getDate()}</div>
+                    ${renderCellItems(key, true)}
+                </td>`;
+            }
+            rows += '</tr>';
+        }
+        tbody.innerHTML = rows;
+    } else {
+        thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
+        tbody.innerHTML = `<tr>${dates.map(d => {
+            const key = fmt(d);
+            return `<td style="cursor:pointer;" onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false)}</td>`;
+        }).join('')}</tr>`;
+    }
 
     refreshIcons();
+}
+
+async function quickScheduleOnDate(dateStr) {
+    const choice = confirm('Schedule an Appointment? Click Cancel for a Task instead.');
+    if (choice) {
+        await quickNewAppointment(dateStr);
+    } else {
+        openStaffTaskModal(null);
+        setTimeout(() => { const el = document.getElementById('stsk-due'); if (el) el.value = dateStr; }, 0);
+    }
+}
+
+async function quickNewAppointment(presetDate) {
+    const client = getSupabase();
+    if (!client) return;
+    const name = prompt('Which household is this appointment for? (type a name to search)');
+    if (!name || !name.trim()) return;
+
+    const { data: matches } = await client.from('households').select('id, name').ilike('name', `%${name.trim()}%`).limit(5);
+    if (!matches || !matches.length) return alert('No matching household found.');
+
+    let target = matches[0];
+    if (matches.length > 1) {
+        const pick = prompt(`Multiple matches found:\n${matches.map((m, i) => `${i + 1}. ${m.name}`).join('\n')}\n\nEnter a number:`);
+        const idx = parseInt(pick, 10) - 1;
+        if (matches[idx]) target = matches[idx];
+    }
+
+    if (presetDate) pendingCalendarDate = presetDate;
+    openBookingModal(target.id);
+}
+
+function quickNewTask() {
+    openStaffTaskModal(null);
 }
 
 /* ==========================================================================

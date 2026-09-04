@@ -447,7 +447,16 @@
         <section id="activities-view" class="view-panel hidden">
             <div class="section-header-row" style="margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem;">
                 <h2 style="margin:0;">Activities</h2>
-                <div style="display:flex; gap:0.5rem;">
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <div class="dropdown-add-container" style="position:relative; display:inline-block;">
+                        <button class="btn btn-primary" style="display:flex; align-items:center; gap:0.5rem;">
+                            <i data-lucide="plus"></i> New <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+                        </button>
+                        <div class="dropdown-add-menu">
+                            <button onclick="quickNewAppointment()"><i data-lucide="calendar-plus"></i> Appointment</button>
+                            <button onclick="quickNewTask()"><i data-lucide="list-checks"></i> Task</button>
+                        </div>
+                    </div>
                     <button class="biz-tab active" id="acttab-list" onclick="switchActivitiesView('list')"><i data-lucide="layout-list"></i> List</button>
                     <button class="biz-tab" id="acttab-calendar" onclick="switchActivitiesView('calendar')"><i data-lucide="calendar"></i> Calendar</button>
                 </div>
@@ -483,11 +492,16 @@
             <div id="activities-calendar-view" class="hidden">
                 <div class="cal-toolbar">
                     <div class="cal-nav">
-                        <button class="cal-nav-btn" onclick="shiftActWeek(-1)">← Prev</button>
-                        <button class="cal-nav-btn today" onclick="resetActWeek()">Today</button>
-                        <button class="cal-nav-btn" onclick="shiftActWeek(1)">Next →</button>
+                        <button class="cal-nav-btn" onclick="shiftActPeriod(-1)">← Prev</button>
+                        <button class="cal-nav-btn today" onclick="resetActPeriod()">Today</button>
+                        <button class="cal-nav-btn" onclick="shiftActPeriod(1)">Next →</button>
                     </div>
                     <span class="cal-week-label" id="act-week-label"></span>
+                    <div class="cal-nav" style="margin-left:auto;">
+                        <button class="cal-nav-btn" id="actview-day" onclick="setActCalendarMode('day')">Day</button>
+                        <button class="cal-nav-btn" id="actview-week" onclick="setActCalendarMode('week')">Week</button>
+                        <button class="cal-nav-btn" id="actview-month" onclick="setActCalendarMode('month')">Month</button>
+                    </div>
                 </div>
                 <div class="table-wrap cal-table-wrap">
                     <table class="calendar-table">
