@@ -164,7 +164,7 @@
         const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let currentBusiness = null;
         let serviceTemplates = [];
@@ -187,7 +187,7 @@
                 return;
             }
 
-            const { data: business, error } = await supabase
+            const { data: business, error } = await supabaseClient
                 .from('businesses')
                 .select('id, name, slug, logo_url, accent_color, welcome_message, public_booking_enabled')
                 .eq('slug', slug)
@@ -202,7 +202,7 @@
             currentBusiness = business;
             applyBranding(business);
 
-            const { data: templates } = await supabase
+            const { data: templates } = await supabaseClient
                 .from('appointment_type_templates')
                 .select('name, default_price, pricing_unit, default_duration_minutes')
                 .eq('business_id', business.id)
