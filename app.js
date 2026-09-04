@@ -2468,8 +2468,8 @@ async function openResourceModal(id = null) {
     editingResourceId = id;
     let r = null;
 
+    const client = getSupabase();
     if (id) {
-        const client = getSupabase();
         const { data } = client ? await client.from('resources').select('*').eq('id', id).single() : { data: null };
         r = data;
     }
@@ -2484,8 +2484,17 @@ async function openResourceModal(id = null) {
     const blackoutsArea = document.getElementById('rm-blackouts');
     const notesInput = document.getElementById('rm-notes');
 
+    // Suggest existing resource types so people can reuse them, but the field stays free-text
+    // so a brand-new type can always be added here directly.
+    if (client) {
+        const { data: resourceRows } = await client.from('resources').select('type');
+        const types = Array.from(new Set((resourceRows || []).map(row => row.type).filter(Boolean))).sort();
+        const datalist = document.getElementById('rm-type-options');
+        if (datalist) datalist.innerHTML = types.map(ty => `<option value="${ty.replace(/"/g, '&quot;')}"></option>`).join('');
+    }
+
     if (nameInput) nameInput.value = r ? r.name : '';
-    if (typeSelect) typeSelect.value = r ? r.type : 'Dog Suite';
+    if (typeSelect) typeSelect.value = r ? r.type : '';
     if (modeSelect) modeSelect.value = r?.default_mode || 'all_day';
     if (seatsInput) seatsInput.value = r?.seats !== undefined && r?.seats !== null ? r.seats : 1;
     if (blackoutsArea) blackoutsArea.value = r && r.blackouts ? r.blackouts.join('\n') : '';
@@ -2516,6 +2525,9 @@ async function saveResource(e) {
     const rawName = nameInput?.value || '';
     if (!rawName.trim()) return alert('Resource name is required.');
 
+    const resourceType = (typeSelect?.value || '').trim();
+    if (!resourceType) return alert('Resource type is required.');
+
     // Auto-pad single-digit numbers (e.g. Kennel 1 -> Kennel 01)
     const paddedName = typeof padSingleDigitResourceName === 'function' 
         ? padSingleDigitResourceName(rawName.trim()) 
@@ -2530,7 +2542,7 @@ async function saveResource(e) {
 
     const payload = {
         name: paddedName,
-        type: typeSelect?.value || 'Dog Suite',
+        type: resourceType,
         default_mode: modeSelect?.value || 'all_day',
         seats: parsedSeats,
         blackouts: blackouts,
