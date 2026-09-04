@@ -4431,6 +4431,7 @@ async function fetchActivityItems() {
    ========================================================================== */
 const ACT_GROUP_BY_KEY = 'barkboard-act-group-by';
 let actWeekOffset = 0;
+let actCalendarMode = 'week';
 
 async function initActivitiesView() {
     // 1. Restore saved Group By preference (if set)
@@ -4518,6 +4519,14 @@ function switchActivitiesView(mode) {
     } else {
         renderActivities();
     }
+}
+
+function setActCalendarMode(mode) {
+    actCalendarMode = mode;
+    actWeekOffset = 0;
+    document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
+    document.getElementById('actview-' + mode)?.classList.add('today');
+    renderActivitiesCalendar();
 }
 
 function activitiesFilters() {
