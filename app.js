@@ -397,6 +397,7 @@ async function openBookingModal(householdId = null, bookingId = null) {
     const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
 
     if (titleEl) titleEl.textContent = bookingId ? 'Edit Event' : 'Add Event';
+    document.getElementById('bk-delete-btn')?.classList.toggle('hidden', !bookingId);
 
     // Reset fields
     if (typeSel) typeSel.value = 'appointment';
@@ -478,10 +479,12 @@ async function openBookingModal(householdId = null, bookingId = null) {
         if (notesInput) notesInput.value = existingBooking.notes || '';
         toggleBookingTypeFields();
 
-        // Load multi-resource assignments
-        bkSelectedResources = await loadExistingBookingResources(existingBooking.id);
-        document.getElementById('bk-resources-section')?.classList.remove('hidden');
-        if (typeof renderBkResourcesList === 'function') renderBkResourcesList();
+        // Load multi-resource assignments (keyed by pet id, matching how saveBooking reads them back)
+        if (existingBooking.pet_id) {
+            bkResourcesByPet[existingBooking.pet_id] = await loadExistingBookingResources(existingBooking.id);
+            document.getElementById(`bk-pet-resources-${existingBooking.pet_id}`)?.classList.remove('hidden');
+            if (typeof renderBkResourcesList === 'function') renderBkResourcesList(existingBooking.pet_id);
+        }
 
         const needsStaffTime = existingBooking.requires_staff_time || false;
         if (needsStaffTime) {
@@ -610,8 +613,6 @@ function calculateBookingTotalAmount() {
 }
 
 /* Stores per-day rate and triggers total stay amount calculation */
-let activeServicePerDayRate = null;
-
 function calculateBookingTotalAmount() {
     if (activeServicePerDayRate == null) return;
 
@@ -1074,8 +1075,12 @@ async function saveBooking() {
     let response;
     let firstNewBookingId = null;
     let petIdToBookingId = {};
+    let existingBookingInvoiceId = null;
 
     if (editingBookingId) {
+        const { data: currentBk } = await client.from('bookings').select('invoice_id').eq('id', editingBookingId).single();
+        existingBookingInvoiceId = currentBk?.invoice_id || null;
+
         const [firstPetId, ...extraPetIds] = petIds;
         response = await client.from('bookings').update({ ...basePayload, pet_id: firstPetId }).eq('id', editingBookingId);
         petIdToBookingId[firstPetId] = editingBookingId;
@@ -1102,6 +1107,13 @@ async function saveBooking() {
         // Save resource assignments
         for (const pid of Object.keys(petIdToBookingId)) {
             await saveBookingResources(client, petIdToBookingId[pid], bkResourcesByPet[pid] || []);
+        }
+
+        // If editing an existing booking that's already linked to an invoice, keep the
+        // invoice's total/description in sync with the (possibly changed) amount/service name
+        // instead of leaving it stale until someone happens to reopen the invoice modal.
+        if (editingBookingId && existingBookingInvoiceId) {
+            await syncInvoiceTotals(client, existingBookingInvoiceId);
         }
 
         // AUTO-GENERATE & LINK INVOICE
@@ -1159,12 +1171,44 @@ async function deleteBooking(id, householdId) {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
+    // Grab the linked invoice (if any) before deleting so its total can be resynced after.
+    const { data: bk } = await client.from('bookings').select('invoice_id').eq('id', id).single();
+    const linkedInvoiceId = bk?.invoice_id || null;
+
     const { error } = await client.from('bookings').delete().eq('id', id);
     if (error) {
         alert('Error deleting event: ' + error.message);
     } else {
+        if (linkedInvoiceId) await syncInvoiceTotals(client, linkedInvoiceId);
         openFullWidthProfile('household', householdId);
     }
+}
+
+// Delete button inside the appointment edit modal itself (uses the currently-open booking).
+async function deleteBookingFromModal() {
+    if (!editingBookingId) return;
+    const id = editingBookingId;
+    const householdId = bookingHouseholdId;
+    if (!confirm('Remove this scheduled event? This cannot be undone.')) return;
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const { data: bk } = await client.from('bookings').select('invoice_id').eq('id', id).single();
+    const linkedInvoiceId = bk?.invoice_id || null;
+
+    const { error } = await client.from('bookings').delete().eq('id', id);
+    if (error) {
+        alert('Error deleting event: ' + error.message);
+        return;
+    }
+    if (linkedInvoiceId) await syncInvoiceTotals(client, linkedInvoiceId);
+
+    closeBookingModal();
+    if (householdId) openFullWidthProfile('household', householdId);
+    if (typeof renderActivities === 'function') await renderActivities();
+    if (typeof renderActivitiesCalendar === 'function') await renderActivitiesCalendar();
+    if (typeof renderCalendar === 'function') await renderCalendar();
 }
 
 let editingInvoiceId = null;
@@ -1186,6 +1230,7 @@ async function openInvoiceModal(householdId, invoiceId = null) {
     const serviceEndInput = document.getElementById('inv-service-end');
 
     if (titleEl) titleEl.textContent = invoiceId ? 'Edit Invoice' : 'Create Invoice';
+    document.getElementById('inv-delete-btn')?.classList.toggle('hidden', !invoiceId);
 
     // Reset fields
     if (descInput) descInput.value = '';
@@ -1254,6 +1299,21 @@ async function openInvoiceModal(householdId, invoiceId = null) {
         modal.classList.remove('hidden');
         refreshIcons();
     }
+}
+
+// Recalculates an invoice's amount + description from its currently-linked bookings.
+// Used anywhere a linked booking is edited, added, removed, or deleted outside of the
+// invoice modal itself (renderLinkedAppointments does the same thing, but only runs
+// while that modal is open).
+async function syncInvoiceTotals(client, invoiceId) {
+    if (!client || !invoiceId) return;
+    const { data: linked } = await client.from('bookings').select('service_name, amount').eq('invoice_id', invoiceId);
+    const total = (linked || []).reduce((sum, bk) => sum + Number(bk.amount || 0), 0);
+    const titles = Array.from(new Set((linked || []).map(bk => bk.service_name).filter(Boolean)));
+    await client.from('invoices').update({
+        amount: total,
+        description: titles.length ? titles.join(' & ') : 'Invoice'
+    }).eq('id', invoiceId);
 }
 
 async function renderLinkedAppointments(invoiceId) {
@@ -1434,12 +1494,38 @@ async function deleteInvoice(id, householdId) {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
+    // Unlink any appointments pointing at this invoice first, so they don't get
+    // orphaned (or blocked by a foreign key) when the invoice row disappears.
+    await client.from('bookings').update({ invoice_id: null }).eq('invoice_id', id);
+
     const { error } = await client.from('invoices').delete().eq('id', id);
     if (error) {
         alert('Error deleting invoice: ' + error.message);
     } else {
         openFullWidthProfile('household', householdId);
     }
+}
+
+// Delete button inside the invoice edit modal itself (uses the currently-open invoice).
+async function deleteInvoiceFromModal() {
+    if (!editingInvoiceId) return;
+    const id = editingInvoiceId;
+    const householdId = invoiceHouseholdId;
+    if (!confirm('Remove this invoice? This cannot be undone.')) return;
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    await client.from('bookings').update({ invoice_id: null }).eq('invoice_id', id);
+
+    const { error } = await client.from('invoices').delete().eq('id', id);
+    if (error) {
+        alert('Error deleting invoice: ' + error.message);
+        return;
+    }
+
+    closeInvoiceModal();
+    if (householdId) openFullWidthProfile('household', householdId);
 }
 
 function renderHouseholdInvoiceStatusTag(invoiceId, currentStatus, householdId) {

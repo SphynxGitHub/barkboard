@@ -1050,9 +1050,12 @@
                         </div>
         
                         <!-- Submit Bar -->
-                        <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem; border-top:1px solid var(--border); padding-top:1rem;">
-                            <button type="button" class="btn" onclick="closeBookingModal()">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Save Event</button>
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; margin-top:1rem; border-top:1px solid var(--border); padding-top:1rem;">
+                            <button type="button" id="bk-delete-btn" class="btn hidden" style="color:#dc2626; border-color:#dc2626;" onclick="deleteBookingFromModal()">Delete Event</button>
+                            <div style="display:flex; gap:0.75rem; margin-left:auto;">
+                                <button type="button" class="btn" onclick="closeBookingModal()">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save Event</button>
+                            </div>
                         </div>
         
                     </div>
@@ -1112,9 +1115,12 @@
                     </div>
                 </div>
         
-                <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
-                    <button class="btn" onclick="closeInvoiceModal()">Cancel</button>
-                    <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
+                <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-top:1.25rem;">
+                    <button id="inv-delete-btn" class="btn hidden" style="color:#dc2626; border-color:#dc2626;" onclick="deleteInvoiceFromModal()">Delete Invoice</button>
+                    <div style="display:flex; gap:0.5rem; margin-left:auto;">
+                        <button class="btn" onclick="closeInvoiceModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
+                    </div>
                 </div>
             </div>
         </div>
