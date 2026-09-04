@@ -3775,15 +3775,21 @@ function renderEventsCard(bookings, householdId, opts) {
             return `
                 <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                        <div>
+                        <div style="flex:1;">
                             <strong>${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
-                            <span onclick="event.stopPropagation();" style="margin-left:0.4rem; display:inline-block;">${renderStatusTag('appointment', bk.id, bk.status || 'pending', 'setBookingStatusInProfile')}</span>
-                            ${bk.invoice_id ? `<span onclick="event.stopPropagation();" style="margin-left:0.3rem; display:inline-block;">${renderStatusTag('invoice', bk.invoice_id, bk.invoiceStatus || 'unpaid', 'setBookingStatusInProfile')}</span>` : ''}
-                            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.2rem;">${when}</div>
-                            ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem; gap:0.5rem;">
+                                <span style="font-size:0.82rem; color:var(--text-muted);">${when}</span>
+                                <span onclick="event.stopPropagation();" style="display:inline-block;">${renderStatusTag('appointment', bk.id, bk.status || 'pending', 'setBookingStatusInProfile')}</span>
+                            </div>
+                            ${bk.amount || bk.invoice_id ? `
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.25rem; gap:0.5rem;">
+                                    <span style="font-size:0.82rem; color:var(--text-muted);">${bk.amount ? '$' + Number(bk.amount).toFixed(2) : ''}</span>
+                                    ${bk.invoice_id ? `<span onclick="event.stopPropagation();" style="display:inline-block;">${renderStatusTag('invoice', bk.invoice_id, bk.invoiceStatus || 'unpaid', 'setBookingStatusInProfile')}</span>` : ''}
+                                </div>
+                            ` : ''}
+                            ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.3rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
                             ${bk.resources?.name ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${bk.resources.name}</div>` : ''}
                             ${bk.requires_staff_time ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${bk.staff_time_minutes || '?'} min/day staff time${bk.staff_time_resource?.name ? ' · ' + bk.staff_time_resource.name : ''}</div>` : ''}
-                            ${bk.amount ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">$${Number(bk.amount).toFixed(2)}</div>` : ''}
                             ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
                         </div>
                         <div style="display:flex; gap:0.35rem;">
