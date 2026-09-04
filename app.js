@@ -4330,14 +4330,44 @@ function setPortalRole(role) {
 }
 
 /* ==========================================================================
-   ACTIVITIES VIEW (merged appointments + tasks + invoice due dates)
+   ACTIVITIES VIEW (DYNAMIC GROUPING, RESOURCES & EXPANDED FILTERS)
    ========================================================================== */
 
 let actWeekOffset = 0;
 
 async function initActivitiesView() {
     if (typeof populateStaffSelects === 'function') await populateStaffSelects();
+    await populateHouseholdActivityFilter();
+    await populateResourceActivityFilter();
     renderActivities();
+}
+
+async function populateHouseholdActivityFilter() {
+    const sel = document.getElementById('act-household-filter');
+    if (!sel) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: households } = await client.from('households').select('id, name').order('name');
+    if (households && households.length) {
+        sel.innerHTML = '<option value="all">All Households</option>' + 
+            households.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+    }
+}
+
+async function populateResourceActivityFilter() {
+    const sel = document.getElementById('act-resource-filter');
+    if (!sel) return;
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: resources } = await client.from('resources').select('id, name, type').order('name');
+    if (resources && resources.length) {
+        sel.innerHTML = '<option value="all">All Resources</option>' + 
+            resources.map(r => `<option value="${r.id}">${r.name} (${r.type || 'Resource'})</option>`).join('');
+    }
 }
 
 function switchActivitiesView(mode) {
@@ -4355,8 +4385,11 @@ function switchActivitiesView(mode) {
 
 function activitiesFilters() {
     return {
+        groupBy: document.getElementById('act-group-by')?.value || 'date',
         category: document.getElementById('act-category-filter')?.value || 'all',
         staff: document.getElementById('act-staff-filter')?.value || 'all',
+        resource: document.getElementById('act-resource-filter')?.value || 'all',
+        household: document.getElementById('act-household-filter')?.value || 'all',
         status: document.getElementById('act-status-filter')?.value || 'all',
         from: document.getElementById('act-date-from')?.value || '',
         to: document.getElementById('act-date-to')?.value || '',
@@ -4364,147 +4397,23 @@ function activitiesFilters() {
     };
 }
 
-async function fetchActivityItems() {
-    const client = getSupabase();
-    if (!client) return [];
-
-    const items = [];
-
-    const { data: rawBookings } = await client.from('bookings').select('*, pets(name), households(name), staff:assigned_staff_id(name)');
-    const bookings = await attachResourceNames(client, rawBookings || []);
-
-    const invoiceIds = (bookings || []).map(bk => bk.invoice_id).filter(Boolean);
-    const { data: linkedInvoices } = invoiceIds.length
-        ? await client.from('invoices').select('id, status').in('id', invoiceIds)
-        : { data: [] };
-    const invoiceStatusById = {};
-    (linkedInvoices || []).forEach(inv => { invoiceStatusById[inv.id] = inv.status; });
-
-    (bookings || []).forEach(bk => {
-        items.push({
-            kind: 'appointment',
-            id: bk.id,
-            title: bk.service_name || 'Appointment',
-            subtitle: [bk.pets?.name, bk.households?.name, bk.resources?.name].filter(Boolean).join(' · '),
-            date: (bk.check_in || '').slice(0, 10),
-            endDate: (bk.check_out || bk.check_in || '').slice(0, 10),
-            status: bk.status || 'pending',
-            staffName: bk.staff?.name || '',
-            staffId: bk.assigned_staff_id || '',
-            householdId: bk.household_id,
-            invoiceId: bk.invoice_id || null,
-            invoiceStatus: bk.invoice_id ? (invoiceStatusById[bk.invoice_id] || null) : null
-        });
-    });
-
-    const { data: tasks } = await client.from('staff_tasks').select('*, staff(name)');
-    (tasks || []).forEach(t => {
-        items.push({
-            kind: 'task',
-            id: t.id,
-            title: t.task_text,
-            subtitle: t.priority ? `Priority: ${t.priority}` : '',
-            date: t.due_date || '',
-            status: t.is_done ? 'completed' : 'pending',
-            staffName: t.staff?.name || '',
-            staffId: t.staff_id || ''
-        });
-    });
-
-    const { data: invoices } = await client.from('invoices').select('*, households(name)').neq('status', 'paid');
-    (invoices || []).forEach(inv => {
-        items.push({
-            kind: 'invoice',
-            id: inv.id,
-            title: `Invoice due: ${inv.description || 'Invoice'}`,
-            subtitle: `${inv.households?.name || ''} · $${Number(inv.amount || 0).toFixed(2)}`,
-            date: inv.due_date || '',
-            status: inv.status || 'pending',
-            staffName: '',
-            staffId: '',
-            householdId: inv.household_id
-        });
-    });
-
-    return items;
-}
-
 function filterActivityItems(items, f) {
     return items.filter(it => {
         if (f.category !== 'all' && it.kind !== f.category) return false;
         if (f.staff !== 'all' && it.staffId !== f.staff) return false;
+        if (f.household !== 'all' && it.householdId !== f.household) return false;
         if (f.status !== 'all' && it.status !== f.status) return false;
         if (f.from && it.date && it.date < f.from) return false;
         if (f.to && it.date && it.date > f.to) return false;
-        if (f.query && !(it.title.toLowerCase().includes(f.query) || it.subtitle.toLowerCase().includes(f.query))) return false;
+        if (f.query && !(it.title.toLowerCase().includes(f.query) || (it.subtitle || '').toLowerCase().includes(f.query))) return false;
+        
+        // Filter by Resource ID
+        if (f.resource !== 'all') {
+            if (!it.resourceIds || !it.resourceIds.includes(f.resource)) return false;
+        }
+
         return true;
     });
-}
-
-const ACTIVITY_STATUS_OPTIONS = {
-    appointment: ['pending', 'confirmed', 'completed', 'cancelled', 'no-show'],
-    task: ['pending', 'completed'],
-    invoice: ['unpaid', 'paid', 'void']
-};
-
-function renderStatusTag(kind, id, currentStatus, onChangeFn) {
-    const options = ACTIVITY_STATUS_OPTIONS[kind] || ['pending'];
-    return `
-        <select onclick="event.stopPropagation();" onchange="event.stopPropagation(); ${onChangeFn}('${kind}', '${id}', this.value)" style="font-size:0.72rem; padding:0.2rem 0.5rem; border-radius:9999px; border:1px solid var(--border); background:var(--bg-card); cursor:pointer; color:${activityStatusColor(currentStatus)}; text-transform:capitalize;">
-            ${options.map(o => `<option value="${o}" ${o === currentStatus ? 'selected' : ''}>${o}</option>`).join('')}
-        </select>
-    `;
-}
-
-async function setActivityStatus(kind, id, newStatus) {
-    const client = getSupabase();
-    if (!client) return;
-
-    if (kind === 'appointment') {
-        await client.from('bookings').update({ status: newStatus }).eq('id', id);
-    } else if (kind === 'task') {
-        await client.from('staff_tasks').update({ is_done: newStatus === 'completed' }).eq('id', id);
-    } else if (kind === 'invoice') {
-        await client.from('invoices').update({ status: newStatus }).eq('id', id);
-        if (newStatus === 'paid') showReceipt(id);
-    }
-
-    if (document.getElementById('activities-calendar-view')?.classList.contains('hidden')) {
-        renderActivities();
-    } else {
-        renderActivitiesCalendar();
-    }
-}
-
-function activityStatusColor(status) {
-    if (status === 'completed' || status === 'paid' || status === 'void') return 'var(--text-muted)';
-    if (status === 'cancelled' || status === 'no-show' || status === 'unpaid') return '#dc2626';
-    if (status === 'confirmed') return '#16a34a';
-    return 'var(--accent, #2563eb)';
-}
-
-function openActivityItem(kind, id, householdId) {
-    if (kind === 'appointment') {
-        openBookingModal(householdId, id);
-    } else if (kind === 'task') {
-        openStaffTaskModal(id);
-    } else if (kind === 'invoice') {
-        switchView('crm-view');
-        openFullWidthProfile('household', householdId);
-    }
-}
-
-async function setAppointmentInvoiceStatus(kind, invoiceId, newStatus) {
-    const client = getSupabase();
-    if (!client) return;
-    await client.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
-    if (newStatus === 'paid') showReceipt(invoiceId);
-
-    if (document.getElementById('activities-calendar-view')?.classList.contains('hidden')) {
-        renderActivities();
-    } else {
-        renderActivitiesCalendar();
-    }
 }
 
 async function renderActivities() {
@@ -4513,322 +4422,94 @@ async function renderActivities() {
 
     const f = activitiesFilters();
     let items = await fetchActivityItems();
+
+    // Map resource IDs & names onto items for resource-based grouping & filtering
+    items.forEach(it => {
+        const assigned = it.resourceAssignments || [];
+        if (assigned.length) {
+            it.resourceNames = assigned.map(r => r.name).join(', ');
+            it.resourceIds = assigned.map(r => r.resourceId).filter(Boolean);
+        } else if (it.resources?.name) {
+            it.resourceNames = it.resources.name;
+            it.resourceIds = [it.resources.id].filter(Boolean);
+        } else {
+            it.resourceNames = 'No Resource Assigned';
+            it.resourceIds = [];
+        }
+    });
+
     items = filterActivityItems(items, f);
-    items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
     if (!items.length) {
         el.innerHTML = '<div class="biz-empty">No activities match this filter.</div>';
         return;
     }
 
+    // Attach Household names for grouping & displays
+    const client = getSupabase();
+    if (client) {
+        const hIds = Array.from(new Set(items.map(i => i.householdId).filter(Boolean)));
+        if (hIds.length) {
+            const { data: hhList } = await client.from('households').select('id, name').in('id', hIds);
+            const hhMap = {};
+            (hhList || []).forEach(h => { hhMap[h.id] = h.name; });
+            items.forEach(it => { it.householdName = it.householdId ? (hhMap[it.householdId] || 'Unassigned') : 'No Household'; });
+        }
+    }
+
+    // Grouping Engine
+    const groups = {};
+    items.forEach(it => {
+        let key = 'Other';
+        if (f.groupBy === 'date') key = it.date || 'No Date';
+        else if (f.groupBy === 'kind') key = it.kind === 'appointment' ? 'Appointments' : it.kind === 'task' ? 'Tasks' : 'Invoices';
+        else if (f.groupBy === 'staff') key = it.staffName || 'Unassigned Staff';
+        else if (f.groupBy === 'resource') key = it.resourceNames || 'No Resource Assigned';
+        else if (f.groupBy === 'status') key = it.status ? it.status.toUpperCase() : 'PENDING';
+        else if (f.groupBy === 'household') key = it.householdName || 'No Household';
+
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(it);
+    });
+
     const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
 
-    el.innerHTML = items.map(it => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
-            <div style="display:flex; align-items:center; gap:0.6rem;">
-                <i data-lucide="${kindIcon[it.kind]}" style="width:16px;height:16px; color:var(--text-muted);"></i>
-                <div>
-                    <strong>${it.title}</strong>
-                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">${it.subtitle}${it.staffName ? ' · ' + it.staffName : ''} ${it.date ? '· ' + it.date : ''}</div>
+    // Render Group Headers + Items
+    let html = '';
+    Object.keys(groups).forEach(groupName => {
+        const groupItems = groups[groupName];
+        html += `
+            <div class="activity-group-block" style="border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); padding:1rem; margin-bottom:1rem;">
+                <div style="font-size:0.85rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--primary); margin-bottom:0.75rem; border-bottom:1px solid var(--border); padding-bottom:0.4rem; display:flex; justify-content:space-between; align-items:center;">
+                    <span>${groupName}</span>
+                    <span style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">${groupItems.length} item(s)</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                    ${groupItems.map(it => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.65rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); cursor:pointer;" onclick="openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+                            <div style="display:flex; align-items:center; gap:0.6rem;">
+                                <i data-lucide="${kindIcon[it.kind]}" style="width:16px;height:16px; color:var(--text-muted);"></i>
+                                <div>
+                                    <strong>${it.title}</strong>
+                                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">
+                                        ${it.subtitle ? it.subtitle + ' · ' : ''}${it.resourceNames && it.resourceNames !== 'No Resource Assigned' ? '🛏️ ' + it.resourceNames + ' · ' : ''}${it.householdName ? '🏡 ' + it.householdName + ' · ' : ''}${it.staffName ? '👤 ' + it.staffName + ' · ' : ''}${it.date ? '📅 ' + it.date : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                ${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="${it.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:15px;height:15px;"></i></button>` : ''}
+                                ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
+                                ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
-            <div style="display:flex; align-items:center; gap:0.5rem;">
-                ${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="${it.status === 'paid' ? 'View receipt' : 'View payment notice'}" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:15px;height:15px;"></i></button>` : ''}
-                ${it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}
-                ${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}
-            </div>
-        </div>
-    `).join('');
-    refreshIcons();
-}
-
-let actCalendarMode = 'week'; // 'day' | 'week' | 'month'
-
-function setActCalendarMode(mode) {
-    actCalendarMode = mode;
-    actWeekOffset = 0;
-    document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
-    document.getElementById('actview-' + mode)?.classList.add('today');
-    renderActivitiesCalendar();
-}
-
-function shiftActPeriod(delta) {
-    actWeekOffset += delta;
-    renderActivitiesCalendar();
-}
-
-function resetActPeriod() {
-    actWeekOffset = 0;
-    renderActivitiesCalendar();
-}
-
-function getActPeriodDates() {
-    const today = new Date();
-    const fmt = d => d.toISOString().slice(0, 10);
-
-    if (actCalendarMode === 'day') {
-        const d = new Date(today);
-        d.setDate(d.getDate() + actWeekOffset);
-        return { dates: [d], label: fmt(d) };
-    }
-
-    if (actCalendarMode === 'month') {
-        const first = new Date(today.getFullYear(), today.getMonth() + actWeekOffset, 1);
-        const startDay = new Date(first);
-        startDay.setDate(startDay.getDate() - startDay.getDay());
-        const dates = [];
-        for (let i = 0; i < 42; i++) {
-            const d = new Date(startDay);
-            d.setDate(startDay.getDate() + i);
-            dates.push(d);
-        }
-        const label = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-        return { dates, label, monthAnchor: first.getMonth() };
-    }
-
-    // week
-    const sunday = new Date(today);
-    sunday.setDate(today.getDate() - today.getDay() + actWeekOffset * 7);
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-        const d = new Date(sunday);
-        d.setDate(sunday.getDate() + i);
-        dates.push(d);
-    }
-    return { dates, label: `${fmt(dates[0])} — ${fmt(dates[6])}` };
-}
-
-async function computeCalendarDayStatuses(dates) {
-    const client = getSupabase();
-    if (!client) return {};
-
-    const fmt = d => d.toISOString().slice(0, 10);
-    const rangeStart = fmt(dates[0]);
-    const rangeEnd = fmt(dates[dates.length - 1]);
-
-    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }, { data: resourceUsage }] = await Promise.all([
-        client.from('resources').select('id, type, seats'),
-        client.from('staff').select('id'),
-        client.from('business_closures').select('start_date, end_date'),
-        client.from('bookings').select('id, check_in, check_out, assigned_staff_id, requires_staff_time, status')
-            .neq('status', 'cancelled')
-            .lte('check_in', rangeEnd + 'T23:59:59')
-            .gte('check_out', rangeStart + 'T00:00:00'),
-        client.from('booking_resources').select('resource_id, bookings!inner(id, check_in, check_out, status)')
-            .neq('bookings.status', 'cancelled')
-            .lte('bookings.check_in', rangeEnd + 'T23:59:59')
-            .gte('bookings.check_out', rangeStart + 'T00:00:00')
-    ]);
-
-    // Total seat capacity per resource TYPE (a 10-seat "Kennels" resource counts as 10).
-    const resourceTypeCapacity = {};
-    const resourceTypeById = {};
-    const resourceSeatsById = {};
-    (resources || []).forEach(r => {
-        resourceTypeById[r.id] = r.type;
-        resourceSeatsById[r.id] = r.seats || 1;
-        resourceTypeCapacity[r.type] = (resourceTypeCapacity[r.type] || 0) + (r.seats || 1);
-    });
-    const totalStaff = (staffList || []).length;
-
-    const result = {};
-    dates.forEach(d => {
-        const key = fmt(d);
-
-        const closed = (closures || []).some(c => key >= c.start_date && key <= (c.end_date || c.start_date));
-
-        const dayBookings = (bookings || []).filter(bk => {
-            const start = (bk.check_in || '').slice(0, 10);
-            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
-            return key >= start && key <= end;
-        });
-
-        // Simple boarding (no dedicated staff/trainer time) doesn't tie up a staff member's day —
-        // only appointments that actually declare a staff-time requirement count toward "fully booked."
-        const staffBusy = new Set(dayBookings.filter(bk => bk.requires_staff_time && bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
-        const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
-
-        const dayResourceUsage = (resourceUsage || []).filter(row => {
-            const bk = row.bookings;
-            if (!bk) return false;
-            const start = (bk.check_in || '').slice(0, 10);
-            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
-            return key >= start && key <= end;
-        });
-
-        // Seat-aware: count usage per TYPE against total seat capacity for that type, not per-resource.
-        const usedByType = {};
-        dayResourceUsage.forEach(row => {
-            const type = resourceTypeById[row.resource_id];
-            if (!type) return;
-            usedByType[type] = (usedByType[type] || 0) + 1;
-        });
-        const fullTypes = Object.keys(resourceTypeCapacity).filter(type => usedByType[type] >= resourceTypeCapacity[type]);
-
-        let level = null;
-        if (closed) level = 'closed';
-        else if (staffFull) level = 'staff-full';
-        else if (fullTypes.length) level = 'resource-full';
-
-        result[key] = { level, fullTypes };
+        `;
     });
 
-    return result;
-}
-
-async function renderActivitiesCalendar() {
-    const thead = document.getElementById('act-cal-thead');
-    const tbody = document.getElementById('act-cal-body');
-    const weekLabel = document.getElementById('act-week-label');
-    if (!thead || !tbody) return;
-
-    const { dates, label, monthAnchor } = getActPeriodDates();
-    const fmt = d => d.toISOString().slice(0, 10);
-    if (weekLabel) weekLabel.textContent = label;
-
-    const f = activitiesFilters();
-    let items = await fetchActivityItems();
-    items = filterActivityItems(items, f);
-
-    // Bucket items by day, spanning multi-day appointments across every day they cover.
-    const byDay = {};
-    dates.forEach(d => { byDay[fmt(d)] = []; });
-    items.forEach(it => {
-        const start = it.date;
-        const end = it.endDate || it.date;
-        Object.keys(byDay).forEach(key => {
-            if (key >= start && key <= end) byDay[key].push(it);
-        });
-    });
-
-    const dayStatus = await computeCalendarDayStatuses(dates);
-
-    const kindIcon = { appointment: 'calendar', task: 'list-checks', invoice: 'receipt' };
-    const statusBg = { closed: '#e5e7eb', 'staff-full': '#fecaca', 'resource-full': '#fef08a' };
-
-    const isDayMode = actCalendarMode === 'day';
-
-    const renderCellItems = (key, compact) => (byDay[key] || []).map(it => `
-        <div style="padding:${compact ? '0.2rem 0.3rem' : '0.4rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer;" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.3rem;">
-                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i data-lucide="${kindIcon[it.kind]}" style="width:11px;height:11px;"></i> ${it.title}</span>
-            </div>
-            ${!compact ? `<div style="color:var(--text-muted); margin-top:0.1rem;">${it.subtitle}</div><div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.2rem; flex-wrap:wrap;">${it.kind === 'invoice' ? `<button class="btn-icon" onclick="event.stopPropagation(); ${it.status === 'paid' ? `showReceipt('${it.id}')` : `showPaymentNotice('${it.id}')`}" title="Print" style="background:none; border:none; cursor:pointer;"><i data-lucide="printer" style="width:12px;height:12px;"></i></button>` : ''}${isDayMode && it.kind === 'appointment' && it.invoiceId ? `<span onclick="event.stopPropagation();">${renderStatusTag('invoice', it.invoiceId, it.invoiceStatus || 'unpaid', 'setAppointmentInvoiceStatus')}</span>` : ''}${renderStatusTag(it.kind, it.id, it.status, 'setActivityStatus')}</div>` : ''}
-        </div>
-    `).join('');
-
-    const todayKey = fmt(new Date());
-
-    const cellStyle = (key, extra) => {
-        const s = dayStatus[key];
-        const bg = s ? statusBg[s.level] : '';
-        const label = s ? (s.level === 'closed' ? 'Business closed' : s.level === 'staff-full' ? 'All staff booked' : `Closed to: ${s.fullTypes.join(', ')}`) : '';
-        const todayOutline = key === todayKey ? 'box-shadow: inset 0 0 0 2px #2563eb;' : '';
-        return `style="cursor:pointer; ${bg ? 'background:' + bg + ';' : ''} ${todayOutline} ${extra || ''}" title="${key === todayKey ? 'Today. ' : ''}${label}"`;
-    };
-
-    if (actCalendarMode === 'day') {
-        thead.innerHTML = `<tr><th>${dates[0].toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</th></tr>`;
-        const key = fmt(dates[0]);
-        tbody.innerHTML = `<tr><td ${cellStyle(key, 'min-height:300px;')} onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false) || '<span style="color:var(--text-muted); font-size:0.85rem;">Click to schedule something on this day.</span>'}</td></tr>`;
-    } else if (actCalendarMode === 'month') {
-        thead.innerHTML = `<tr>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<th>${d}</th>`).join('')}</tr>`;
-        let rows = '';
-        for (let w = 0; w < 6; w++) {
-            rows += '<tr>';
-            for (let d = 0; d < 7; d++) {
-                const date = dates[w * 7 + d];
-                const key = fmt(date);
-                const inMonth = date.getMonth() === monthAnchor;
-                rows += `<td ${cellStyle(key, `opacity:${inMonth ? '1' : '0.4'};`)} onclick="quickScheduleOnDate('${key}')">
-                    <div style="font-size:0.78rem; font-weight:600; margin-bottom:0.2rem;">${date.getDate()}</div>
-                    ${renderCellItems(key, true)}
-                </td>`;
-            }
-            rows += '</tr>';
-        }
-        tbody.innerHTML = rows;
-    } else {
-        thead.innerHTML = `<tr>${dates.map(d => `<th>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</th>`).join('')}</tr>`;
-        tbody.innerHTML = `<tr>${dates.map(d => {
-            const key = fmt(d);
-            return `<td ${cellStyle(key)} onclick="quickScheduleOnDate('${key}')">${renderCellItems(key, false)}</td>`;
-        }).join('')}</tr>`;
-    }
-
+    el.innerHTML = html;
     refreshIcons();
-}
-
-let quickScheduleDate = null;
-
-function openQuickScheduleModal(presetDate) {
-    quickScheduleDate = presetDate || null;
-    document.getElementById('qs-household-search').value = '';
-    document.getElementById('qs-household-results').innerHTML = '';
-    setQuickScheduleType(null);
-    document.getElementById('quick-schedule-modal')?.classList.remove('hidden');
-    refreshIcons();
-}
-
-function closeQuickScheduleModal() {
-    document.getElementById('quick-schedule-modal')?.classList.add('hidden');
-    quickScheduleDate = null;
-}
-
-function setQuickScheduleType(type) {
-    document.getElementById('qs-type-appointment')?.classList.toggle('today', type === 'appointment');
-    document.getElementById('qs-type-task')?.classList.toggle('today', type === 'task');
-    document.getElementById('qs-appointment-section')?.classList.toggle('hidden', type !== 'appointment');
-    document.getElementById('qs-task-section')?.classList.toggle('hidden', type !== 'task');
-    if (type === 'appointment') document.getElementById('qs-household-search')?.focus();
-}
-
-async function searchHouseholdForSchedule(query) {
-    const container = document.getElementById('qs-household-results');
-    if (!container) return;
-    const q = query.trim();
-    if (!q) { container.innerHTML = ''; return; }
-
-    const client = getSupabase();
-    if (!client) return;
-
-    const { data: matches } = await client.from('households').select('id, name').ilike('name', `%${q}%`).limit(8);
-
-    container.innerHTML = (matches && matches.length) ? matches.map(m => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0.6rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); cursor:pointer;" onclick="selectHouseholdForSchedule('${m.id}')">
-            <span><i data-lucide="home" style="width:13px;height:13px;"></i> ${m.name}</span>
-            <span style="font-size:0.75rem; color:var(--primary, #2563eb);">Select</span>
-        </div>
-    `).join('') : '<div style="font-size:0.8rem; color:var(--text-muted);">No matching households.</div>';
-    refreshIcons();
-}
-
-function selectHouseholdForSchedule(householdId) {
-    if (quickScheduleDate) pendingCalendarDate = quickScheduleDate;
-    closeQuickScheduleModal();
-    openBookingModal(householdId);
-}
-
-function proceedQuickScheduleTask() {
-    const dateStr = quickScheduleDate;
-    closeQuickScheduleModal();
-    openStaffTaskModal(null);
-    if (dateStr) {
-        setTimeout(() => { const el = document.getElementById('stsk-due'); if (el) el.value = dateStr; }, 0);
-    }
-}
-
-function quickScheduleOnDate(dateStr) {
-    openQuickScheduleModal(dateStr);
-}
-
-function quickNewAppointment() {
-    openQuickScheduleModal(null);
-    setQuickScheduleType('appointment');
-}
-
-function quickNewTask() {
-    openStaffTaskModal(null);
 }
 
 /* ==========================================================================
