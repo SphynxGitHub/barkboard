@@ -410,6 +410,7 @@ async function openBookingModal(householdId = null, bookingId = null) {
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
     bkResourcesByPet = {};
+    activeServicePerDayRate = null;
     if (staffTimeField) staffTimeField.classList.add('hidden');
     if (staffTimeMinutesInput) staffTimeMinutesInput.value = '';
     document.getElementById('bk-invoice-section')?.classList.add('hidden');
@@ -509,7 +510,7 @@ async function openBookingModal(householdId = null, bookingId = null) {
                 invoiceInfo.innerHTML = `
                     <input type="text" id="bk-invoice-link-search" placeholder="Type to filter this household's invoices..." style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem;" onkeyup="searchInvoicesForBooking(this.value, '${existingBooking.id}')">
                     <div id="bk-invoice-link-results" style="margin-top:0.4rem; display:flex; flex-direction:column; gap:0.3rem; max-height:180px; overflow-y:auto;"></div>
-                    <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-top:0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}')">+ Create New Invoice</button>
+                    <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-top:0.5rem;" onclick="closeBookingModal(); openInvoiceModal('${bookingHouseholdId}', null, '${existingBooking.id}')">+ Create New Invoice</button>
                 `;
                 await searchInvoicesForBooking('', existingBooking.id);
             }
@@ -589,29 +590,6 @@ async function selectGlobalPetForBooking(petId, householdId) {
 /* Calculates Total Amount based on Service Per-Day / Per-Service Rate × Days */
 let activeServicePerDayRate = null;
 
-function calculateBookingTotalAmount() {
-    if (activeServicePerDayRate == null) return;
-
-    const type = document.getElementById('bk-type')?.value || 'appointment';
-    const startDateStr = document.getElementById('bk-start-date')?.value;
-    const endDateStr = document.getElementById('bk-end-date')?.value;
-    const amountInput = document.getElementById('bk-amount');
-
-    if (!amountInput) return;
-
-    let days = 1;
-    if (type === 'stay' && startDateStr && endDateStr) {
-        const start = new Date(startDateStr);
-        const end = new Date(endDateStr);
-        const diffTime = end.getTime() - start.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        days = diffDays > 0 ? diffDays : 1;
-    }
-
-    const totalAmount = activeServicePerDayRate * days;
-    amountInput.value = totalAmount.toFixed(2);
-}
-
 /* Stores per-day rate and triggers total stay amount calculation */
 function calculateBookingTotalAmount() {
     if (activeServicePerDayRate == null) return;
@@ -634,22 +612,6 @@ function calculateBookingTotalAmount() {
 
     const totalAmount = activeServicePerDayRate * days;
     amountInput.value = totalAmount.toFixed(2);
-}
-
-function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType) {
-    const serviceInput = document.getElementById('bk-service-type');
-    if (serviceInput) serviceInput.value = name;
-    document.getElementById('bk-service-type-results')?.classList.add('hidden');
-
-    const staffTimeField = document.getElementById('bk-staff-time-field');
-    const staffTimeMinutesInput = document.getElementById('bk-staff-time-minutes');
-
-    if (staffTimeField) staffTimeField.classList.toggle('hidden', !requiresStaffTime);
-    if (staffTimeMinutesInput && requiresStaffTime) staffTimeMinutesInput.value = staffTimeMinutes || '';
-
-    // Bind price per day/service and calculate total
-    activeServicePerDayRate = price != null ? parseFloat(price) : null;
-    calculateBookingTotalAmount();
 }
 
 async function searchResourcesForBooking(query) {
@@ -774,13 +736,13 @@ async function searchServiceTypeForBooking(query) {
     const { data: matches } = await dbQuery;
 
     const rows = (matches || []).map(t => `
-        <div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; border-bottom:1px solid var(--border);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(t.name)}, ${JSON.stringify(t.resource_type || null)}, ${t.default_price != null ? t.default_price : 'null'}, ${!!t.requires_staff_time}, ${t.staff_time_minutes || 'null'}, ${JSON.stringify(t.staff_time_resource_type || null)})'>
+        <div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; border-bottom:1px solid var(--border);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(t.name)}, ${JSON.stringify(t.resource_type || null)}, ${t.default_price != null ? t.default_price : 'null'}, ${!!t.requires_staff_time}, ${t.staff_time_minutes || 'null'}, ${JSON.stringify(t.staff_time_resource_type || null)}, ${JSON.stringify(t.pricing_unit || 'flat')})'>
             <strong>${t.name}</strong>
-            <span style="color:var(--text-muted); font-size:0.78rem;">${t.default_price != null ? ' · $' + Number(t.default_price).toFixed(2) : ''}${t.resource_type ? ' · needs ' + t.resource_type : ''}${t.requires_staff_time ? ' · staff time' : ''}</span>
+            <span style="color:var(--text-muted); font-size:0.78rem;">${t.default_price != null ? ' · $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}${t.resource_type ? ' · needs ' + t.resource_type : ''}${t.requires_staff_time ? ' · staff time' : ''}</span>
         </div>
     `).join('');
 
-    const customRow = q ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(q)}, null, null, false, null, null)'>Use custom: "${q}"</div>` : '';
+    const customRow = q ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(q)}, null, null, false, null, null, "flat")'>Use custom: "${q}"</div>` : '';
 
     container.innerHTML = rows + customRow || '<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching appointment types — start typing to enter a custom one.</div>';
     container.classList.remove('hidden');
@@ -788,11 +750,10 @@ async function searchServiceTypeForBooking(query) {
 
 let bkResourcesByPet = {}; // { [petId]: [{ resourceId, name, type, defaultMode, allDay, startTime, endTime }] }
 
-function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType) {
+function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType, pricingUnit) {
     const serviceInput = document.getElementById('bk-service-type');
     const amountInput = document.getElementById('bk-amount');
     if (serviceInput) serviceInput.value = name;
-    if (amountInput && price != null && !amountInput.value) amountInput.value = price;
     document.getElementById('bk-service-type-results')?.classList.add('hidden');
 
     const staffTimeField = document.getElementById('bk-staff-time-field');
@@ -800,6 +761,17 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
 
     if (staffTimeField) staffTimeField.classList.toggle('hidden', !requiresStaffTime);
     if (staffTimeMinutesInput && requiresStaffTime) staffTimeMinutesInput.value = staffTimeMinutes || '';
+
+    // Apply the template's price according to how it's meant to be charged:
+    // "per_day" rates get multiplied by the stay length (and recalculated as dates change),
+    // while "flat" rates are a one-time amount regardless of how many days the stay covers.
+    if (pricingUnit === 'per_day') {
+        activeServicePerDayRate = price != null ? parseFloat(price) : null;
+        calculateBookingTotalAmount();
+    } else {
+        activeServicePerDayRate = null;
+        if (amountInput && price != null) amountInput.value = price;
+    }
 
     // If a resource type is declared, prefill each currently-checked pet's resource search to nudge toward it.
     if (resourceType) {
@@ -1213,10 +1185,13 @@ async function deleteBookingFromModal() {
 
 let editingInvoiceId = null;
 let invoiceHouseholdId = null;
+let pendingLinkBookingId = null; // booking to auto-link once a brand-new invoice is saved
 
-async function openInvoiceModal(householdId, invoiceId = null) {
+async function openInvoiceModal(householdId, invoiceId = null, linkBookingId = null) {
     editingInvoiceId = invoiceId;
     invoiceHouseholdId = householdId;
+    // Only relevant when creating a fresh invoice from an appointment's "+ Create New Invoice" button.
+    pendingLinkBookingId = invoiceId ? null : linkBookingId;
 
     const titleEl = document.getElementById('invoice-modal-title');
     const descInput = document.getElementById('inv-description');
@@ -1244,6 +1219,22 @@ async function openInvoiceModal(householdId, invoiceId = null) {
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
+
+    // Pull the source appointment's details through into the new invoice immediately,
+    // rather than leaving the form blank until after it's linked on save.
+    if (pendingLinkBookingId) {
+        const { data: sourceBk } = await client.from('bookings')
+            .select('service_name, amount, check_in, check_out, pets(name)')
+            .eq('id', pendingLinkBookingId).single();
+        if (sourceBk) {
+            if (amountInput) amountInput.value = sourceBk.amount != null ? sourceBk.amount : '';
+            if (dueDateInput) dueDateInput.value = sourceBk.check_in ? sourceBk.check_in.slice(0, 10) : '';
+            if (descInput) descInput.value = sourceBk.service_name || '';
+            if (petNamesInput) petNamesInput.value = sourceBk.pets?.name || '';
+            if (serviceStartInput) serviceStartInput.value = sourceBk.check_in ? sourceBk.check_in.slice(0, 10) : '';
+            if (serviceEndInput) serviceEndInput.value = sourceBk.check_out ? sourceBk.check_out.slice(0, 10) : '';
+        }
+    }
 
     // Load this household's events for the optional link dropdown
     const { data: bookings } = await client.from('bookings').select('id, service_name, check_in, check_out, amount, pet_id').eq('household_id', householdId).order('check_in', { ascending: false });
@@ -1430,6 +1421,7 @@ async function removeAppointmentFromInvoice(bookingId, invoiceId) {
 function closeInvoiceModal() {
     editingInvoiceId = null;
     invoiceHouseholdId = null;
+    pendingLinkBookingId = null;
     const modal = document.getElementById('invoice-modal');
     if (modal) modal.classList.add('hidden');
 }
@@ -1483,6 +1475,16 @@ async function saveInvoice() {
         alert('Failed to save invoice: ' + response.error.message);
         console.error('Supabase invoice error:', response.error);
     } else {
+        // If this invoice was created via "+ Create New Invoice" from an appointment,
+        // link that appointment now and let the total/description resync from it
+        // (rather than trusting the pre-filled values, in case anything changed in the form).
+        if (!editingInvoiceId && pendingLinkBookingId && response.data && response.data.length) {
+            const newInvoiceId = response.data[0].id;
+            await client.from('bookings').update({ invoice_id: newInvoiceId }).eq('id', pendingLinkBookingId);
+            await syncInvoiceTotals(client, newInvoiceId);
+        }
+        pendingLinkBookingId = null;
+
         const refreshId = invoiceHouseholdId;
         closeInvoiceModal();
         openFullWidthProfile('household', refreshId);
@@ -5480,7 +5482,7 @@ async function renderApptTypeList() {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openApptTypeModal('${t.id}')">
             <div>
                 <strong>${t.name}</strong>
-                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''}</span>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : ' flat') : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''}</span>
                 ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
@@ -5505,16 +5507,37 @@ async function openApptTypeModal(id) {
     const staffTimeMinutesInput = document.getElementById('att-staff-time-minutes');
     const staffTimeResourceTypeSel = document.getElementById('att-staff-time-resource-type');
     const notesInput = document.getElementById('att-notes');
+    const pricingFlatRadio = document.getElementById('att-pricing-flat');
+    const pricingPerDayRadio = document.getElementById('att-pricing-per-day');
 
     let t = null;
+    const client = getSupabase();
     if (id) {
-        const client = getSupabase();
         const { data } = client ? await client.from('appointment_type_templates').select('*').eq('id', id).single() : { data: null };
         t = data;
     }
 
+    // Pull real resource types from the resources table instead of a hardcoded sample list,
+    // so this stays in sync with whatever resources actually exist. Keep the template's
+    // currently-saved value selectable even if no resource of that type exists anymore.
+    if (client && (resourceTypeSel || staffTimeResourceTypeSel)) {
+        const { data: resourceRows } = await client.from('resources').select('type');
+        const types = Array.from(new Set((resourceRows || []).map(r => r.type).filter(Boolean))).sort();
+        if (t?.resource_type && !types.includes(t.resource_type)) types.push(t.resource_type);
+        if (t?.staff_time_resource_type && !types.includes(t.staff_time_resource_type)) types.push(t.staff_time_resource_type);
+
+        if (resourceTypeSel) {
+            resourceTypeSel.innerHTML = `<option value="">None</option>${types.map(ty => `<option value="${ty}">${ty}</option>`).join('')}`;
+        }
+        if (staffTimeResourceTypeSel) {
+            staffTimeResourceTypeSel.innerHTML = `<option value="">No — just staff time</option>${types.map(ty => `<option value="${ty}">${ty}</option>`).join('')}`;
+        }
+    }
+
     if (nameInput) nameInput.value = t?.name || '';
     if (priceInput) priceInput.value = t?.default_price != null ? t.default_price : '';
+    if (pricingFlatRadio) pricingFlatRadio.checked = (t?.pricing_unit || 'flat') !== 'per_day';
+    if (pricingPerDayRadio) pricingPerDayRadio.checked = t?.pricing_unit === 'per_day';
     if (durationInput) durationInput.value = t?.default_duration_minutes || '';
     if (resourceTypeSel) resourceTypeSel.value = t?.resource_type || '';
     if (requiresStaffTimeChk) requiresStaffTimeChk.checked = !!t?.requires_staff_time;
@@ -5535,6 +5558,7 @@ async function saveApptType() {
     if (!name) return alert('Please enter a name.');
 
     const price = document.getElementById('att-price')?.value;
+    const pricingUnit = document.getElementById('att-pricing-per-day')?.checked ? 'per_day' : 'flat';
     const duration = document.getElementById('att-duration')?.value;
     const resourceType = document.getElementById('att-resource-type')?.value || null;
     const requiresStaffTime = document.getElementById('att-requires-staff-time')?.checked || false;
@@ -5548,6 +5572,7 @@ async function saveApptType() {
     const payload = {
         name,
         default_price: price ? parseFloat(price) : null,
+        pricing_unit: pricingUnit,
         default_duration_minutes: duration ? parseInt(duration, 10) : null,
         resource_type: resourceType,
         requires_staff_time: requiresStaffTime,
