@@ -74,12 +74,107 @@ function refreshIcons() {
 }
 
 /* ==========================================================================
+   AUTH GATE: Supabase Auth login required before the app boots
+   ========================================================================== */
+
+let currentBusinessId = null;
+let currentUser = null;
+
+function showAuthGate(errorMessage) {
+    document.getElementById('auth-gate')?.classList.remove('hidden');
+    const errEl = document.getElementById('auth-error');
+    if (errEl) {
+        if (errorMessage) {
+            errEl.textContent = errorMessage;
+            errEl.classList.remove('hidden');
+        } else {
+            errEl.classList.add('hidden');
+        }
+    }
+}
+
+function hideAuthGate() {
+    document.getElementById('auth-gate')?.classList.add('hidden');
+}
+
+async function handleLoginSubmit() {
+    const client = getSupabase();
+    if (!client) return showAuthGate('Database connection unavailable.');
+
+    const email = document.getElementById('auth-email')?.value.trim();
+    const password = document.getElementById('auth-password')?.value;
+    const submitBtn = document.getElementById('auth-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Signing in...'; }
+
+    const { data, error } = await client.auth.signInWithPassword({ email, password });
+
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Sign In'; }
+
+    if (error) {
+        showAuthGate(error.message);
+        return;
+    }
+
+    currentUser = data.user;
+    await resolveBusinessAndEnterApp();
+}
+
+async function handleLogout() {
+    const client = getSupabase();
+    if (client) await client.auth.signOut();
+    // Full reload rather than trying to hand-reset every in-memory variable
+    // and re-show the gate — much less error-prone for a full sign-out.
+    window.location.reload();
+}
+
+/* Looks up which business the signed-in user belongs to (via the
+   current_business_id() RPC added in the multi-tenant migration), then
+   reveals the app. If the user isn't attached to any business, they're kept
+   at the gate with an explanatory error rather than let into an app that
+   can't resolve business_id for any of its inserts. */
+async function resolveBusinessAndEnterApp() {
+    const client = getSupabase();
+    if (!client) return showAuthGate('Database connection unavailable.');
+
+    const { data: businessId, error } = await client.rpc('current_business_id');
+
+    if (error || !businessId) {
+        showAuthGate("Your account isn't linked to a business yet. Contact your admin.");
+        return;
+    }
+
+    currentBusinessId = businessId;
+    hideAuthGate();
+    bootstrapApp();
+}
+
+/* Runs once on page load: checks for an existing Supabase Auth session
+   (returning visit) before falling back to showing the login form. */
+async function initAuthGate() {
+    const client = getSupabase();
+    if (!client) return showAuthGate('Database connection unavailable.');
+
+    const { data: { session } } = await client.auth.getSession();
+    if (session?.user) {
+        currentUser = session.user;
+        await resolveBusinessAndEnterApp();
+    } else {
+        showAuthGate();
+    }
+}
+
+/* ==========================================================================
    APP CONTROLLER: Event Handlers & View Management
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
     refreshIcons();
+    initAuthGate();
+});
 
+/* Everything that used to run directly on DOMContentLoaded now runs here,
+   only after login succeeds and a business_id has been resolved. */
+function bootstrapApp() {
     let restoredProfile = false;
     try {
         const lastView = localStorage.getItem('barkboard-last-view');
@@ -110,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof renderTodoPanel === 'function') {
         renderTodoPanel();
     }
-});
+}
 
 async function renderTodaysOverview() {
     const client = getSupabase();
@@ -189,7 +284,7 @@ async function addCustomTask() {
     if (!client) return;
 
     const today = new Date().toISOString().slice(0, 10);
-    const { error } = await client.from('staff_tasks').insert([{ task_text: text, due_date: today, priority: 'normal', is_done: false }]);
+    const { error } = await client.from('staff_tasks').insert([{ task_text: text, due_date: today, priority: 'normal', is_done: false, business_id: currentBusinessId }]);
 
     if (error) {
         alert('Failed to add task: ' + error.message);
@@ -956,7 +1051,8 @@ async function saveBookingResources(client, bookingId, resourceList) {
         resource_id: r.resourceId,
         all_day: r.allDay !== false,
         start_time: r.allDay ? null : (r.startTime || null),
-        end_time: r.allDay ? null : (r.endTime || null)
+        end_time: r.allDay ? null : (r.endTime || null),
+        business_id: currentBusinessId
     }));
 
     const { error: insertError } = await client.from('booking_resources').insert(rows);
@@ -1029,7 +1125,8 @@ async function saveBooking() {
         rate_per_day: ratePerDay,
         // Stored separately from the discounted `amount` so the Subtotal/Discount split can
         // be reconstructed and shown correctly the next time this booking is opened for edit.
-        discount_amount: discount
+        discount_amount: discount,
+        business_id: currentBusinessId
     };
 
     let response;
@@ -1091,7 +1188,8 @@ async function saveBooking() {
                 due_date: startDate,
                 service_start_date: startDate,
                 service_end_date: type === 'stay' ? endDate : startDate,
-                pet_names: petNames.join(', ')
+                pet_names: petNames.join(', '),
+                business_id: currentBusinessId
             }]).select();
 
             // 2. Link created Invoice back to all generated booking rows
@@ -1450,14 +1548,15 @@ async function saveInvoice() {
         amount: amount,
         due_date: dueDate,
         status: status,
-        notes: notes
+        notes: notes,
+        business_id: currentBusinessId
     };
 
     let response;
     if (editingInvoiceId) {
         response = await client.from('invoices').update(payload).eq('id', editingInvoiceId);
     } else {
-        response = await client.from('invoices').insert([payload]).select();
+        response = await client.from('invoices').insert([{ ...payload, business_id: currentBusinessId }]).select();
     }
 
     if (response.error) {
@@ -1783,7 +1882,7 @@ async function saveStaffMember() {
     } else {
         response = await client
             .from('staff')
-            .insert([payload]);
+            .insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) {
@@ -1894,7 +1993,7 @@ async function saveStaffAvail() {
     if (editingStaffAvailId) {
         response = await client.from('staff_availability').update(payload).eq('id', editingStaffAvailId);
     } else {
-        response = await client.from('staff_availability').insert([payload]);
+        response = await client.from('staff_availability').insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) {
@@ -2072,7 +2171,7 @@ async function saveAssignment() {
         return alert('Pet is already assigned to this staff member.');
     }
 
-    const { error } = await client.from('staff_assignments').insert([{ staff_id: staffId, pet_id: petId, role }]);
+    const { error } = await client.from('staff_assignments').insert([{ staff_id: staffId, pet_id: petId, role, business_id: currentBusinessId }]);
     if (error) {
         alert('Failed to save assignment: ' + error.message);
         return;
@@ -2289,7 +2388,7 @@ async function saveStaffTask() {
     if (editingStaffTaskId) {
         response = await client.from('staff_tasks').update(payload).eq('id', editingStaffTaskId);
     } else {
-        response = await client.from('staff_tasks').insert([{ ...payload, is_done: false }]);
+        response = await client.from('staff_tasks').insert([{ ...payload, is_done: false, business_id: currentBusinessId }]);
     }
 
     if (response.error) {
@@ -2526,7 +2625,7 @@ async function cloneResource(id) {
         blackouts: source.blackouts || []
     };
 
-    const { error } = await client.from('resources').insert([payload]);
+    const { error } = await client.from('resources').insert([{ ...payload, business_id: currentBusinessId }]);
     if (error) {
         alert('Failed to clone resource: ' + error.message);
     } else {
@@ -2625,7 +2724,7 @@ async function saveResource(e) {
     if (editingResourceId) {
         ({ error } = await client.from('resources').update(payload).eq('id', editingResourceId));
     } else {
-        ({ error } = await client.from('resources').insert([payload]));
+        ({ error } = await client.from('resources').insert([{ ...payload, business_id: currentBusinessId }]));
     }
 
     if (error) {
@@ -2960,7 +3059,7 @@ async function saveAvailability() {
     if (editingClosureId) {
         response = await client.from('business_closures').update(payload).eq('id', editingClosureId);
     } else {
-        response = await client.from('business_closures').insert([payload]);
+        response = await client.from('business_closures').insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) {
@@ -3174,7 +3273,8 @@ async function saveHousehold() {
             email: isEmail ? contactInfo : null,
             phone: !isEmail ? contactInfo : null,
             role: role,
-            category: pendingPersonCategory || 'member'
+            category: pendingPersonCategory || 'member',
+            business_id: currentBusinessId
         }]);
         pendingPersonCategory = null;
 
@@ -3197,7 +3297,7 @@ async function saveHousehold() {
     if (editingHouseholdId) {
         await client.from('households').update({ name: hhName, address, note: role }).eq('id', editingHouseholdId);
     } else {
-        const { data: inserted, error } = await client.from('households').insert([{ name: hhName, address, note: role }]).select();
+        const { data: inserted, error } = await client.from('households').insert([{ name: hhName, address, note: role, business_id: currentBusinessId }]).select();
         if (error) {
             alert('Error creating household: ' + error.message);
             return;
@@ -3343,7 +3443,7 @@ async function savePet() {
     if (editingPetId) {
         response = await client.from('pets').update(payload).eq('id', editingPetId);
     } else {
-        response = await client.from('pets').insert([payload]);
+        response = await client.from('pets').insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) {
@@ -3472,7 +3572,7 @@ async function saveVet() {
     if (editingVetId) {
         response = await client.from('vets').update(payload).eq('id', editingVetId);
     } else {
-        response = await client.from('vets').insert([payload]).select();
+        response = await client.from('vets').insert([{ ...payload, business_id: currentBusinessId }]).select();
     }
 
     if (response.error) {
@@ -4632,7 +4732,7 @@ async function linkEntities(targetType, targetId, sourceId, sourceType) {
         if (existing && existing.length) {
             alert('This pet is already assigned to this staff member.');
         } else {
-            await client.from('staff_assignments').insert([{ staff_id: sourceId, pet_id: targetId }]);
+            await client.from('staff_assignments').insert([{ staff_id: sourceId, pet_id: targetId, business_id: currentBusinessId }]);
         }
     } else {
         await client.from(targetType === 'person' ? 'people' : 'pets').update({ household_id: sourceId }).eq('id', targetId);
@@ -5693,7 +5793,7 @@ async function saveApptType() {
     if (editingApptTypeId) {
         response = await client.from('appointment_type_templates').update(payload).eq('id', editingApptTypeId);
     } else {
-        response = await client.from('appointment_type_templates').insert([payload]);
+        response = await client.from('appointment_type_templates').insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) return alert('Failed to save: ' + response.error.message);
@@ -5784,7 +5884,7 @@ async function saveTaskTemplate() {
     if (editingTaskTemplateId) {
         response = await client.from('task_templates').update(payload).eq('id', editingTaskTemplateId);
     } else {
-        response = await client.from('task_templates').insert([payload]);
+        response = await client.from('task_templates').insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) return alert('Failed to save: ' + response.error.message);
@@ -5876,7 +5976,7 @@ async function saveAssessmentTemplate() {
     if (editingAssessmentTemplateId) {
         response = await client.from('assessment_templates').update(payload).eq('id', editingAssessmentTemplateId);
     } else {
-        response = await client.from('assessment_templates').insert([payload]);
+        response = await client.from('assessment_templates').insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) return alert('Failed to save: ' + response.error.message);
@@ -5937,7 +6037,7 @@ async function saveBusinessPaymentSettings() {
     if (existing) {
         response = await client.from('business_settings').update(payload).eq('id', existing.id);
     } else {
-        response = await client.from('business_settings').insert([payload]);
+        response = await client.from('business_settings').insert([{ ...payload, business_id: currentBusinessId }]);
     }
 
     if (response.error) return alert('Failed to save: ' + response.error.message);
