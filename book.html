@@ -8,79 +8,33 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
-            --accent: #4f46e5;
-            --text: #111827;
-            --text-muted: #6b7280;
-            --border: #e5e7eb;
-            --bg: #f9fafb;
-            --surface: #ffffff;
-            --danger: #fee2e2;
-            --danger-text: #991b1b;
-            --success: #d1fae5;
-            --success-text: #065f46;
+            --accent: #4f46e5; --text: #111827; --text-muted: #6b7280; --border: #e5e7eb;
+            --bg: #f9fafb; --surface: #ffffff; --danger: #fee2e2; --danger-text: #991b1b;
+            --success: #d1fae5; --success-text: #065f46;
             --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: var(--font-sans);
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            padding: 2.5rem 1.25rem;
-        }
+        body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; justify-content: center; padding: 2.5rem 1.25rem; }
         .page { width: 100%; max-width: 480px; }
         .brand-header { text-align: center; margin-bottom: 1.75rem; }
         .brand-logo { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; margin: 0 auto 0.75rem; display: block; }
-        .brand-logo-fallback {
-            width: 64px; height: 64px; border-radius: 16px; margin: 0 auto 0.75rem;
-            display: flex; align-items: center; justify-content: center; font-size: 1.8rem;
-            background: var(--accent); color: #fff;
-        }
+        .brand-logo-fallback { width: 64px; height: 64px; border-radius: 16px; margin: 0 auto 0.75rem; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; background: var(--accent); color: #fff; }
         .brand-header h1 { margin: 0; font-size: 1.4rem; }
         .brand-header p { margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.9rem; }
-        .card {
-            background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-            padding: 1.75rem; box-shadow: 0 10px 30px -10px rgba(15,23,42,0.08);
-        }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.75rem; box-shadow: 0 10px 30px -10px rgba(15,23,42,0.08); }
         .form-group { margin-bottom: 1.1rem; }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
         label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
-        input, select, textarea {
-            width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px;
-            font-size: 0.92rem; font-family: var(--font-sans); background: #fbfbfe;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none; border-color: var(--accent); background: #fff;
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
-        }
+        input, select, textarea { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.92rem; font-family: var(--font-sans); background: #fbfbfe; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
         textarea { resize: vertical; min-height: 70px; }
-        .submit-btn {
-            width: 100%; padding: 0.75rem; border: none; border-radius: 9px;
-            background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
-        }
+        .submit-btn { width: 100%; padding: 0.75rem; border: none; border-radius: 9px; background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
         .submit-btn:disabled { opacity: 0.6; cursor: default; }
-        .add-pet-btn {
-            display: flex; align-items: center; gap: 0.35rem;
-            width: 100%; padding: 0.6rem; margin-bottom: 1.1rem;
-            border: 1.5px dashed var(--border); border-radius: 9px;
-            background: transparent; color: var(--accent);
-            font-size: 0.85rem; font-weight: 600; cursor: pointer;
-            justify-content: center;
-            transition: background 0.15s ease, border-color 0.15s ease;
-        }
+        .btn-secondary { width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+        .add-pet-btn { display: flex; align-items: center; gap: 0.35rem; width: 100%; padding: 0.6rem; margin-bottom: 1.1rem; border: 1.5px dashed var(--border); border-radius: 9px; background: transparent; color: var(--accent); font-size: 0.85rem; font-weight: 600; cursor: pointer; justify-content: center; transition: background 0.15s ease, border-color 0.15s ease; }
         .add-pet-btn:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); border-color: var(--accent); }
-        .pet-card {
-            border: 1px solid var(--border); border-radius: 10px; padding: 1rem;
-            margin-bottom: 1rem; background: #fbfbfe; position: relative;
-        }
-        .pet-card-remove {
-            position: absolute; top: 0.6rem; right: 0.6rem;
-            background: none; border: none; cursor: pointer; color: var(--text-muted);
-            font-size: 1.15rem; line-height: 1; padding: 0.15rem 0.4rem; border-radius: 6px;
-        }
+        .pet-card { border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; background: #fbfbfe; position: relative; }
+        .pet-card-remove { position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.15rem; line-height: 1; padding: 0.15rem 0.4rem; border-radius: 6px; }
         .pet-card-remove:hover { background: var(--danger); color: var(--danger-text); }
         .msg-box { padding: 0.7rem 0.85rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; }
         .msg-error { background: var(--danger); color: var(--danger-text); }
@@ -89,38 +43,39 @@
         .section-divider { border: none; border-top: 1px solid var(--border); margin: 1.4rem 0; }
         .field-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
         .center-msg { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
-
         .success-card { text-align: center; padding: 2.5rem 1.75rem; animation: success-pop 0.4s ease; }
-        .success-check {
-            width: 68px; height: 68px; margin: 0 auto 1.25rem; border-radius: 50%;
-            background: linear-gradient(135deg, #22c55e, #16a34a);
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 10px 24px -6px rgba(22, 163, 74, 0.5);
-            animation: check-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
-        }
+        .success-check { width: 68px; height: 68px; margin: 0 auto 1.25rem; border-radius: 50%; background: linear-gradient(135deg, #22c55e, #16a34a); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 24px -6px rgba(22, 163, 74, 0.5); animation: check-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both; }
         .success-check svg { width: 32px; height: 32px; }
         .success-card h2 { margin: 0 0 0.6rem; font-size: 1.3rem; }
         .success-card p { margin: 0; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5; }
-        @keyframes success-pop {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes check-pop {
-            from { transform: scale(0.4); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
+        @keyframes success-pop { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes check-pop { from { transform: scale(0); } to { transform: scale(1); } }
+
+        .category-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem; }
+        .category-card { border: 1.5px solid var(--border); border-radius: 12px; padding: 1.1rem 0.75rem; text-align: center; cursor: pointer; background: var(--surface); transition: border-color 0.15s ease, background 0.15s ease; }
+        .category-card:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, transparent); }
+        .category-card .cat-icon { font-size: 1.6rem; margin-bottom: 0.4rem; }
+        .category-card .cat-label { font-weight: 700; font-size: 0.9rem; }
+        .group-summary-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; background: #fbfbfe; position: relative; }
+        .group-summary-card .cat-tag { display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--accent); margin-bottom: 0.3rem; }
+        .group-remove { position: absolute; top: 0.7rem; right: 0.7rem; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.1rem; padding: 0.1rem 0.4rem; border-radius: 6px; }
+        .group-remove:hover { background: var(--danger); color: var(--danger-text); }
+        .addon-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .addon-row:last-child { border-bottom: none; }
+        .step-back { background: none; border: none; color: var(--text-muted); font-size: 0.82rem; cursor: pointer; padding: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.3rem; }
+        .step-back:hover { color: var(--accent); }
     </style>
 </head>
 <body>
     <div class="page">
-        <div id="loading-state" class="center-msg">Loading booking form...</div>
+        <div id="loading-state" class="center-msg">Loading...</div>
 
         <div id="not-available-state" class="center-msg hidden">
             <div style="font-size:2rem;">🐾</div>
             <p>This booking page isn't available.</p>
         </div>
 
-        <div id="booking-content" class="hidden">
+        <div id="main-content" class="hidden">
             <div class="brand-header">
                 <div id="brand-logo-slot"></div>
                 <h1 id="biz-name"></h1>
@@ -128,49 +83,131 @@
                 <div id="biz-hours" style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;"></div>
             </div>
 
-            <div class="card">
-                <div id="form-error" class="msg-box msg-error hidden"></div>
+            <!-- STEP: email check -->
+            <div id="step-email" class="card">
+                <div id="email-error" class="msg-box msg-error hidden"></div>
+                <div id="email-info" class="msg-box msg-success hidden"></div>
+                <div class="form-group">
+                    <label>Your Email</label>
+                    <input type="email" id="check-email" required>
+                    <p class="field-hint">We'll check if you already have an account with us.</p>
+                </div>
+                <button type="button" class="submit-btn" id="email-check-btn" onclick="handleEmailCheck()">Continue</button>
+            </div>
 
-                <form id="booking-form">
+            <!-- STEP: guest contact info (name/phone, email already captured) -->
+            <div id="step-contact" class="card hidden">
+                <button type="button" class="step-back" onclick="goToStep('email')">← Back</button>
+                <div class="form-group">
+                    <label>Your Name *</label>
+                    <input type="text" id="f-owner-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="f-phone">
+                    <p class="field-hint">Optional, but helpful if we need to reach you quickly.</p>
+                </div>
+                <button type="button" class="submit-btn" onclick="goToStep('category')">Continue</button>
+            </div>
+
+            <!-- STEP: category picker -->
+            <div id="step-category" class="card hidden">
+                <button type="button" class="step-back" onclick="handleCategoryBack()">← Back</button>
+                <p style="font-size:0.9rem; font-weight:600; margin-bottom:1rem;">What would you like to book?</p>
+                <div class="category-grid" id="category-grid"></div>
+            </div>
+
+            <!-- STEP: boarding group -->
+            <div id="step-boarding" class="card hidden">
+                <button type="button" class="step-back" onclick="goToStep('category')">← Back</button>
+                <p style="font-size:0.9rem; font-weight:600; margin-bottom:1rem;">🏠 Boarding</p>
+
+                <div id="boarding-pet-rows"></div>
+                <button type="button" class="add-pet-btn" onclick="addBoardingPetRow()">+ Add Another Pet</button>
+
+                <div class="form-row">
                     <div class="form-group">
-                        <label>Your Name *</label>
-                        <input type="text" id="f-owner-name" required>
+                        <label>Start Date *</label>
+                        <input type="date" id="board-start-date" required>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Email</label>
-                            <input type="email" id="f-email">
-                        </div>
-                        <div class="form-group">
-                            <label>Phone</label>
-                            <input type="tel" id="f-phone">
-                        </div>
-                    </div>
-                    <p class="field-hint" style="margin-top:-0.6rem; margin-bottom:1.1rem;">Please provide at least one way to reach you.</p>
-
-                    <hr class="section-divider">
-
-                    <div id="pet-rows"></div>
-                    <button type="button" class="add-pet-btn" onclick="addPetRow()">+ Add Another Pet</button>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label id="f-start-label">Date *</label>
-                            <input type="date" id="f-start-date" required>
-                        </div>
-                        <div class="form-group" id="f-end-date-group">
-                            <label>End Date</label>
-                            <input type="date" id="f-end-date">
-                        </div>
-                    </div>
-
                     <div class="form-group">
-                        <label>Notes</label>
-                        <textarea id="f-notes" placeholder="Anything we should know? Allergies, temperament, special requests..."></textarea>
+                        <label>End Date *</label>
+                        <input type="date" id="board-end-date" required>
                     </div>
+                </div>
 
-                    <button type="submit" class="submit-btn" id="submit-btn">Request Booking</button>
-                </form>
+                <div id="board-times-row" class="form-row hidden">
+                    <div class="form-group">
+                        <label>Drop-off Time</label>
+                        <input type="time" id="board-dropoff-time">
+                    </div>
+                    <div class="form-group">
+                        <label>Pickup Time</label>
+                        <input type="time" id="board-pickup-time">
+                    </div>
+                </div>
+
+                <div id="addon-section" class="hidden">
+                    <label>Add-ons (optional)</label>
+                    <p class="field-hint" style="margin-top:0; margin-bottom:0.5rem;">These don't need a specific time — we'll schedule them during the stay and make sure they're done before pickup.</p>
+                    <div id="addon-rows" style="border:1px solid var(--border); border-radius:8px; padding:0 0.75rem;"></div>
+                </div>
+
+                <div style="margin-top:1.25rem;">
+                    <button type="button" class="submit-btn" onclick="finishBoardingGroup()">Add to My Requests</button>
+                </div>
+            </div>
+
+            <!-- STEP: grooming/training/daycare group -->
+            <div id="step-service-group" class="card hidden">
+                <button type="button" class="step-back" onclick="goToStep('category')">← Back</button>
+                <p style="font-size:0.9rem; font-weight:600; margin-bottom:1rem;" id="service-group-title">Service</p>
+
+                <div id="service-pet-rows"></div>
+                <button type="button" class="add-pet-btn" onclick="addServicePetRow()">+ Add Another Pet</button>
+                <p class="field-hint hidden" id="multi-pet-notice" style="margin-top:-0.6rem; margin-bottom:1.1rem;"></p>
+
+                <div class="form-group">
+                    <label>Service *</label>
+                    <select id="service-select" required onchange="updateMultiPetNotice()"></select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" id="service-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Time *</label>
+                        <input type="time" id="service-time" required>
+                    </div>
+                </div>
+
+                <button type="button" class="submit-btn" onclick="finishServiceGroup()">Add to My Requests</button>
+            </div>
+
+            <!-- STEP: "book another?" prompt -->
+            <div id="step-another" class="card hidden">
+                <p style="font-size:0.95rem; font-weight:600; text-align:center; margin-bottom:1.25rem;">Added! Want to book another service?</p>
+                <div style="display:flex; flex-direction:column; gap:0.6rem;">
+                    <button type="button" class="submit-btn" onclick="goToStep('category')">Yes, book another service</button>
+                    <button type="button" class="btn-secondary" onclick="goToStep('review')">No, review & submit</button>
+                </div>
+            </div>
+
+            <!-- STEP: review & submit -->
+            <div id="step-review" class="card hidden">
+                <button type="button" class="step-back" onclick="goToStep('another')">← Back</button>
+                <p style="font-size:0.95rem; font-weight:600; margin-bottom:1rem;">Review your requests</p>
+                <div id="review-groups"></div>
+
+                <div class="form-group" style="margin-top:1rem;">
+                    <label>Notes</label>
+                    <textarea id="f-notes" placeholder="Anything we should know? Allergies, temperament, special requests..."></textarea>
+                </div>
+
+                <div id="review-error" class="msg-box msg-error hidden"></div>
+                <button type="button" class="submit-btn" id="submit-btn" onclick="submitAllBookings()">Request Bookings</button>
             </div>
         </div>
 
@@ -181,7 +218,7 @@
                         <path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </div>
-                <h2 id="success-heading">Request Sent!</h2>
+                <h2>Requests Sent!</h2>
                 <p id="success-message"></p>
             </div>
         </div>
@@ -190,74 +227,56 @@
     <script>
         const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
-
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let currentBusiness = null;
-        let serviceTemplates = [];
+        let allTemplates = [];
+        let contactInfo = { name: '', email: '', phone: '' };
+        let bookingGroups = [];
         let petRowCounter = 0;
 
-        function addPetRow() {
-            const id = `pet-row-${petRowCounter++}`;
-            const el = document.createElement('div');
-            el.id = id;
-            el.className = 'pet-card';
-            const isFirst = petRowCounter === 1;
-            el.innerHTML = `
-                ${isFirst ? '' : `<button type="button" class="pet-card-remove" onclick="document.getElementById('${id}').remove();">×</button>`}
-                <div class="form-row">
-                    <div class="form-group" style="flex:2;">
-                        <label>Pet's Name *</label>
-                        <input type="text" class="pet-name-input" required>
-                    </div>
-                    <div class="form-group" style="flex:1;">
-                        <label>Species</label>
-                        <select class="pet-species-input" onchange="populateServiceOptionsForRow('${id}')">
-                            <option value="dog">Dog</option>
-                            <option value="cat">Cat</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>Service *</label>
-                    <select class="pet-service-input" required>
-                        <option value="">Select a service...</option>
-                    </select>
-                </div>
-            `;
-            document.getElementById('pet-rows').appendChild(el);
-            populateServiceOptionsForRow(id);
-        }
-        addPetRow(); // first pet row, always present
+        const CATEGORY_META = {
+            boarding: { label: 'Boarding', icon: '🏠' },
+            daycare: { label: 'Daycare', icon: '☀️' },
+            grooming: { label: 'Grooming', icon: '✂️' },
+            training: { label: 'Training', icon: '🎾' },
+        };
 
-        function getSlugFromUrl() {
-            const params = new URLSearchParams(window.location.search);
-            return (params.get('biz') || '').trim();
+        function getSlug() {
+            return new URLSearchParams(window.location.search).get('biz')?.trim() || '';
         }
 
-        function showState(stateId) {
-            ['loading-state', 'not-available-state', 'booking-content', 'success-state'].forEach(id => {
-                document.getElementById(id).classList.toggle('hidden', id !== stateId);
+        function goToStep(step) {
+            ['email', 'contact', 'category', 'boarding', 'service-group', 'another', 'review'].forEach(s => {
+                document.getElementById(`step-${s}`)?.classList.toggle('hidden', s !== step);
             });
+            if (step === 'category') renderCategoryGrid();
+            if (step === 'review') renderReview();
+        }
+
+        function handleCategoryBack() {
+            goToStep('contact');
         }
 
         async function init() {
-            const slug = getSlugFromUrl();
+            const slug = getSlug();
             if (!slug) {
-                showState('not-available-state');
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('not-available-state').classList.remove('hidden');
                 return;
             }
 
-            const { data: business, error } = await supabaseClient
+            const { data: business } = await supabaseClient
                 .from('businesses')
                 .select('id, name, slug, logo_url, accent_color, welcome_message, public_booking_enabled')
                 .eq('slug', slug)
                 .eq('public_booking_enabled', true)
                 .maybeSingle();
 
-            if (error || !business) {
-                showState('not-available-state');
+            document.getElementById('loading-state').classList.add('hidden');
+
+            if (!business) {
+                document.getElementById('not-available-state').classList.remove('hidden');
                 return;
             }
 
@@ -266,13 +285,10 @@
 
             const { data: templates } = await supabaseClient
                 .from('appointment_type_templates')
-                .select('name, default_price, pricing_unit, default_duration_minutes, species')
+                .select('name, default_price, pricing_unit, default_duration_minutes, species, category, prompt_dropoff_pickup_time')
                 .eq('business_id', business.id)
                 .order('name');
-            serviceTemplates = templates || [];
-            // Populate the service dropdown on every pet row already on the form
-            // (the first one, added before templates finished loading).
-            document.querySelectorAll('.pet-card').forEach(card => populateServiceOptionsForRow(card.id));
+            allTemplates = templates || [];
 
             const { data: hours } = await supabaseClient
                 .from('business_hours')
@@ -280,11 +296,24 @@
                 .eq('business_id', business.id);
             renderBusinessHours(hours || []);
 
-            showState('booking-content');
+            document.getElementById('main-content').classList.remove('hidden');
+            addBoardingPetRow();
+            addServicePetRow();
+            goToStep('email');
+        }
+
+        function applyBranding(business) {
+            if (business.accent_color) document.documentElement.style.setProperty('--accent', business.accent_color);
+            document.getElementById('biz-name').textContent = business.name;
+            document.getElementById('biz-welcome').textContent = business.welcome_message || 'Request an appointment below.';
+            document.title = `Book with ${business.name}`;
+            const logoSlot = document.getElementById('brand-logo-slot');
+            logoSlot.innerHTML = business.logo_url
+                ? `<img src="${business.logo_url}" class="brand-logo" alt="${business.name}">`
+                : `<div class="brand-logo-fallback">🐾</div>`;
         }
 
         const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
         function formatTime12h(t) {
             if (!t) return '';
             const [h, m] = t.split(':').map(Number);
@@ -292,103 +321,351 @@
             const h12 = h % 12 === 0 ? 12 : h % 12;
             return `${h12}:${String(m).padStart(2, '0')}${period}`;
         }
-
         function renderBusinessHours(hours) {
             const el = document.getElementById('biz-hours');
             if (!el || !hours.length) return;
             const byDay = {};
             hours.forEach(h => { byDay[h.day_of_week] = h; });
-
             el.textContent = Array.from({ length: 7 }).map((_, i) => {
                 const h = byDay[i];
                 if (!h || h.is_closed) return `${DAY_NAMES[i]}: Closed`;
-                return `${DAY_NAMES[i]}: ${formatTime12h(h.open_time)}\u2013${formatTime12h(h.close_time)}`;
+                return `${DAY_NAMES[i]}: ${formatTime12h(h.open_time)}–${formatTime12h(h.close_time)}`;
             }).join('  •  ');
         }
 
-        function applyBranding(business) {
-            if (business.accent_color) {
-                document.documentElement.style.setProperty('--accent', business.accent_color);
-            }
-            document.getElementById('biz-name').textContent = business.name;
-            document.getElementById('biz-welcome').textContent = business.welcome_message || 'Request an appointment below.';
-            document.title = `Book with ${business.name}`;
+        // --- Step: email check -------------------------------------------------
+        async function handleEmailCheck() {
+            const email = document.getElementById('check-email').value.trim();
+            const errBox = document.getElementById('email-error');
+            const infoBox = document.getElementById('email-info');
+            errBox.classList.add('hidden');
+            infoBox.classList.add('hidden');
 
-            const logoSlot = document.getElementById('brand-logo-slot');
-            if (business.logo_url) {
-                logoSlot.innerHTML = `<img src="${business.logo_url}" class="brand-logo" alt="${business.name}">`;
+            if (!email) {
+                errBox.textContent = 'Please enter your email.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+
+            const btn = document.getElementById('email-check-btn');
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+
+            const { data: exists, error } = await supabaseClient.rpc('check_customer_email_exists', {
+                business_slug: currentBusiness.slug,
+                check_email: email
+            });
+
+            if (error) {
+                btn.disabled = false;
+                btn.textContent = 'Continue';
+                errBox.textContent = 'Something went wrong. Please try again.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+
+            contactInfo.email = email;
+
+            if (exists) {
+                btn.textContent = 'Sending link...';
+                const portalUrl = `${window.location.origin}${window.location.pathname.replace('book.html', 'portal.html')}?biz=${encodeURIComponent(currentBusiness.slug)}`;
+                const { error: otpError } = await supabaseClient.auth.signInWithOtp({
+                    email,
+                    options: { emailRedirectTo: portalUrl }
+                });
+                btn.disabled = false;
+                btn.textContent = 'Continue';
+                if (otpError) {
+                    errBox.textContent = otpError.message;
+                    errBox.classList.remove('hidden');
+                    return;
+                }
+                infoBox.textContent = `We found your account! Check your email for a secure sign-in link — it'll take you to your account where you can book and see all your appointments.`;
+                infoBox.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Continue';
+            goToStep('contact');
+        }
+
+        // --- Boarding pet rows ---------------------------------------------------
+        function addBoardingPetRow() {
+            const id = `board-pet-${petRowCounter++}`;
+            const el = document.createElement('div');
+            el.id = id;
+            el.className = 'pet-card';
+            const isFirst = !document.querySelector('#boarding-pet-rows .pet-card');
+            el.innerHTML = `
+                ${isFirst ? '' : `<button type="button" class="pet-card-remove" onclick="document.getElementById('${id}').remove(); refreshAddOns();">×</button>`}
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Pet's Name *</label>
+                        <input type="text" class="pet-name-input" required onchange="refreshAddOns()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Species</label>
+                        <select class="pet-species-input" onchange="refreshAddOns()">
+                            <option value="dog">Dog</option>
+                            <option value="cat">Cat</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            document.getElementById('boarding-pet-rows').appendChild(el);
+            refreshAddOns();
+        }
+
+        function getBoardingPets() {
+            return Array.from(document.querySelectorAll('#boarding-pet-rows .pet-card')).map(card => ({
+                name: card.querySelector('.pet-name-input')?.value.trim(),
+                species: card.querySelector('.pet-species-input')?.value
+            })).filter(p => p.name);
+        }
+
+        function updateBoardingTimeVisibility() {
+            const boardingTemplates = allTemplates.filter(t => Array.isArray(t.category) && t.category.includes('boarding'));
+            const showTimes = boardingTemplates.some(t => t.prompt_dropoff_pickup_time);
+            document.getElementById('board-times-row').classList.toggle('hidden', !showTimes);
+        }
+
+        function refreshAddOns() {
+            const pets = getBoardingPets();
+            const speciesInPlay = new Set(pets.map(p => p.species));
+            const addOnTemplates = allTemplates.filter(t =>
+                Array.isArray(t.category) && (t.category.includes('grooming') || t.category.includes('training')) &&
+                (!Array.isArray(t.species) || !t.species.length || t.species.some(s => speciesInPlay.has(s)))
+            );
+
+            const section = document.getElementById('addon-section');
+            const rows = document.getElementById('addon-rows');
+            if (!addOnTemplates.length || !pets.length) {
+                section.classList.add('hidden');
+                rows.innerHTML = '';
+                return;
+            }
+            section.classList.remove('hidden');
+            rows.innerHTML = addOnTemplates.map((t, i) => `
+                <div class="addon-row">
+                    <input type="checkbox" class="addon-chk" data-name="${t.name.replace(/"/g, '&quot;')}" id="addon-${i}">
+                    <label for="addon-${i}" style="margin:0; font-weight:400; flex:1;">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) : ''}</label>
+                    ${pets.length > 1 ? `
+                        <select class="addon-pet-select" data-index="${i}" style="width:auto; padding:0.3rem 0.5rem; font-size:0.8rem;">
+                            ${pets.map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`).join('')}
+                        </select>
+                    ` : `<input type="hidden" class="addon-pet-select" data-index="${i}" value="${pets[0].name.replace(/"/g, '&quot;')}">`}
+                </div>
+            `).join('');
+            updateBoardingTimeVisibility();
+        }
+
+        function finishBoardingGroup() {
+            const pets = getBoardingPets();
+            const startDate = document.getElementById('board-start-date').value;
+            const endDate = document.getElementById('board-end-date').value;
+            const dropoffTime = document.getElementById('board-dropoff-time').value;
+            const pickupTime = document.getElementById('board-pickup-time').value;
+
+            if (!pets.length) return alert('Please enter at least one pet.');
+            if (!startDate || !endDate) return alert('Please choose start and end dates.');
+
+            const addOns = Array.from(document.querySelectorAll('.addon-chk:checked')).map(chk => {
+                const idx = chk.id.replace('addon-', '');
+                const petSelect = document.querySelector(`.addon-pet-select[data-index="${idx}"]`);
+                return { serviceName: chk.dataset.name, petName: petSelect?.value || pets[0].name };
+            });
+
+            bookingGroups.push({ category: 'boarding', pets, startDate, endDate, dropoffTime, pickupTime, addOns });
+
+            document.getElementById('boarding-pet-rows').innerHTML = '';
+            addBoardingPetRow();
+            document.getElementById('board-start-date').value = '';
+            document.getElementById('board-end-date').value = '';
+            document.getElementById('board-dropoff-time').value = '';
+            document.getElementById('board-pickup-time').value = '';
+
+            goToStep('another');
+        }
+
+        // --- Grooming/Training/Daycare group -------------------------------------
+        let currentServiceCategory = null;
+
+        function addServicePetRow() {
+            const id = `svc-pet-${petRowCounter++}`;
+            const el = document.createElement('div');
+            el.id = id;
+            el.className = 'pet-card';
+            const isFirst = !document.querySelector('#service-pet-rows .pet-card');
+            el.innerHTML = `
+                ${isFirst ? '' : `<button type="button" class="pet-card-remove" onclick="document.getElementById('${id}').remove(); populateServiceSelect(); updateMultiPetNotice();">×</button>`}
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Pet's Name *</label>
+                        <input type="text" class="pet-name-input" required onchange="populateServiceSelect(); updateMultiPetNotice();">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Species</label>
+                        <select class="pet-species-input" onchange="populateServiceSelect(); updateMultiPetNotice();">
+                            <option value="dog">Dog</option>
+                            <option value="cat">Cat</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            document.getElementById('service-pet-rows').appendChild(el);
+            populateServiceSelect();
+            updateMultiPetNotice();
+        }
+
+        function getServicePets() {
+            return Array.from(document.querySelectorAll('#service-pet-rows .pet-card')).map(card => ({
+                name: card.querySelector('.pet-name-input')?.value.trim(),
+                species: card.querySelector('.pet-species-input')?.value
+            })).filter(p => p.name);
+        }
+
+        function updateMultiPetNotice() {
+            const notice = document.getElementById('multi-pet-notice');
+            const pets = getServicePets();
+            if (pets.length > 1) {
+                notice.textContent = `We'll confirm exact appointment times for each pet when we approve this request — availability may mean they can't be at the exact same time.`;
+                notice.classList.remove('hidden');
             } else {
-                logoSlot.innerHTML = `<div class="brand-logo-fallback">🐾</div>`;
+                notice.classList.add('hidden');
             }
         }
 
-        function populateServiceOptionsForRow(rowId) {
-            const row = document.getElementById(rowId);
-            if (!row) return;
-            const sel = row.querySelector('.pet-service-input');
-            const species = row.querySelector('.pet-species-input')?.value || '';
-            const visible = serviceTemplates.filter(t =>
-                !Array.isArray(t.species) || !t.species.length || t.species.includes(species)
+        function populateServiceSelect() {
+            const sel = document.getElementById('service-select');
+            const pets = getServicePets();
+            const speciesNeeded = pets.map(p => p.species);
+            const visible = allTemplates.filter(t =>
+                Array.isArray(t.category) && t.category.includes(currentServiceCategory) &&
+                (!Array.isArray(t.species) || !t.species.length || speciesNeeded.every(s => t.species.includes(s)))
             );
             const previouslySelected = sel.value;
             sel.innerHTML = '<option value="">Select a service...</option>' +
-                visible.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('') +
-                '<option value="__other__">Other / Not Listed</option>';
-            // Keep the previous selection if it's still valid for the (possibly new) species, otherwise reset
+                visible.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('');
             if (visible.some(t => t.name === previouslySelected)) sel.value = previouslySelected;
         }
 
-        function showFormError(message) {
-            const el = document.getElementById('form-error');
-            el.textContent = message;
-            el.classList.remove('hidden');
+        function openServiceGroupStep(category) {
+            currentServiceCategory = category;
+            document.getElementById('service-group-title').textContent = `${CATEGORY_META[category].icon} ${CATEGORY_META[category].label}`;
+            document.getElementById('service-pet-rows').innerHTML = '';
+            addServicePetRow();
+            document.getElementById('service-date').value = '';
+            document.getElementById('service-time').value = '';
+            goToStep('service-group');
         }
 
-        function clearFormError() {
-            document.getElementById('form-error').classList.add('hidden');
+        function finishServiceGroup() {
+            const pets = getServicePets();
+            const serviceName = document.getElementById('service-select').value;
+            const date = document.getElementById('service-date').value;
+            const time = document.getElementById('service-time').value;
+
+            if (!pets.length) return alert('Please enter at least one pet.');
+            if (!serviceName) return alert('Please select a service.');
+            if (!date || !time) return alert('Please choose a date and time.');
+
+            bookingGroups.push({ category: currentServiceCategory, pets, serviceName, date, time });
+
+            document.getElementById('service-pet-rows').innerHTML = '';
+            addServicePetRow();
+            document.getElementById('service-date').value = '';
+            document.getElementById('service-time').value = '';
+
+            goToStep('another');
         }
 
-        document.getElementById('booking-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            clearFormError();
+        // --- Category picker -----------------------------------------------------
+        function renderCategoryGrid() {
+            const availableCategories = Object.keys(CATEGORY_META).filter(cat =>
+                allTemplates.some(t => Array.isArray(t.category) && t.category.includes(cat))
+            );
+            const grid = document.getElementById('category-grid');
+            if (!availableCategories.length) {
+                grid.innerHTML = '<p style="grid-column:1/-1; color:var(--text-muted); font-size:0.85rem;">No services are set up for online booking yet — please contact us directly.</p>';
+                return;
+            }
+            grid.innerHTML = availableCategories.map(cat => `
+                <div class="category-card" onclick="selectCategory('${cat}')">
+                    <div class="cat-icon">${CATEGORY_META[cat].icon}</div>
+                    <div class="cat-label">${CATEGORY_META[cat].label}</div>
+                </div>
+            `).join('');
+        }
 
-            const ownerName = document.getElementById('f-owner-name').value.trim();
-            const email = document.getElementById('f-email').value.trim();
-            const phone = document.getElementById('f-phone').value.trim();
+        function selectCategory(cat) {
+            if (cat === 'boarding') {
+                updateBoardingTimeVisibility();
+                refreshAddOns();
+                goToStep('boarding');
+            } else {
+                openServiceGroupStep(cat);
+            }
+        }
 
-            const pets = [];
-            for (const card of document.querySelectorAll('.pet-card')) {
-                const name = card.querySelector('.pet-name-input')?.value.trim();
-                if (!name) continue;
-                const species = card.querySelector('.pet-species-input')?.value;
-                let serviceName = card.querySelector('.pet-service-input')?.value;
-                if (serviceName === '__other__') {
-                    serviceName = prompt(`Please describe the service you're requesting for ${name}:`) || '';
-                    if (!serviceName.trim()) return;
-                }
-                if (!serviceName) {
-                    showFormError(`Please select a service for ${name}.`);
-                    return;
-                }
-                pets.push({ name, species, serviceName });
+        // --- Review & submit -------------------------------------------------------
+        function groupSummaryHtml(group, index) {
+            const meta = CATEGORY_META[group.category];
+            if (group.category === 'boarding') {
+                const petNames = group.pets.map(p => p.name).join(', ');
+                const addOnsText = group.addOns.length ? group.addOns.map(a => `${a.serviceName} (${a.petName})`).join(', ') : '';
+                return `
+                    <div class="group-summary-card">
+                        <button type="button" class="group-remove" onclick="removeGroup(${index})">×</button>
+                        <span class="cat-tag">${meta.icon} ${meta.label}</span>
+                        <div style="font-weight:600; font-size:0.9rem;">${petNames}</div>
+                        <div class="field-hint" style="margin-top:0.2rem;">${group.startDate} → ${group.endDate}${group.dropoffTime ? ' · Drop-off ' + group.dropoffTime : ''}${group.pickupTime ? ' · Pickup ' + group.pickupTime : ''}</div>
+                        ${addOnsText ? `<div class="field-hint" style="margin-top:0.2rem;">Add-ons: ${addOnsText}</div>` : ''}
+                    </div>
+                `;
+            }
+            const petNames = group.pets.map(p => p.name).join(', ');
+            return `
+                <div class="group-summary-card">
+                    <button type="button" class="group-remove" onclick="removeGroup(${index})">×</button>
+                    <span class="cat-tag">${meta.icon} ${meta.label}</span>
+                    <div style="font-weight:600; font-size:0.9rem;">${petNames} — ${group.serviceName}</div>
+                    <div class="field-hint" style="margin-top:0.2rem;">${group.date} at ${group.time}</div>
+                </div>
+            `;
+        }
+
+        function removeGroup(index) {
+            bookingGroups.splice(index, 1);
+            renderReview();
+        }
+
+        function renderReview() {
+            const container = document.getElementById('review-groups');
+            container.innerHTML = bookingGroups.length
+                ? bookingGroups.map((g, i) => groupSummaryHtml(g, i)).join('')
+                : '<p class="field-hint">Nothing added yet.</p>';
+        }
+
+        async function submitAllBookings() {
+            const errBox = document.getElementById('review-error');
+            errBox.classList.add('hidden');
+
+            if (!bookingGroups.length) {
+                errBox.textContent = 'Please add at least one service before submitting.';
+                errBox.classList.remove('hidden');
+                return;
             }
 
-            const startDate = document.getElementById('f-start-date').value;
-            const endDate = document.getElementById('f-end-date').value;
+            const ownerName = document.getElementById('f-owner-name').value.trim() || contactInfo.email;
+            const phone = document.getElementById('f-phone').value.trim();
             const notes = document.getElementById('f-notes').value.trim();
 
-            if (!email && !phone) {
-                showFormError('Please provide an email or phone number so we can reach you.');
-                return;
-            }
-            if (!pets.length) {
-                showFormError('Please enter at least one pet.');
-                return;
-            }
-
-            const submitBtn = document.getElementById('submit-btn');
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Sending...';
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
 
             try {
                 const res = await fetch(`${SUPABASE_URL}/functions/v1/create-public-booking`, {
@@ -400,28 +677,31 @@
                     },
                     body: JSON.stringify({
                         slug: currentBusiness.slug,
-                        ownerName, contactEmail: email, contactPhone: phone,
-                        pets, startDate, endDate, notes
+                        ownerName, contactEmail: contactInfo.email, contactPhone: phone,
+                        bookingGroups, notes
                     })
                 });
                 const result = await res.json();
 
                 if (!result.success) {
-                    showFormError(result.error || 'Something went wrong. Please try again.');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Request Booking';
+                    errBox.textContent = result.error || 'Something went wrong. Please try again.';
+                    errBox.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Request Bookings';
                     return;
                 }
 
                 document.getElementById('success-message').textContent = result.message;
-                showState('success-state');
+                document.getElementById('main-content').classList.add('hidden');
+                document.getElementById('success-state').classList.remove('hidden');
             } catch (err) {
                 console.error(err);
-                showFormError('Could not reach the server. Please check your connection and try again.');
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Request Booking';
+                errBox.textContent = 'Could not reach the server. Please check your connection and try again.';
+                errBox.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Request Bookings';
             }
-        });
+        }
 
         init();
     </script>

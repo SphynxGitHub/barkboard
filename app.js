@@ -6711,6 +6711,7 @@ async function openApptTypeModal(id) {
     document.querySelectorAll('.att-category-chk').forEach(chk => {
         chk.checked = Array.isArray(t?.category) && t.category.includes(chk.value);
     });
+    if (document.getElementById('att-prompt-times')) document.getElementById('att-prompt-times').checked = !!t?.prompt_dropoff_pickup_time;
 
     document.getElementById('appt-type-modal')?.classList.remove('hidden');
 }
@@ -6733,6 +6734,7 @@ async function saveApptType() {
     const notes = document.getElementById('att-notes')?.value.trim() || '';
     const species = Array.from(document.querySelectorAll('.att-species-chk:checked')).map(chk => chk.value);
     const category = Array.from(document.querySelectorAll('.att-category-chk:checked')).map(chk => chk.value);
+    const promptTimes = document.getElementById('att-prompt-times')?.checked || false;
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
@@ -6748,7 +6750,8 @@ async function saveApptType() {
         staff_time_resource_type: requiresStaffTime ? staffTimeResourceType : null,
         notes,
         species: species.length ? species : null,
-        category: category.length ? category : null
+        category: category.length ? category : null,
+        prompt_dropoff_pickup_time: promptTimes
     };
 
     let response;
