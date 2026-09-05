@@ -1654,6 +1654,7 @@ input.biz-select {
 .ob-step input[type="text"],
 .ob-step input[type="number"],
 .ob-step input[type="email"],
+.ob-step input[type="tel"],
 .ob-step input[type="time"],
 .ob-step select {
   padding: 0.55rem 0.7rem;
@@ -1669,6 +1670,7 @@ input.biz-select {
 .ob-step input[type="text"]:focus,
 .ob-step input[type="number"]:focus,
 .ob-step input[type="email"]:focus,
+.ob-step input[type="tel"]:focus,
 .ob-step input[type="time"]:focus,
 .ob-step select:focus {
   outline: none;

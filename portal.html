@@ -159,9 +159,7 @@
     <div id="print-overlay" class="modal-overlay-portal hidden">
         <div class="card" style="width:100%; max-width:400px;">
             <div id="print-receipt-content">
-                <div id="print-logo-slot" style="margin-bottom:0.75rem;"></div>
-                <h2 id="print-biz-name" style="margin:0 0 0.25rem;"></h2>
-                <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 1.25rem;" id="print-receipt-label">Receipt</p>
+                <div id="print-header" style="margin-bottom:1rem;"></div>
                 <div id="print-receipt-body" style="font-size:0.9rem; line-height:1.8;"></div>
             </div>
             <div style="display:flex; gap:0.6rem; margin-top:1.5rem;" class="no-print">
@@ -450,13 +448,18 @@
         function openPrintOverlay(invoiceId) {
             const inv = invoicesById[invoiceId];
             if (!inv) return;
-            document.getElementById('print-logo-slot').innerHTML = currentBiz.logo_url
-                ? `<img src="${currentBiz.logo_url}" style="max-height:56px; max-width:180px;" alt="${currentBiz.name}">`
-                : '';
-            document.getElementById('print-biz-name').textContent = currentBiz.name;
-            document.getElementById('print-receipt-label').textContent = inv.status === 'paid' ? 'Receipt' : 'Invoice';
+            const isPaid = inv.status === 'paid';
 
             const contactLine = [currentBiz.contact_phone, currentBiz.contact_email, currentBiz.address].filter(Boolean).join(' · ');
+            document.getElementById('print-header').innerHTML = `
+                <div style="display:flex; align-items:center; gap:0.85rem; padding-bottom:1rem; border-bottom:1px solid var(--border);">
+                    ${currentBiz.logo_url ? `<img src="${currentBiz.logo_url}" style="max-height:52px; max-width:90px; object-fit:contain; flex-shrink:0;" alt="${currentBiz.name}">` : ''}
+                    <div>
+                        <div style="font-weight:700; font-size:1.1rem;">${currentBiz.name}</div>
+                        ${contactLine ? `<div style="color:var(--text-muted); font-size:0.78rem; margin-top:0.15rem;">${contactLine}</div>` : ''}
+                    </div>
+                </div>
+            `;
 
             const wayToPay = [];
             if (paymentSettings?.venmo_handle) wayToPay.push(`Venmo: ${paymentSettings.venmo_handle}`);
@@ -465,14 +468,14 @@
             if (paymentSettings?.square_link) wayToPay.push(`Square: ${paymentSettings.square_link}`);
 
             document.getElementById('print-receipt-body').innerHTML = `
-                ${contactLine ? `<div style="color:var(--text-muted); font-size:0.82rem; margin-bottom:0.75rem;">${contactLine}</div>` : ''}
+                ${isPaid ? `<div style="display:inline-block; background:#16a34a; color:#fff; font-weight:800; font-size:0.85rem; letter-spacing:0.06em; padding:0.3rem 0.9rem; border-radius:999px; margin-bottom:0.85rem;">PAID</div>` : ''}
                 <div><strong>Description:</strong> ${inv.description || ''}</div>
                 <div><strong>Amount:</strong> $${Number(inv.amount || 0).toFixed(2)}</div>
-                <div><strong>Status:</strong> ${inv.status}</div>
+                ${!isPaid ? `<div><strong>Status:</strong> ${inv.status}</div>` : ''}
                 <div><strong>Due date:</strong> ${inv.due_date || '—'}</div>
                 ${inv.paid_date ? `<div><strong>Paid Date:</strong> ${inv.paid_date}</div>` : ''}
                 ${inv.payment_method ? `<div><strong>Payment Method:</strong> ${inv.payment_method}</div>` : ''}
-                ${wayToPay.length ? `
+                ${!isPaid && wayToPay.length ? `
                     <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border);">
                         <div style="font-weight:600; margin-bottom:0.3rem;">Ways to Pay</div>
                         ${wayToPay.map(w => `<div style="font-size:0.85rem; color:var(--text-muted);">${w}</div>`).join('')}

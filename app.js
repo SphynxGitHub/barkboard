@@ -356,6 +356,7 @@ async function openOnboardingWizard(businessName, reopen = false) {
             .select('logo_url, accent_color, notification_email, public_booking_enabled, contact_phone, contact_email, address')
             .eq('id', currentBusinessId).single();
         document.getElementById('ob-logo-url').value = biz?.logo_url || '';
+        updateOnboardingLogoPreview();
         document.getElementById('ob-accent-color').value = biz?.accent_color || '#4f46e5';
         document.getElementById('ob-notify-email').value = biz?.notification_email || '';
         document.getElementById('ob-contact-phone').value = biz?.contact_phone || '';
@@ -7244,8 +7245,21 @@ function updateLogoPreview() {
     }
 }
 
-async function uploadBusinessLogo() {
-    const fileInput = document.getElementById('pb-logo-file');
+function updateOnboardingLogoPreview() {
+    const url = document.getElementById('ob-logo-url')?.value.trim();
+    const wrap = document.getElementById('ob-logo-preview-wrap');
+    const img = document.getElementById('ob-logo-preview');
+    if (!wrap || !img) return;
+    if (url) {
+        img.src = url;
+        wrap.classList.remove('hidden');
+    } else {
+        wrap.classList.add('hidden');
+    }
+}
+
+async function uploadLogoToStorage(fileInputId, urlFieldId, statusElId) {
+    const fileInput = document.getElementById(fileInputId);
     const file = fileInput?.files?.[0];
     if (!file) return;
 
@@ -7262,13 +7276,21 @@ async function uploadBusinessLogo() {
     }
 
     const { data } = client.storage.from('business-logos').getPublicUrl(path);
-    const logoUrlInput = document.getElementById('pb-logo-url');
+    const logoUrlInput = document.getElementById(urlFieldId);
     if (logoUrlInput) logoUrlInput.value = data.publicUrl;
-    updateLogoPreview();
     fileInput.value = '';
-    flashSaveIndicator('pb-logo-upload-status');
+    flashSaveIndicator(statusElId);
+}
 
+async function uploadBusinessLogo() {
+    await uploadLogoToStorage('pb-logo-file', 'pb-logo-url', 'pb-logo-upload-status');
+    updateLogoPreview();
     await savePublicBookingSettings();
+}
+
+async function uploadOnboardingLogo() {
+    await uploadLogoToStorage('ob-logo-file', 'ob-logo-url', 'ob-logo-upload-status');
+    updateOnboardingLogoPreview();
 }
 
 async function getBusinessSettings() {
@@ -7541,6 +7563,22 @@ function renderDocumentOverlay(html) {
     refreshIcons();
 }
 
+/* Shared "letterhead" block — logo + business name + contact info as one
+   cohesive header, instead of separate stacked lines. Used by both the
+   payment notice (unpaid invoice) and receipt (paid invoice) documents. */
+function businessHeaderHtml(settings, biz) {
+    const contactLine = [biz?.contact_phone, biz?.contact_email, biz?.address].filter(Boolean).join(' · ');
+    return `
+        <div style="display:flex; align-items:center; gap:0.85rem; margin-bottom:1.25rem; padding-bottom:1rem; border-bottom:1px solid var(--border);">
+            ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:52px; max-width:90px; object-fit:contain; flex-shrink:0;">` : ''}
+            <div>
+                <div style="font-weight:700; font-size:1.1rem;">${settings?.business_name || 'Your Business'}</div>
+                ${contactLine ? `<div style="color:var(--text-muted); font-size:0.78rem; margin-top:0.15rem;">${contactLine}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
 async function showPaymentNotice(invoiceId) {
     const client = getSupabase();
     if (!client) return;
@@ -7548,6 +7586,7 @@ async function showPaymentNotice(invoiceId) {
     const { data: inv } = await client.from('invoices').select('*, households(name)').eq('id', invoiceId).single();
     if (!inv) return;
     const settings = await getBusinessSettings();
+    const { data: biz } = await client.from('businesses').select('contact_phone, contact_email, address').eq('id', currentBusinessId).single();
 
     const paymentOptions = [];
     if (settings?.venmo_handle) paymentOptions.push(`<li><strong>Venmo:</strong> ${settings.venmo_handle}</li>`);
@@ -7558,8 +7597,7 @@ async function showPaymentNotice(invoiceId) {
     const serviceWhen = inv.service_start_date ? (inv.service_end_date && inv.service_end_date !== inv.service_start_date ? `${inv.service_start_date} → ${inv.service_end_date}` : inv.service_start_date) : null;
 
     renderDocumentOverlay(`
-        ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:60px; margin-bottom:0.75rem;">` : ''}
-        <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Payment Notice'}</h2>
+        ${businessHeaderHtml(settings, biz)}
         <p style="color:var(--text-muted); margin:0 0 1rem;">Amount Due</p>
         <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
         <p><strong>${inv.description || 'Invoice'}</strong></p>
@@ -7582,19 +7620,9 @@ async function showReceipt(invoiceId) {
 
     const serviceWhen = inv.service_start_date ? (inv.service_end_date && inv.service_end_date !== inv.service_start_date ? `${inv.service_start_date} → ${inv.service_end_date}` : inv.service_start_date) : null;
 
-    const wayToPay = [];
-    if (settings?.venmo_handle) wayToPay.push(`Venmo: ${settings.venmo_handle}`);
-    if (settings?.zelle_info) wayToPay.push(`Zelle: ${settings.zelle_info}`);
-    if (settings?.cash_note) wayToPay.push(`Cash: ${settings.cash_note}`);
-    if (settings?.square_link) wayToPay.push(`Square: ${settings.square_link}`);
-
-    const contactLine = [biz?.contact_phone, biz?.contact_email, biz?.address].filter(Boolean).join(' · ');
-
     renderDocumentOverlay(`
-        ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:60px; margin-bottom:0.75rem;">` : ''}
-        <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Receipt'}</h2>
-        ${contactLine ? `<p style="color:var(--text-muted); font-size:0.82rem; margin:0 0 0.75rem;">${contactLine}</p>` : ''}
-        <p style="color:var(--text-muted); margin:0 0 1rem;">Payment Received</p>
+        ${businessHeaderHtml(settings, biz)}
+        <div style="display:inline-block; background:#16a34a; color:#fff; font-weight:800; font-size:0.85rem; letter-spacing:0.06em; padding:0.3rem 0.9rem; border-radius:999px; margin-bottom:1rem;">PAID</div>
         <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
         <p><strong>${inv.description || 'Invoice'}</strong></p>
         <p style="color:var(--text-muted);">${inv.households?.name || ''}</p>
@@ -7603,12 +7631,6 @@ async function showReceipt(invoiceId) {
         ${inv.paid_date ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Paid Date:</strong> ${inv.paid_date}</p>` : ''}
         ${inv.payment_method ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Payment Method:</strong> ${inv.payment_method}</p>` : ''}
         <p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem;">Paid in full. Thank you!</p>
-        ${wayToPay.length ? `
-            <div style="margin-top:1.25rem; padding-top:0.85rem; border-top:1px solid var(--border);">
-                <p style="font-weight:600; font-size:0.85rem; margin:0 0 0.4rem;">Ways to Pay</p>
-                ${wayToPay.map(w => `<p style="color:var(--text-muted); font-size:0.85rem; margin:0.15rem 0;">${w}</p>`).join('')}
-            </div>
-        ` : ''}
     `);
 }
 
