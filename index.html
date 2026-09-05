@@ -94,6 +94,19 @@
                         <input type="email" id="ob-notify-email" placeholder="owner@yourbusiness.com">
                         <p style="font-size:0.75rem; color:var(--text-muted); margin:0.3rem 0 0;">Where booking-request notifications go. Leave blank to use your login email.</p>
                     </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Phone</label>
+                        <input type="tel" id="ob-contact-phone" placeholder="(555) 123-4567">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Email</label>
+                        <input type="email" id="ob-contact-email" placeholder="hello@yourbusiness.com">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
+                        <input type="text" id="ob-address" placeholder="123 Main St, Anytown, ST 12345">
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0.3rem 0 0;">Shown on invoices/receipts and your booking page.</p>
+                    </div>
                     <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600; font-size:0.9rem;">
                         <input type="checkbox" id="ob-enable-public-booking"> Enable public booking page
                     </label>
@@ -543,6 +556,22 @@
                         <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Business Name</label>
                         <input type="text" id="pb-business-name" placeholder="Your Business Name" class="biz-select" style="width:100%; padding:0.5rem;">
                         <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Shown as the heading at the top of your public booking page.</p>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.85rem;">
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Phone</label>
+                            <input type="tel" id="pb-contact-phone" placeholder="(555) 123-4567" class="biz-select" style="width:100%; padding:0.5rem;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Email</label>
+                            <input type="email" id="pb-contact-email" placeholder="hello@yourbusiness.com" class="biz-select" style="width:100%; padding:0.5rem;">
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
+                        <input type="text" id="pb-address" placeholder="123 Main St, Anytown, ST 12345" class="biz-select" style="width:100%; padding:0.5rem;">
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Shown on invoices/receipts and your booking page — not currently used elsewhere.</p>
                     </div>
 
                     <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">

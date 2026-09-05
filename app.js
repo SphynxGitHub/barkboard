@@ -353,11 +353,14 @@ async function openOnboardingWizard(businessName, reopen = false) {
     const client = getSupabase();
     if (client && currentBusinessId) {
         const { data: biz } = await client.from('businesses')
-            .select('logo_url, accent_color, notification_email, public_booking_enabled')
+            .select('logo_url, accent_color, notification_email, public_booking_enabled, contact_phone, contact_email, address')
             .eq('id', currentBusinessId).single();
         document.getElementById('ob-logo-url').value = biz?.logo_url || '';
         document.getElementById('ob-accent-color').value = biz?.accent_color || '#4f46e5';
         document.getElementById('ob-notify-email').value = biz?.notification_email || '';
+        document.getElementById('ob-contact-phone').value = biz?.contact_phone || '';
+        document.getElementById('ob-contact-email').value = biz?.contact_email || '';
+        document.getElementById('ob-address').value = biz?.address || '';
         document.getElementById('ob-enable-public-booking').checked = !!biz?.public_booking_enabled;
 
         const settings = typeof getBusinessSettings === 'function' ? await getBusinessSettings() : null;
@@ -512,11 +515,14 @@ async function obFinish(skip = false) {
         })).filter(r => r.name);
 
         try {
-            // Business info (logo, accent color, notify email, public booking toggle)
+            // Business info (logo, accent color, notify email, contact info, public booking toggle)
             await client.from('businesses').update({
                 logo_url: document.getElementById('ob-logo-url')?.value.trim() || null,
                 accent_color: document.getElementById('ob-accent-color')?.value || '#4f46e5',
                 notification_email: document.getElementById('ob-notify-email')?.value.trim() || null,
+                contact_phone: document.getElementById('ob-contact-phone')?.value.trim() || null,
+                contact_email: document.getElementById('ob-contact-email')?.value.trim() || null,
+                address: document.getElementById('ob-address')?.value.trim() || null,
                 public_booking_enabled: document.getElementById('ob-enable-public-booking')?.checked || false,
             }).eq('id', currentBusinessId);
 
@@ -7273,7 +7279,7 @@ async function loadPublicBookingSettings() {
     if (!client) return;
 
     const { data: business, error } = await client.from('businesses')
-        .select('name, slug, public_booking_enabled, logo_url, accent_color, welcome_message, notification_email')
+        .select('name, slug, public_booking_enabled, logo_url, accent_color, welcome_message, notification_email, contact_phone, contact_email, address')
         .eq('id', currentBusinessId)
         .single();
 
@@ -7284,6 +7290,9 @@ async function loadPublicBookingSettings() {
 
     document.getElementById('pb-business-name').value = business.name || '';
     document.getElementById('pb-notify-email').value = business.notification_email || '';
+    document.getElementById('pb-contact-phone').value = business.contact_phone || '';
+    document.getElementById('pb-contact-email').value = business.contact_email || '';
+    document.getElementById('pb-address').value = business.address || '';
     const enabledChk = document.getElementById('pb-enabled');
     if (enabledChk) enabledChk.checked = !!business.public_booking_enabled;
     document.getElementById('pb-welcome').value = business.welcome_message || '';
@@ -7353,7 +7362,10 @@ async function savePublicBookingSettings() {
         welcome_message: document.getElementById('pb-welcome')?.value.trim() || null,
         logo_url: document.getElementById('pb-logo-url')?.value.trim() || null,
         accent_color: document.getElementById('pb-accent-color')?.value || '#4f46e5',
-        notification_email: document.getElementById('pb-notify-email')?.value.trim() || null
+        notification_email: document.getElementById('pb-notify-email')?.value.trim() || null,
+        contact_phone: document.getElementById('pb-contact-phone')?.value.trim() || null,
+        contact_email: document.getElementById('pb-contact-email')?.value.trim() || null,
+        address: document.getElementById('pb-address')?.value.trim() || null
     };
     // slug is NOT NULL in the schema — only include it in the update if there's
     // actually a value, so an empty field never tries to null it out (which
@@ -7514,12 +7526,22 @@ async function showReceipt(invoiceId) {
     const { data: inv } = await client.from('invoices').select('*, households(name)').eq('id', invoiceId).single();
     if (!inv) return;
     const settings = await getBusinessSettings();
+    const { data: biz } = await client.from('businesses').select('contact_phone, contact_email, address').eq('id', currentBusinessId).single();
 
     const serviceWhen = inv.service_start_date ? (inv.service_end_date && inv.service_end_date !== inv.service_start_date ? `${inv.service_start_date} → ${inv.service_end_date}` : inv.service_start_date) : null;
+
+    const wayToPay = [];
+    if (settings?.venmo_handle) wayToPay.push(`Venmo: ${settings.venmo_handle}`);
+    if (settings?.zelle_info) wayToPay.push(`Zelle: ${settings.zelle_info}`);
+    if (settings?.cash_note) wayToPay.push(`Cash: ${settings.cash_note}`);
+    if (settings?.square_link) wayToPay.push(`Square: ${settings.square_link}`);
+
+    const contactLine = [biz?.contact_phone, biz?.contact_email, biz?.address].filter(Boolean).join(' · ');
 
     renderDocumentOverlay(`
         ${settings?.logo_url ? `<img src="${settings.logo_url}" style="max-height:60px; margin-bottom:0.75rem;">` : ''}
         <h2 style="margin:0 0 0.25rem;">${settings?.business_name || 'Receipt'}</h2>
+        ${contactLine ? `<p style="color:var(--text-muted); font-size:0.82rem; margin:0 0 0.75rem;">${contactLine}</p>` : ''}
         <p style="color:var(--text-muted); margin:0 0 1rem;">Payment Received</p>
         <div style="font-size:2rem; font-weight:700; margin-bottom:1rem;">$${Number(inv.amount || 0).toFixed(2)}</div>
         <p><strong>${inv.description || 'Invoice'}</strong></p>
@@ -7529,6 +7551,12 @@ async function showReceipt(invoiceId) {
         ${inv.paid_date ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Paid Date:</strong> ${inv.paid_date}</p>` : ''}
         ${inv.payment_method ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Payment Method:</strong> ${inv.payment_method}</p>` : ''}
         <p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem;">Paid in full. Thank you!</p>
+        ${wayToPay.length ? `
+            <div style="margin-top:1.25rem; padding-top:0.85rem; border-top:1px solid var(--border);">
+                <p style="font-weight:600; font-size:0.85rem; margin:0 0 0.4rem;">Ways to Pay</p>
+                ${wayToPay.map(w => `<p style="color:var(--text-muted); font-size:0.85rem; margin:0.15rem 0;">${w}</p>`).join('')}
+            </div>
+        ` : ''}
     `);
 }
 

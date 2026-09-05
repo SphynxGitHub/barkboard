@@ -214,7 +214,7 @@
 
             const { data: business } = await supabaseClient
                 .from('businesses')
-                .select('id, name, slug, logo_url, accent_color, public_booking_enabled')
+                .select('id, name, slug, logo_url, accent_color, public_booking_enabled, contact_phone, contact_email, address')
                 .eq('slug', slug)
                 .eq('public_booking_enabled', true)
                 .maybeSingle();
@@ -373,6 +373,7 @@
         let invoicesById = {};
         let serviceCategoryMap = {};
         let lastVisitedAt = null;
+        let paymentSettings = null;
 
         function setGroupBy(mode) {
             groupBy = mode;
@@ -454,13 +455,29 @@
                 : '';
             document.getElementById('print-biz-name').textContent = currentBiz.name;
             document.getElementById('print-receipt-label').textContent = inv.status === 'paid' ? 'Receipt' : 'Invoice';
+
+            const contactLine = [currentBiz.contact_phone, currentBiz.contact_email, currentBiz.address].filter(Boolean).join(' · ');
+
+            const wayToPay = [];
+            if (paymentSettings?.venmo_handle) wayToPay.push(`Venmo: ${paymentSettings.venmo_handle}`);
+            if (paymentSettings?.zelle_info) wayToPay.push(`Zelle: ${paymentSettings.zelle_info}`);
+            if (paymentSettings?.cash_note) wayToPay.push(`Cash: ${paymentSettings.cash_note}`);
+            if (paymentSettings?.square_link) wayToPay.push(`Square: ${paymentSettings.square_link}`);
+
             document.getElementById('print-receipt-body').innerHTML = `
+                ${contactLine ? `<div style="color:var(--text-muted); font-size:0.82rem; margin-bottom:0.75rem;">${contactLine}</div>` : ''}
                 <div><strong>Description:</strong> ${inv.description || ''}</div>
                 <div><strong>Amount:</strong> $${Number(inv.amount || 0).toFixed(2)}</div>
                 <div><strong>Status:</strong> ${inv.status}</div>
                 <div><strong>Due date:</strong> ${inv.due_date || '—'}</div>
                 ${inv.paid_date ? `<div><strong>Paid Date:</strong> ${inv.paid_date}</div>` : ''}
                 ${inv.payment_method ? `<div><strong>Payment Method:</strong> ${inv.payment_method}</div>` : ''}
+                ${wayToPay.length ? `
+                    <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+                        <div style="font-weight:600; margin-bottom:0.3rem;">Ways to Pay</div>
+                        ${wayToPay.map(w => `<div style="font-size:0.85rem; color:var(--text-muted);">${w}</div>`).join('')}
+                    </div>
+                ` : ''}
             `;
             document.getElementById('print-overlay').classList.remove('hidden');
         }
@@ -523,6 +540,11 @@
                 (templates || []).forEach(t => {
                     serviceCategoryMap[t.name] = Array.isArray(t.category) && t.category.length ? t.category[0] : 'other';
                 });
+            }
+
+            if (!paymentSettings) {
+                const { data: settingsRow } = await supabaseClient.from('business_settings').select('venmo_handle, zelle_info, cash_note, square_link').eq('business_id', currentBiz.id).maybeSingle();
+                paymentSettings = settingsRow || {};
             }
 
             const { data: bookings } = await supabaseClient
