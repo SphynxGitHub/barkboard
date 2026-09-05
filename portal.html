@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Account</title>
+    <link rel="icon" href="https://fav.farm/🐾" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --accent: #4f46e5; --text: #111827; --text-muted: #6b7280; --border: #e5e7eb;
+            --bg: #f9fafb; --surface: #ffffff; --danger: #fee2e2; --danger-text: #991b1b;
+            --success: #d1fae5; --success-text: #065f46;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+        .page { max-width: 640px; margin: 0 auto; padding: 2.5rem 1.25rem; }
+        .center-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.75rem; box-shadow: 0 10px 30px -10px rgba(15,23,42,0.08); }
+        .brand-header { text-align: center; margin-bottom: 1.5rem; }
+        .brand-header h1 { margin: 0.5rem 0 0; font-size: 1.4rem; }
+        .brand-header p { margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.88rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
+        input { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.92rem; font-family: var(--font-sans); background: #fbfbfe; }
+        input:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,0.14); }
+        .btn-primary { width: 100%; padding: 0.7rem; border: none; border-radius: 9px; background: var(--accent); color: #fff; font-size: 0.92rem; font-weight: 600; cursor: pointer; }
+        .btn-primary:disabled { opacity: 0.6; cursor: default; }
+        .msg-box { padding: 0.6rem 0.85rem; border-radius: 8px; font-size: 0.82rem; margin-bottom: 1rem; }
+        .msg-error { background: var(--danger); color: var(--danger-text); }
+        .msg-success { background: var(--success); color: var(--success-text); }
+        .hidden { display: none !important; }
+        .section-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin: 1.75rem 0 0.75rem; }
+        .section-title:first-child { margin-top: 0; }
+        .item-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.6rem; background: var(--surface); }
+        .item-title { font-weight: 600; font-size: 0.92rem; }
+        .item-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+        .status-pill { display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 999px; margin-left: 0.5rem; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-confirmed { background: #d1fae5; color: #065f46; }
+        .status-completed { background: #e5e7eb; color: #374151; }
+        .status-cancelled { background: #fee2e2; color: #991b1b; }
+        .empty-note { font-size: 0.85rem; color: var(--text-muted); padding: 0.5rem 0; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .top-bar h1 { font-size: 1.25rem; margin: 0; }
+        .logout-link { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; cursor: pointer; }
+        .logout-link:hover { color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div id="loading-state" class="center-page"><p style="color:var(--text-muted);">Loading...</p></div>
+
+    <div id="not-available-state" class="center-page hidden">
+        <div style="text-align:center; color:var(--text-muted);">
+            <div style="font-size:2rem;">🐾</div>
+            <p>This portal isn't available.</p>
+        </div>
+    </div>
+
+    <div id="login-state" class="center-page hidden">
+        <div class="card" style="width:100%; max-width:380px;">
+            <div class="brand-header">
+                <div style="font-size:1.8rem;">🐾</div>
+                <h1 id="login-biz-name">Your Account</h1>
+                <p>Enter your email and we'll send you a secure login link — no password needed.</p>
+            </div>
+            <div id="login-error" class="msg-box msg-error hidden"></div>
+            <div id="login-success" class="msg-box msg-success hidden"></div>
+            <form id="login-form" onsubmit="event.preventDefault(); handlePortalLogin();">
+                <div class="form-group">
+                    <label>Your Name</label>
+                    <input type="text" id="p-name" placeholder="For a new account only">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="p-email" required>
+                </div>
+                <button type="submit" class="btn-primary" id="login-submit-btn">Send Login Link</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="portal-content" class="hidden">
+        <div class="page">
+            <div class="top-bar">
+                <h1 id="portal-biz-name">Your Account</h1>
+                <a class="logout-link" onclick="handlePortalLogout()">Sign out</a>
+            </div>
+
+            <div id="review-flag-notice" class="msg-box msg-success hidden">Thanks! We've created your account — a team member will review it shortly to make sure everything's linked up correctly.</div>
+
+            <div class="section-title">Upcoming Appointments</div>
+            <div id="upcoming-list"></div>
+
+            <div class="section-title">Past Appointments</div>
+            <div id="past-list"></div>
+
+            <div class="section-title">Notes For You</div>
+            <div id="notes-list"></div>
+
+            <div class="section-title">Invoices</div>
+            <div id="invoices-list"></div>
+
+            <div class="section-title">Your Pets</div>
+            <div id="pets-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentBiz = null;
+        let currentHouseholdId = null;
+
+        function getSlug() {
+            return new URLSearchParams(window.location.search).get('biz')?.trim() || '';
+        }
+
+        function showState(id) {
+            ['loading-state', 'not-available-state', 'login-state', 'portal-content'].forEach(s => {
+                document.getElementById(s).classList.toggle('hidden', s !== id);
+            });
+        }
+
+        async function init() {
+            const slug = getSlug();
+            if (!slug) return showState('not-available-state');
+
+            const { data: business } = await supabaseClient
+                .from('businesses')
+                .select('id, name, slug, public_booking_enabled')
+                .eq('slug', slug)
+                .eq('public_booking_enabled', true)
+                .maybeSingle();
+
+            if (!business) return showState('not-available-state');
+            currentBiz = business;
+            document.getElementById('login-biz-name').textContent = business.name;
+            document.getElementById('portal-biz-name').textContent = business.name;
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session?.user) {
+                await enterPortal();
+            } else {
+                showState('login-state');
+            }
+
+            supabaseClient.auth.onAuthStateChange((event, newSession) => {
+                if (event === 'SIGNED_IN' && newSession?.user) {
+                    enterPortal();
+                }
+            });
+        }
+
+        async function handlePortalLogin() {
+            const email = document.getElementById('p-email').value.trim();
+            const btn = document.getElementById('login-submit-btn');
+            const errBox = document.getElementById('login-error');
+            const successBox = document.getElementById('login-success');
+            errBox.classList.add('hidden');
+            successBox.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+
+            const { error } = await supabaseClient.auth.signInWithOtp({
+                email,
+                options: { emailRedirectTo: window.location.href }
+            });
+
+            btn.disabled = false;
+            btn.textContent = 'Send Login Link';
+
+            if (error) {
+                errBox.textContent = error.message;
+                errBox.classList.remove('hidden');
+                return;
+            }
+            successBox.textContent = 'Check your email for a secure login link.';
+            successBox.classList.remove('hidden');
+        }
+
+        async function handlePortalLogout() {
+            await supabaseClient.auth.signOut();
+            window.location.reload();
+        }
+
+        async function enterPortal() {
+            const name = document.getElementById('p-name')?.value.trim() || '';
+            const { data: householdId, error } = await supabaseClient.rpc('resolve_or_create_customer_household', {
+                business_slug: currentBiz.slug,
+                customer_name: name
+            });
+
+            if (error || !householdId) {
+                document.getElementById('login-error').textContent = error?.message || 'Could not set up your account. Please contact us directly.';
+                document.getElementById('login-error').classList.remove('hidden');
+                showState('login-state');
+                return;
+            }
+
+            currentHouseholdId = householdId;
+            showState('portal-content');
+            await loadPortalData();
+        }
+
+        function statusPillHtml(status) {
+            const cls = { pending: 'status-pending', confirmed: 'status-confirmed', completed: 'status-completed', cancelled: 'status-cancelled' }[status] || 'status-pending';
+            return `<span class="status-pill ${cls}">${status || 'pending'}</span>`;
+        }
+
+        async function loadPortalData() {
+            const today = new Date().toISOString().slice(0, 10);
+
+            const { data: household } = await supabaseClient.from('households').select('needs_review').eq('id', currentHouseholdId).maybeSingle();
+            document.getElementById('review-flag-notice').classList.toggle('hidden', !household?.needs_review);
+
+            const { data: bookings } = await supabaseClient
+                .from('customer_bookings_view')
+                .select('*, pets(name)')
+                .eq('household_id', currentHouseholdId)
+                .order('check_in', { ascending: false });
+
+            const upcoming = (bookings || []).filter(b => (b.check_in || '').slice(0, 10) >= today && b.status !== 'cancelled');
+            const past = (bookings || []).filter(b => (b.check_in || '').slice(0, 10) < today || b.status === 'cancelled');
+
+            document.getElementById('upcoming-list').innerHTML = upcoming.length
+                ? upcoming.map(b => `
+                    <div class="item-card">
+                        <div class="item-title">${b.pets?.name || 'Pet'} — ${b.service_name}${statusPillHtml(b.status)}</div>
+                        <div class="item-sub">${(b.check_in || '').slice(0, 10)}${b.check_out && b.check_out.slice(0,10) !== b.check_in.slice(0,10) ? ' → ' + b.check_out.slice(0, 10) : ''}${b.amount ? ' · $' + Number(b.amount).toFixed(2) : ''}</div>
+                        ${b.notes ? `<div class="item-sub" style="margin-top:0.4rem;">📝 ${b.notes}</div>` : ''}
+                    </div>
+                `).join('')
+                : '<div class="empty-note">No upcoming appointments.</div>';
+
+            document.getElementById('past-list').innerHTML = past.length
+                ? past.slice(0, 10).map(b => `
+                    <div class="item-card">
+                        <div class="item-title">${b.pets?.name || 'Pet'} — ${b.service_name}${statusPillHtml(b.status)}</div>
+                        <div class="item-sub">${(b.check_in || '').slice(0, 10)}${b.amount ? ' · $' + Number(b.amount).toFixed(2) : ''}</div>
+                    </div>
+                `).join('')
+                : '<div class="empty-note">No past appointments yet.</div>';
+
+            const bookingNotes = (bookings || []).filter(b => b.notes).map(b => ({
+                title: `${b.pets?.name || 'Pet'} — ${b.service_name}`,
+                text: b.notes
+            }));
+
+            const { data: tasks } = await supabaseClient
+                .from('customer_tasks_view')
+                .select('*, pets(name)')
+                .order('due_date', { ascending: true });
+            const taskNotes = (tasks || []).map(t => ({
+                title: t.pets?.name ? `For ${t.pets.name}` : 'Note',
+                text: t.task_text
+            }));
+
+            const allNotes = [...bookingNotes, ...taskNotes];
+            document.getElementById('notes-list').innerHTML = allNotes.length
+                ? allNotes.map(n => `<div class="item-card"><div class="item-title">${n.title}</div><div class="item-sub" style="margin-top:0.3rem;">${n.text}</div></div>`).join('')
+                : '<div class="empty-note">Nothing here yet.</div>';
+
+            const { data: invoices } = await supabaseClient
+                .from('invoices')
+                .select('*')
+                .eq('household_id', currentHouseholdId)
+                .order('due_date', { ascending: false });
+            document.getElementById('invoices-list').innerHTML = (invoices || []).length
+                ? invoices.map(i => `
+                    <div class="item-card">
+                        <div class="item-title">${i.description || 'Invoice'} — $${Number(i.amount || 0).toFixed(2)}${statusPillHtml(i.status)}</div>
+                        <div class="item-sub">Due ${i.due_date || '—'}</div>
+                    </div>
+                `).join('')
+                : '<div class="empty-note">No invoices yet.</div>';
+
+            const { data: pets } = await supabaseClient
+                .from('pets')
+                .select('*')
+                .eq('household_id', currentHouseholdId)
+                .order('name');
+            document.getElementById('pets-list').innerHTML = (pets || []).length
+                ? pets.map(p => `<div class="item-card"><div class="item-title">${p.name}</div><div class="item-sub">${p.species || ''}</div></div>`).join('')
+                : '<div class="empty-note">No pets on file yet.</div>';
+        }
+
+        init();
+    </script>
+</body>
+</html>

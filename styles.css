@@ -284,6 +284,63 @@ body {
   z-index: 1001;
 }
 
+/* Form fields inside modals — .form-group is used across nearly every modal
+   in the app but never had its own styling, so every field (text inputs,
+   selects, textareas, labels) was silently falling back to bare browser
+   defaults. This fixes it everywhere at once rather than one modal at a time. */
+.modal-content .form-group,
+.modal-content h3 + div > .form-group {
+  margin-bottom: 1.1rem;
+}
+
+.modal-content .form-group label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.modal-content .form-group input[type="text"],
+.modal-content .form-group input[type="email"],
+.modal-content .form-group input[type="tel"],
+.modal-content .form-group input[type="number"],
+.modal-content .form-group input[type="date"],
+.modal-content .form-group input[type="time"],
+.modal-content .form-group input[type="password"],
+.modal-content .form-group select,
+.modal-content .form-group textarea {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: var(--font-sans);
+  background: #fbfbfe;
+  color: var(--text);
+}
+
+.modal-content .form-group input:focus,
+.modal-content .form-group select:focus,
+.modal-content .form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+}
+
+.modal-content .form-group textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+/* Checkbox/radio rows (e.g. "Available For", "Category") */
+.modal-content .form-group label[style*="display:flex"],
+.modal-content .form-group label[style*="display: flex"] {
+  font-weight: 400;
+  margin-bottom: 0;
+}
+
 /* Ensure modal overlays stack cleanly above inline full-width views */
 .modal-overlay {
     position: fixed;

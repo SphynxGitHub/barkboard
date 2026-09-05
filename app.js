@@ -1303,6 +1303,7 @@ async function openBookingModal(householdId = null, bookingId = null) {
     if (document.getElementById('bk-final-total')) document.getElementById('bk-final-total').textContent = '$0.00';
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
+    if (document.getElementById('bk-notes-visible-customer')) document.getElementById('bk-notes-visible-customer').checked = false;
     bkEventResources = [];
     activeServicePerDayRate = null;
     if (staffTimeField) staffTimeField.classList.add('hidden');
@@ -1377,6 +1378,7 @@ async function openBookingModal(householdId = null, bookingId = null) {
         if (statusSel) statusSel.value = existingBooking.status || 'pending';
         if (staffSel) staffSel.value = existingBooking.assigned_staff_id || '';
         if (notesInput) notesInput.value = existingBooking.notes || '';
+        if (document.getElementById('bk-notes-visible-customer')) document.getElementById('bk-notes-visible-customer').checked = !!existingBooking.notes_visible_to_customer;
         toggleBookingTypeFields();
 
         // Restore the per-day rate directly from the booking itself (set whenever it was last
@@ -1887,6 +1889,7 @@ async function saveBooking() {
     const requiresStaffTime = !document.getElementById('bk-staff-time-field')?.classList.contains('hidden');
     const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
+    const notesVisibleToCustomer = document.getElementById('bk-notes-visible-customer')?.checked || false;
     
     const petCheckboxes = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked'));
     const petIds = petCheckboxes.map(cb => cb.value);
@@ -1929,6 +1932,7 @@ async function saveBooking() {
         requires_staff_time: requiresStaffTime,
         staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
         notes: notes,
+        notes_visible_to_customer: notesVisibleToCustomer,
         // Persisted so that reopening this booking to edit it can recalculate the total as
         // dates/type change, without needing to re-find or re-select the original template.
         rate_per_day: ratePerDay,
@@ -3032,6 +3036,7 @@ async function renderStaffTasks() {
             <div>
                 <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleStaffTask('${t.id}', ${!t.is_done})">
                 <strong style="${t.is_done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.task_text}</strong>
+                ${t.visible_to_customer ? '<i data-lucide="eye" style="width:12px;height:12px;color:var(--primary); margin-left:0.3rem;" title="Visible to customer"></i>' : ''}
                 <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem;"><i data-lucide="user" style="width:11px;height:11px;"></i> ${t.staff?.name || 'Unassigned'} · Due ${t.due_date || 'no date'}${t.pets?.name ? ' · <i data-lucide="paw-print" style="width:11px;height:11px;"></i> ' + t.pets.name : ''}</span>
             </div>
             <div>
@@ -3112,6 +3117,7 @@ async function openStaffTaskModal(id) {
     if (petSearchInput) petSearchInput.value = '';
     document.getElementById('stsk-pet-search-results').innerHTML = '';
     document.getElementById('stsk-pet-selected')?.classList.add('hidden');
+    const visibleChk = document.getElementById('stsk-visible-customer');
 
     if (id) {
         const client = getSupabase();
@@ -3121,12 +3127,14 @@ async function openStaffTaskModal(id) {
             if (textInput) textInput.value = t.task_text || '';
             if (dueInput) dueInput.value = t.due_date || '';
             if (prioritySel) prioritySel.value = t.priority || 'normal';
+            if (visibleChk) visibleChk.checked = !!t.visible_to_customer;
             if (t.pet_id) selectPetForTask(t.pet_id, t.pets?.name || 'Pet');
         }
     } else {
         if (textInput) textInput.value = '';
         if (dueInput) dueInput.value = '';
         if (prioritySel) prioritySel.value = 'normal';
+        if (visibleChk) visibleChk.checked = false;
     }
 
     const modal = document.getElementById('staff-task-modal');
@@ -3186,13 +3194,14 @@ async function saveStaffTask() {
     const text = document.getElementById('stsk-text')?.value.trim();
     const due = document.getElementById('stsk-due')?.value || null;
     const priority = document.getElementById('stsk-priority')?.value || 'normal';
+    const visibleToCustomer = document.getElementById('stsk-visible-customer')?.checked || false;
 
     if (!text) return alert('Please enter a task description.');
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const payload = { staff_id: staffId, task_text: text, due_date: due, priority, pet_id: editingStaffTaskPetId };
+    const payload = { staff_id: staffId, task_text: text, due_date: due, priority, pet_id: editingStaffTaskPetId, visible_to_customer: visibleToCustomer };
     let response;
     if (editingStaffTaskId) {
         response = await client.from('staff_tasks').update(payload).eq('id', editingStaffTaskId);
@@ -4757,6 +4766,12 @@ async function openFullWidthProfile(type, id) {
                 <div style="display:flex; align-items:center; gap:0.6rem;">
                     <i data-lucide="${iconName}" style="width:24px; height:24px;"></i>
                     <h2 style="margin:0; font-size:1.4rem;">${payload.name || 'Details'}</h2>
+                    ${type === 'household' && payload.needs_review ? `
+                        <span style="display:flex; align-items:center; gap:0.35rem; background:#fef3c7; color:#92400e; font-size:0.75rem; font-weight:700; padding:0.25rem 0.6rem; border-radius:999px;">
+                            <i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Needs Review — new portal signup
+                            <button onclick="markHouseholdReviewed('${id}')" style="background:none; border:none; cursor:pointer; color:#92400e; font-weight:700; text-decoration:underline; padding:0; margin-left:0.3rem; font-size:0.75rem;">Mark Reviewed</button>
+                        </span>
+                    ` : ''}
                 </div>
                 <div style="display:flex; align-items:center; gap:1rem;">
                     <span id="auto-save-status" style="font-size:0.8rem; color:var(--text-muted);">All changes saved</span>
@@ -4778,6 +4793,14 @@ async function openFullWidthProfile(type, id) {
 
 function detailField(label, value) {
     return `<div><span style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em;">${label}</span><div style="font-size:0.9rem; margin-top:0.1rem;">${value || '—'}</div></div>`;
+}
+
+async function markHouseholdReviewed(householdId) {
+    const client = getSupabase();
+    if (!client) return;
+    const { error } = await client.from('households').update({ needs_review: false }).eq('id', householdId);
+    if (error) return alert('Failed to update: ' + error.message);
+    openFullWidthProfile('household', householdId);
 }
 
 function renderDetailsStrip(type, id, data) {
@@ -5072,6 +5095,7 @@ function renderEntitySections(type, data, id) {
                             <div>
                                 <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleStaffTaskOnPetProfile('${t.id}', ${!t.is_done}, '${id}')">
                                 <span style="${t.is_done ? 'text-decoration:line-through;color:var(--text-muted);' : ''}">${t.task_text}</span>
+                                ${t.visible_to_customer ? '<i data-lucide="eye" style="width:12px;height:12px;color:var(--primary); margin-left:0.3rem;" title="Visible to customer"></i>' : ''}
                                 <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.4rem;">${t.staff?.name ? '· ' + t.staff.name : ''} ${t.due_date ? '· Due ' + t.due_date : ''}</span>
                             </div>
                             <div>

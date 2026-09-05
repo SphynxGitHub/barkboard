@@ -771,6 +771,9 @@
                         <option value="low">Low</option>
                     </select>
                 </div>
+                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; font-weight:400; margin-bottom:1rem;">
+                    <input type="checkbox" id="stsk-visible-customer"> <i data-lucide="eye" style="width:14px;height:14px;"></i> Visible to customer in their portal
+                </label>
                 <div class="modal-actions">
                     <button class="btn" onclick="closeStaffTaskModal()">Cancel</button>
                     <button class="btn-primary" onclick="saveStaffTask()">Save</button>
@@ -1418,6 +1421,9 @@
                         <div>
                             <label style="display:block; font-weight:600; margin-bottom:0.35rem;">Notes</label>
                             <textarea id="bk-notes" class="biz-select" style="width:100%; height:80px; padding:0.5rem;" placeholder="Add internal notes or special instructions..."></textarea>
+                            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; font-weight:400; margin-top:0.5rem;">
+                                <input type="checkbox" id="bk-notes-visible-customer"> <i data-lucide="eye" style="width:14px;height:14px;"></i> Visible to customer in their portal
+                            </label>
                         </div>
         
                         <!-- Submit Bar -->
