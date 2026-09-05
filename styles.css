@@ -1532,3 +1532,75 @@ input.biz-select {
   border-radius: 8px;
   margin-bottom: 1rem;
 }
+
+/* ==========================================================================
+   BASE BUTTON — .btn was used in ~30 places across the app with no actual
+   rule defined, so it was silently falling back to bare browser defaults.
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn:hover {
+  background: var(--background);
+  border-color: #d1d5db;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ==========================================================================
+   ONBOARDING WIZARD — dynamic row inputs never had styling; they were
+   rendering as bare, unstyled browser default inputs.
+   ========================================================================== */
+.ob-step input[type="text"],
+.ob-step input[type="number"],
+.ob-step select {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-family: var(--font-sans);
+  background: #fbfbfe;
+  min-width: 0; /* lets flex-basis actually shrink these instead of overflowing the card */
+}
+
+.ob-step input[type="text"]:focus,
+.ob-step input[type="number"]:focus,
+.ob-step select:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+}
+
+.ob-step button[onclick^="obRemoveRow"] {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s ease;
+}
+
+.ob-step button[onclick^="obRemoveRow"]:hover {
+  background: var(--danger);
+  color: var(--danger-text);
+}
