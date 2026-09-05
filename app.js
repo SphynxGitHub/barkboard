@@ -290,8 +290,11 @@ async function computeMetricValue(key, client, ctx) {
 }
 
 /* Fetches the underlying list behind a metric, for the click-through detail
-   modal. Each item gets an optional onclick so staff can jump straight to
-   the relevant record. */
+   modal. Each item gets an optional onclick (jump to the record) and an
+   optional `actions` array (inline buttons — confirm/decline, mark done,
+   mark paid — so status changes can happen right from this list without
+   navigating away). Action onclick strings call back into
+   refreshMetricDetail(key) afterward so the list updates in place. */
 async function getMetricDetailItems(key, client, ctx) {
     if (key === 'pending-requests') {
         const { data } = await client.from('bookings')
@@ -300,30 +303,46 @@ async function getMetricDetailItems(key, client, ctx) {
         return (data || []).map(b => ({
             title: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Service'}`,
             sub: `${b.households?.name || 'Unknown household'} · ${b.check_in ? b.check_in.slice(0, 10) : ''}`,
-            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`
+            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`,
+            actions: [
+                { label: 'Confirm', onclick: `event.stopPropagation(); setBookingStatusFromDetail('${b.id}', 'confirmed', '${key}')` },
+                { label: 'Decline', onclick: `event.stopPropagation(); setBookingStatusFromDetail('${b.id}', 'cancelled', '${key}')` }
+            ]
         }));
     }
     if (key === 'tasks-today') {
         const { data } = await client.from('staff_tasks').select('id, task_text, staff(name)').eq('due_date', ctx.today).eq('is_done', false);
-        return (data || []).map(t => ({ title: t.task_text, sub: t.staff?.name || 'Unassigned' }));
+        return (data || []).map(t => ({
+            title: t.task_text,
+            sub: t.staff?.name || 'Unassigned',
+            actions: [
+                { label: 'Mark Done', onclick: `event.stopPropagation(); setTaskDoneFromDetail('${t.id}', '${key}')` }
+            ]
+        }));
     }
     if (key === 'unpaid-invoices') {
         const { data } = await client.from('invoices').select('id, description, amount, household_id, households(name)').eq('status', 'unpaid').order('due_date');
         return (data || []).map(i => ({
             title: `${i.households?.name || 'Household'} — $${Number(i.amount || 0).toFixed(2)}`,
             sub: i.description || 'Invoice',
-            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${i.household_id}')`
+            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${i.household_id}')`,
+            actions: [
+                { label: 'Mark Paid', onclick: `event.stopPropagation(); setInvoiceStatusFromDetail('${i.id}', 'paid', '${key}')` }
+            ]
         }));
     }
     if (key === 'training-sessions' || key === 'active-bookings-today') {
-        let q = client.from('bookings').select('id, service_name, household_id, pets(name), households(name)')
+        let q = client.from('bookings').select('id, service_name, status, household_id, pets(name), households(name)')
             .neq('status', 'cancelled').lte('check_in', ctx.todayEnd).gte('check_out', ctx.todayStart);
         if (key === 'training-sessions') q = q.eq('requires_staff_time', true);
         const { data } = await q;
         return (data || []).map(b => ({
             title: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Service'}`,
             sub: b.households?.name || '',
-            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`
+            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`,
+            actions: b.status !== 'completed' ? [
+                { label: 'Mark Completed', onclick: `event.stopPropagation(); setBookingStatusFromDetail('${b.id}', 'completed', '${key}')` }
+            ] : []
         }));
     }
     if (key.startsWith('resource-type:')) {
@@ -345,6 +364,48 @@ async function getMetricDetailItems(key, client, ctx) {
         }));
     }
     return [];
+}
+
+/* Shared handlers for the inline action buttons in the metric detail modal.
+   Each updates the record, then re-renders both the open modal (so the item
+   often just disappears from the list once it no longer matches the metric's
+   filter) and the dashboard behind it (so the count stays in sync). */
+async function setBookingStatusFromDetail(bookingId, newStatus, key) {
+    const client = getSupabase();
+    if (!client) return;
+    const { error } = await client.from('bookings').update({ status: newStatus }).eq('id', bookingId);
+    if (error) return alert('Failed to update: ' + error.message);
+    refreshMetricDetail(key);
+    if (typeof renderActivities === 'function') renderActivities();
+}
+
+async function setTaskDoneFromDetail(taskId, key) {
+    const client = getSupabase();
+    if (!client) return;
+    const { error } = await client.from('staff_tasks').update({ is_done: true }).eq('id', taskId);
+    if (error) return alert('Failed to update: ' + error.message);
+    refreshMetricDetail(key);
+    if (typeof renderTodoPanel === 'function') renderTodoPanel();
+}
+
+async function setInvoiceStatusFromDetail(invoiceId, newStatus, key) {
+    const client = getSupabase();
+    if (!client) return;
+    const { error } = await client.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+    if (error) return alert('Failed to update: ' + error.message);
+    refreshMetricDetail(key);
+}
+
+/* Re-renders the currently-open metric detail modal in place, and the
+   dashboard grid behind it (so counts reflect the change immediately). */
+async function refreshMetricDetail(key) {
+    renderTodaysOverview();
+    const client = getSupabase();
+    if (!client) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const ctx = { today, todayStart: today + 'T00:00:00', todayEnd: today + 'T23:59:59' };
+    const items = await getMetricDetailItems(key, client, ctx);
+    renderMetricDetailItems(items);
 }
 
 let dashboardBusinessNotificationEmail = null; // not used directly here, placeholder for future
@@ -411,10 +472,25 @@ async function openMetricDetail(key) {
     document.getElementById('metric-detail-modal')?.classList.remove('hidden');
 
     const items = await getMetricDetailItems(key, client, ctx);
+    renderMetricDetailItems(items);
+}
+
+/* Shared renderer for the metric detail list — used both on initial open and
+   when refreshMetricDetail() re-fetches after an inline action changes
+   something. Item action buttons stop click propagation so they don't also
+   trigger the item's own onclick (which navigates away to the household). */
+function renderMetricDetailItems(items) {
+    const body = document.getElementById('metric-detail-body');
+    if (!body) return;
     body.innerHTML = items.length ? items.map(it => `
         <div style="padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb); ${it.onclick ? 'cursor:pointer;' : ''}" ${it.onclick ? `onclick="${it.onclick}"` : ''}>
             <div style="font-weight:600; font-size:0.88rem;">${it.title}</div>
             ${it.sub ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">${it.sub}</div>` : ''}
+            ${it.actions && it.actions.length ? `
+                <div style="display:flex; gap:0.4rem; margin-top:0.5rem;">
+                    ${it.actions.map(a => `<button type="button" class="btn" style="font-size:0.75rem; padding:0.25rem 0.6rem;" onclick="${a.onclick}">${a.label}</button>`).join('')}
+                </div>
+            ` : ''}
         </div>
     `).join('') : '<div class="biz-empty">Nothing here right now.</div>';
 }
@@ -1365,8 +1441,9 @@ async function saveBooking() {
     const type = document.getElementById('bk-type')?.value || 'appointment';
     const serviceName = document.getElementById('bk-service-type')?.value.trim() || '';
     const startDate = document.getElementById('bk-start-date')?.value || '';
-    const startTime = document.getElementById('bk-start-time')?.value || '00:00';
+    const startTimeRaw = document.getElementById('bk-start-time')?.value || '';
     const endDate = document.getElementById('bk-end-date')?.value || '';
+    const endTimeRaw = document.getElementById('bk-end-time')?.value || '';
     const amountRaw = document.getElementById('bk-amount')?.value;
     const discountRaw = document.getElementById('bk-discount')?.value;
     const rateRaw = document.getElementById('bk-rate-per-day')?.value;
@@ -1374,7 +1451,6 @@ async function saveBooking() {
     const staffId = document.getElementById('bk-staff-id')?.value || null;
     const requiresStaffTime = !document.getElementById('bk-staff-time-field')?.classList.contains('hidden');
     const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
-    const endTime = document.getElementById('bk-end-time')?.value || startTime;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     
     const petCheckboxes = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked'));
@@ -1382,8 +1458,13 @@ async function saveBooking() {
     const petNames = petCheckboxes.map(cb => cb.parentElement?.textContent.trim() || '').filter(Boolean);
 
     if (!startDate) return alert('Please choose a date.');
+    if (!startTimeRaw) return alert(type === 'stay' ? 'Please choose a drop-off time.' : 'Please choose a time.');
     if (type === 'stay' && !endDate) return alert('Please choose an end date for a multi-day stay.');
+    if (type === 'stay' && !endTimeRaw) return alert('Please choose a pickup time.');
     if (petIds.length === 0) return alert('Please select at least one pet.');
+
+    const startTime = startTimeRaw;
+    const endTime = type === 'stay' ? endTimeRaw : startTimeRaw;
 
     // Fallback: If bookingHouseholdId is empty (global search), resolve from selected pet
     let targetHouseholdId = bookingHouseholdId;

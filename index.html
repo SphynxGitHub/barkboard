@@ -1172,7 +1172,7 @@
                             </div>
                             <div id="bk-time-field">
                                 <label id="bk-start-time-label" style="display:block; font-weight:600; margin-bottom:0.35rem;">Drop-off Time</label>
-                                <input type="time" id="bk-start-time" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="time" id="bk-start-time" class="biz-select" style="width:100%; padding:0.5rem;" required>
                             </div>
                         </div>
         
@@ -1184,14 +1184,8 @@
                             </div>
                             <div id="bk-end-time-field">
                                 <label style="display:block; font-weight:600; margin-bottom:0.35rem;">Pickup Time</label>
-                                <input type="time" id="bk-end-time" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="time" id="bk-end-time" class="biz-select" style="width:100%; padding:0.5rem;" required>
                             </div>
-                        </div>
-        
-                        <!-- 10. Invoice -->
-                        <div id="bk-invoice-section" class="hidden" style="padding:1rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
-                            <label style="display:block; font-weight:600; margin-bottom:0.35rem;">Linked Invoice</label>
-                            <div id="bk-invoice-info"></div>
                         </div>
         
                         <!-- 11. Pets / Resources -->
@@ -1208,6 +1202,12 @@
                             <div id="bk-resource-search-results" style="margin-top:0.4rem; display:flex; flex-direction:column; gap:0.3rem; max-height:180px; overflow-y:auto;"></div>
                         </div>
         
+                        <!-- Linked Invoice — sits right above Pricing since they're closely related -->
+                        <div id="bk-invoice-section" class="hidden" style="padding:1rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
+                            <label style="display:block; font-weight:600; margin-bottom:0.35rem;">Linked Invoice</label>
+                            <div id="bk-invoice-info"></div>
+                        </div>
+
                         <!-- Pricing: Rate/day × days = subtotal, then Discount = final total -->
                         <div style="padding:1rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card);">
                             <label style="display:block; font-weight:600; margin-bottom:0.5rem;">Pricing</label>
