@@ -1725,7 +1725,7 @@ async function searchServiceTypeForBooking(query) {
 
     const customRow = q ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(q)}, null, null, false, null, null, "flat")'>Use custom: "${q}"</div>` : '';
 
-    container.innerHTML = rows + customRow || '<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching appointment types — start typing to enter a custom one.</div>';
+    container.innerHTML = rows + customRow || '<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching services — start typing to enter a custom one.</div>';
     container.classList.remove('hidden');
 }
 
@@ -6550,6 +6550,14 @@ function switchTemplatesTab(tab) {
 // ---- Appointment Type Templates ----
 
 let editingApptTypeId = null;
+let apptTypeGroupBy = 'species';
+
+function switchApptTypeGrouping(mode) {
+    apptTypeGroupBy = mode;
+    document.querySelectorAll('[id^="apptgrouptab-"]').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`apptgrouptab-${mode}`)?.classList.add('active');
+    renderApptTypeList();
+}
 
 async function renderApptTypeList() {
     const el = document.getElementById('appt-type-list');
@@ -6559,19 +6567,67 @@ async function renderApptTypeList() {
 
     const { data: list } = await client.from('appointment_type_templates').select('*').order('name');
     if (!list || !list.length) {
-        el.innerHTML = '<div class="biz-empty">No appointment types yet.</div>';
+        el.innerHTML = '<div class="biz-empty">No services yet.</div>';
         return;
     }
 
-    el.innerHTML = list.map(t => `
+    const itemHtml = (t) => `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openApptTypeModal('${t.id}')">
             <div>
                 <strong>${t.name}</strong>
-                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : ' flat') : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''} ${Array.isArray(t.species) && t.species.length ? '· ' + t.species.map(s => s[0].toUpperCase() + s.slice(1)).join('/') + ' only' : ''}</span>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : ' flat') : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''} ${Array.isArray(t.category) && t.category.length ? '· ' + t.category.map(c => c[0].toUpperCase() + c.slice(1)).join(' + ') : ''}</span>
                 ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
                 <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="event.stopPropagation(); deleteApptType('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+            </div>
+        </div>
+    `;
+
+    let groups;
+    if (apptTypeGroupBy === 'none') {
+        groups = [{ label: null, items: list }];
+    } else if (apptTypeGroupBy === 'rate') {
+        groups = [
+            { label: 'Flat Rate', items: list.filter(t => t.pricing_unit !== 'per_day') },
+            { label: 'Per-Day Rate', items: list.filter(t => t.pricing_unit === 'per_day') },
+        ].filter(g => g.items.length);
+    } else if (apptTypeGroupBy === 'resource') {
+        const byResource = {};
+        list.forEach(t => {
+            const key = t.resource_type || 'No Resource Required';
+            if (!byResource[key]) byResource[key] = [];
+            byResource[key].push(t);
+        });
+        groups = Object.keys(byResource).sort((a, b) => a === 'No Resource Required' ? 1 : b === 'No Resource Required' ? -1 : a.localeCompare(b))
+            .map(key => ({ label: key, items: byResource[key] }));
+    } else if (apptTypeGroupBy === 'category') {
+        // Same multi-group logic as species — a combo package tagged with more
+        // than one category (e.g. "Board and Train" = Boarding + Training)
+        // appears under each one, rather than needing its own combo bucket.
+        const categoryLabels = { boarding: 'Boarding', daycare: 'Daycare', grooming: 'Grooming', training: 'Training' };
+        groups = Object.keys(categoryLabels)
+            .map(key => ({ label: categoryLabels[key], items: list.filter(t => Array.isArray(t.category) && t.category.includes(key)) }))
+            .filter(g => g.items.length);
+        const uncategorized = list.filter(t => !Array.isArray(t.category) || !t.category.length);
+        if (uncategorized.length) groups.push({ label: 'Uncategorized', items: uncategorized });
+    } else {
+        // species (default) — a service restricted to more than one species
+        // (e.g. Dog + Cat) appears in each matching group, since "show me
+        // what's available for dogs" naturally includes anything dogs qualify for.
+        groups = [
+            { label: 'All Species', items: list.filter(t => !Array.isArray(t.species) || !t.species.length) },
+            { label: 'Dogs', items: list.filter(t => Array.isArray(t.species) && t.species.includes('dog')) },
+            { label: 'Cats', items: list.filter(t => Array.isArray(t.species) && t.species.includes('cat')) },
+            { label: 'Other', items: list.filter(t => Array.isArray(t.species) && t.species.includes('other')) },
+        ].filter(g => g.items.length);
+    }
+
+    el.innerHTML = groups.map(g => `
+        <div>
+            ${g.label ? `<h4 style="margin:0 0 0.5rem; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-muted);">${g.label}</h4>` : ''}
+            <div style="display:flex; flex-direction:column; gap:0.6rem;">
+                ${g.items.map(itemHtml).join('')}
             </div>
         </div>
     `).join('');
@@ -6581,7 +6637,7 @@ async function renderApptTypeList() {
 async function openApptTypeModal(id) {
     editingApptTypeId = id;
     const titleEl = document.getElementById('appt-type-modal-title');
-    if (titleEl) titleEl.textContent = id ? 'Edit Appointment Type' : 'Add Appointment Type';
+    if (titleEl) titleEl.textContent = id ? 'Edit Service' : 'Add Service';
 
     const nameInput = document.getElementById('att-name');
     const priceInput = document.getElementById('att-price');
@@ -6628,6 +6684,9 @@ async function openApptTypeModal(id) {
     document.querySelectorAll('.att-species-chk').forEach(chk => {
         chk.checked = Array.isArray(t?.species) && t.species.includes(chk.value);
     });
+    document.querySelectorAll('.att-category-chk').forEach(chk => {
+        chk.checked = Array.isArray(t?.category) && t.category.includes(chk.value);
+    });
 
     document.getElementById('appt-type-modal')?.classList.remove('hidden');
 }
@@ -6649,6 +6708,7 @@ async function saveApptType() {
     const staffTimeResourceType = document.getElementById('att-staff-time-resource-type')?.value.trim() || null;
     const notes = document.getElementById('att-notes')?.value.trim() || '';
     const species = Array.from(document.querySelectorAll('.att-species-chk:checked')).map(chk => chk.value);
+    const category = Array.from(document.querySelectorAll('.att-category-chk:checked')).map(chk => chk.value);
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
@@ -6663,7 +6723,8 @@ async function saveApptType() {
         staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
         staff_time_resource_type: requiresStaffTime ? staffTimeResourceType : null,
         notes,
-        species: species.length ? species : null
+        species: species.length ? species : null,
+        category: category.length ? category : null
     };
 
     let response;
@@ -6681,7 +6742,7 @@ async function saveApptType() {
 }
 
 async function deleteApptType(id) {
-    if (!confirm('Remove this appointment type?')) return;
+    if (!confirm('Remove this service?')) return;
     const client = getSupabase();
     if (!client) return;
     await client.from('appointment_type_templates').delete().eq('id', id);

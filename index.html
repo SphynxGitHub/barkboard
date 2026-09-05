@@ -934,7 +934,7 @@
         <!-- ═══ TEMPLATES ═══ -->
         <section id="templates-view" class="view-panel hidden">
             <div class="biz-subnav">
-                <button class="biz-tab active" id="tmpltab-appt" onclick="switchTemplatesTab('appt')"><i data-lucide="calendar-plus"></i> Appointment Types</button>
+                <button class="biz-tab active" id="tmpltab-appt" onclick="switchTemplatesTab('appt')"><i data-lucide="calendar-plus"></i> Services</button>
                 <button class="biz-tab" id="tmpltab-task" onclick="switchTemplatesTab('task')"><i data-lucide="list-checks"></i> Task Templates</button>
                 <button class="biz-tab" id="tmpltab-assess" onclick="switchTemplatesTab('assess')"><i data-lucide="clipboard-check"></i> Assessment Templates</button>
                 <button class="biz-tab" id="tmpltab-resources" onclick="switchTemplatesTab('resources')"><i data-lucide="bed-double"></i> Resources</button>
@@ -942,10 +942,20 @@
 
             <div id="tmplsec-appt" class="biz-section active">
                 <div class="section-header-row" style="margin-bottom:1rem;">
-                    <h3 style="margin:0;">Appointment type presets</h3>
-                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openApptTypeModal(null)">+ Add appointment type</button>
+                    <h3 style="margin:0;">Services & Appointment Types</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openApptTypeModal(null)">+ Add service</button>
                 </div>
-                <div id="appt-type-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+                <div style="margin-bottom:1rem;">
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.35rem;">Group By:</label>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <button class="biz-tab active" id="apptgrouptab-species" onclick="switchApptTypeGrouping('species')">Species</button>
+                        <button class="biz-tab" id="apptgrouptab-category" onclick="switchApptTypeGrouping('category')">Category</button>
+                        <button class="biz-tab" id="apptgrouptab-rate" onclick="switchApptTypeGrouping('rate')">Rate Type</button>
+                        <button class="biz-tab" id="apptgrouptab-resource" onclick="switchApptTypeGrouping('resource')">Resource Type</button>
+                        <button class="biz-tab" id="apptgrouptab-none" onclick="switchApptTypeGrouping('none')">Ungrouped</button>
+                    </div>
+                </div>
+                <div id="appt-type-list" style="display:flex;flex-direction:column;gap:1.25rem;"></div>
             </div>
 
             <div id="tmplsec-task" class="biz-section">
@@ -976,7 +986,7 @@
         <!-- Appointment type template modal -->
         <div id="appt-type-modal" class="modal hidden">
             <div class="modal-content" style="max-width:480px;">
-                <h3 id="appt-type-modal-title" style="margin:0 0 1rem;">Add Appointment Type</h3>
+                <h3 id="appt-type-modal-title" style="margin:0 0 1rem;">Add Service</h3>
                 <div class="form-group"><label>Name</label><input type="text" id="att-name" placeholder="e.g. Agility Training"></div>
                 <div class="form-group"><label>Default Price ($)</label><input type="number" step="0.01" id="att-price" placeholder="50.00"></div>
                 <div class="form-group"><label>Price Applies</label>
@@ -993,6 +1003,15 @@
                         <label style="display:flex; align-items:center; gap:0.4rem; font-weight:400;"><input type="checkbox" class="att-species-chk" value="other"> Other</label>
                     </div>
                     <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Leave all unchecked to make this available for every species.</p>
+                </div>
+                <div class="form-group"><label>Category</label>
+                    <div style="display:flex; gap:1rem; flex-wrap:wrap; padding-top:0.15rem;">
+                        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:400;"><input type="checkbox" class="att-category-chk" value="boarding"> Boarding</label>
+                        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:400;"><input type="checkbox" class="att-category-chk" value="daycare"> Daycare</label>
+                        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:400;"><input type="checkbox" class="att-category-chk" value="grooming"> Grooming</label>
+                        <label style="display:flex; align-items:center; gap:0.4rem; font-weight:400;"><input type="checkbox" class="att-category-chk" value="training"> Training</label>
+                    </div>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Check more than one for a combo package — e.g. "Board and Train" would check both Boarding and Training.</p>
                 </div>
                 <div class="form-group"><label>Requires Resource Type (for the full stay/visit)</label>
                     <input type="text" id="att-resource-type" list="att-resource-type-options" placeholder="Type to select or add a custom type...">
