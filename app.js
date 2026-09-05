@@ -7529,7 +7529,6 @@ async function showReceipt(invoiceId) {
         ${inv.paid_date ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Paid Date:</strong> ${inv.paid_date}</p>` : ''}
         ${inv.payment_method ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Payment Method:</strong> ${inv.payment_method}</p>` : ''}
         <p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem;">Paid in full. Thank you!</p>
-        <p style="color:var(--text-muted); font-size:0.78rem; margin-top:0.75rem; font-style:italic;">Note: email delivery isn't set up yet — this receipt is view/print only for now.</p>
     `);
 }
 

@@ -72,6 +72,7 @@
         .category-card .cat-label { font-weight: 700; font-size: 0.9rem; }
         .group-summary-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; background: #fbfbfe; position: relative; }
         .group-summary-card .cat-tag { display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--accent); margin-bottom: 0.3rem; }
+        .group-price { font-weight: 700; font-size: 0.88rem; margin-top: 0.4rem; }
         .group-remove { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.1rem; padding: 0.1rem 0.4rem; border-radius: 6px; }
         .group-remove:hover { background: var(--danger); color: var(--danger-text); }
         .group-actions { position: absolute; top: 0.6rem; right: 0.6rem; display: flex; gap: 0.2rem; }
@@ -216,6 +217,8 @@
                 <button type="button" class="step-back" onclick="goToStep('category')">← Back</button>
                 <p style="font-size:0.95rem; font-weight:600; margin-bottom:1rem;">Review your requests</p>
                 <div id="review-groups"></div>
+
+                <div id="review-total-fee" class="total-fee-box hidden"></div>
 
                 <button type="button" class="add-pet-link-btn" onclick="goToStep('category')">+ Add Another Service</button>
 
@@ -578,21 +581,38 @@
             document.getElementById('board-times-row').classList.toggle('hidden', !showTimes);
         }
 
-        // Looks up a template's price for the currently-entered boarding dates —
-        // multiplies per-day rates by night count, same logic used everywhere
-        // else prices are calculated.
-        function priceForBoardingDates(templateName) {
+        // Looks up a template's price for a given date range — multiplies
+        // per-day rates by night count, same logic used everywhere else
+        // prices are calculated. Used both live (current form fields) and
+        // for re-computing a stored review group's total from its saved dates.
+        function templatePrice(templateName, startDate, endDate) {
             const t = allTemplates.find(tpl => tpl.name === templateName);
             if (!t || t.default_price == null) return 0;
-            if (t.pricing_unit === 'per_day') {
-                const start = document.getElementById('board-start-date').value;
-                const end = document.getElementById('board-end-date').value;
-                if (start && end && end !== start) {
-                    const days = Math.max(1, Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)));
-                    return Number(t.default_price) * days;
-                }
+            if (t.pricing_unit === 'per_day' && startDate && endDate && endDate !== startDate) {
+                const days = Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)));
+                return Number(t.default_price) * days;
             }
             return Number(t.default_price);
+        }
+
+        function priceForBoardingDates(templateName) {
+            const start = document.getElementById('board-start-date').value;
+            const end = document.getElementById('board-end-date').value;
+            return templatePrice(templateName, start, end);
+        }
+
+        // Sums a review group's total from its saved data (not live form
+        // fields) — used for the per-request price shown in Review and the
+        // running grand total.
+        function computeGroupTotal(group) {
+            let total = 0;
+            if (group.category === 'boarding') {
+                group.pets.forEach(p => { total += templatePrice(p.serviceName, group.startDate, group.endDate); });
+                (group.addOns || []).forEach(a => { total += templatePrice(a.serviceName, group.startDate, group.endDate); });
+            } else {
+                group.pets.forEach(p => { total += templatePrice(p.serviceName, group.date, group.date); });
+            }
+            return total;
         }
 
         function updateBoardingTotal() {
@@ -709,6 +729,7 @@
             const meta = CATEGORY_META[group.category];
             const petLine = group.pets.map(p => `${p.name} (${p.serviceName})`).join(', ');
             const editBtn = `<button type="button" class="group-edit" onclick="editGroup(${index})" title="Edit">✏️</button>`;
+            const priceLine = `<div class="group-price">$${computeGroupTotal(group).toFixed(2)}</div>`;
             if (group.category === 'boarding') {
                 const addOnsText = group.addOns.length ? group.addOns.map(a => `${a.serviceName} (${a.petName})`).join(', ') : '';
                 return `
@@ -718,6 +739,7 @@
                         <div style="font-weight:600; font-size:0.9rem;">${petLine}</div>
                         <div class="field-hint" style="margin-top:0.2rem;">${group.startDate} → ${group.endDate}${group.dropoffTime ? ' · Drop-off ' + group.dropoffTime : ''}${group.pickupTime ? ' · Pickup ' + group.pickupTime : ''}</div>
                         ${addOnsText ? `<div class="field-hint" style="margin-top:0.2rem;">Add-ons: ${addOnsText}</div>` : ''}
+                        ${priceLine}
                     </div>
                 `;
             }
@@ -727,6 +749,7 @@
                     <span class="cat-tag">${meta.icon} ${meta.label}</span>
                     <div style="font-weight:600; font-size:0.9rem;">${petLine}</div>
                     <div class="field-hint" style="margin-top:0.2rem;">${group.date} at ${group.time}</div>
+                    ${priceLine}
                 </div>
             `;
         }
@@ -803,6 +826,13 @@
             container.innerHTML = bookingGroups.length
                 ? bookingGroups.map((g, i) => groupSummaryHtml(g, i)).join('')
                 : '<p class="field-hint">Nothing added yet.</p>';
+
+            const grandTotal = bookingGroups.reduce((sum, g) => sum + computeGroupTotal(g), 0);
+            const totalBox = document.getElementById('review-total-fee');
+            if (totalBox) {
+                totalBox.classList.toggle('hidden', !bookingGroups.length);
+                totalBox.textContent = `Total: $${grandTotal.toFixed(2)}`;
+            }
         }
 
         async function submitAllBookings() {
