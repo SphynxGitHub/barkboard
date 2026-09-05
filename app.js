@@ -207,33 +207,326 @@ function bootstrapApp() {
     }
 }
 
+/* ==========================================================================
+   DASHBOARD METRICS SYSTEM (Staff Feed "Today's Overview")
+   ========================================================================== */
+
+const DEFAULT_DASHBOARD_METRICS = ['pending-requests', 'tasks-today', 'unpaid-invoices', 'training-sessions'];
+const MAX_DASHBOARD_METRICS = 10;
+
+// Static metric definitions. Resource-type metrics (kennels/suites/runs/etc.)
+// are appended dynamically in getAvailableMetrics() below, pulled from
+// whatever types actually exist in the resources table — not hardcoded to
+// "cat/dog/other", since a business's resource types are whatever they've
+// set up in Templates → Resources.
+const STATIC_METRIC_DEFS = {
+    'pending-requests': { label: 'Pending Requests', icon: 'bell' },
+    'tasks-today': { label: 'Tasks Remaining', icon: 'list-checks' },
+    'unpaid-invoices': { label: 'Pending Invoices', icon: 'receipt' },
+    'training-sessions': { label: 'Training Sessions', icon: 'dumbbell' },
+    'active-bookings-today': { label: "Today's Bookings", icon: 'calendar-check' },
+};
+
+async function getAvailableMetrics(client) {
+    const { data: resourceRows } = await client.from('resources').select('type');
+    const types = Array.from(new Set((resourceRows || []).map(r => r.type).filter(Boolean))).sort();
+    const dynamic = types.map(t => ({ key: `resource-type:${t}`, label: `${t} Occupancy`, icon: 'home' }));
+    const staticList = Object.keys(STATIC_METRIC_DEFS).map(key => ({ key, ...STATIC_METRIC_DEFS[key] }));
+    return [...staticList, ...dynamic];
+}
+
+function metricLabel(key, availableMetrics) {
+    const found = availableMetrics.find(m => m.key === key);
+    if (found) return found.label;
+    if (key.startsWith('resource-type:')) return `${key.slice('resource-type:'.length)} Occupancy`;
+    return key;
+}
+
+/* Computes today's value for one metric. `ctx` carries pre-computed date
+   strings so every metric doesn't redo the same Date math. */
+async function computeMetricValue(key, client, ctx) {
+    if (key === 'pending-requests') {
+        const { data } = await client.from('bookings').select('id').eq('status', 'pending').eq('source', 'public');
+        const count = (data || []).length;
+        return { value: String(count), alert: count > 0 };
+    }
+    if (key === 'tasks-today') {
+        const { data } = await client.from('staff_tasks').select('id').eq('due_date', ctx.today).eq('is_done', false);
+        return { value: String((data || []).length) };
+    }
+    if (key === 'unpaid-invoices') {
+        const { data } = await client.from('invoices').select('id').eq('status', 'unpaid');
+        const count = (data || []).length;
+        return { value: String(count), alert: count > 0 };
+    }
+    if (key === 'training-sessions') {
+        const { data } = await client.from('bookings').select('id')
+            .eq('requires_staff_time', true).neq('status', 'cancelled')
+            .lte('check_in', ctx.todayEnd).gte('check_out', ctx.todayStart);
+        return { value: String((data || []).length) };
+    }
+    if (key === 'active-bookings-today') {
+        const { data } = await client.from('bookings').select('id')
+            .neq('status', 'cancelled')
+            .lte('check_in', ctx.todayEnd).gte('check_out', ctx.todayStart);
+        return { value: String((data || []).length) };
+    }
+    if (key.startsWith('resource-type:')) {
+        const type = key.slice('resource-type:'.length);
+        const { data: resources } = await client.from('resources').select('id').eq('type', type);
+        const resourceIds = (resources || []).map(r => r.id);
+        let occupied = 0;
+        if (resourceIds.length) {
+            const { data: bookedRows } = await client.from('booking_resources')
+                .select('resource_id, bookings!inner(check_in, check_out, status)')
+                .in('resource_id', resourceIds)
+                .neq('bookings.status', 'cancelled')
+                .lte('bookings.check_in', ctx.todayEnd).gte('bookings.check_out', ctx.todayStart);
+            occupied = new Set((bookedRows || []).map(r => r.resource_id)).size;
+        }
+        return { value: `${occupied} / ${resourceIds.length}` };
+    }
+    return { value: '—' };
+}
+
+/* Fetches the underlying list behind a metric, for the click-through detail
+   modal. Each item gets an optional onclick so staff can jump straight to
+   the relevant record. */
+async function getMetricDetailItems(key, client, ctx) {
+    if (key === 'pending-requests') {
+        const { data } = await client.from('bookings')
+            .select('id, service_name, check_in, household_id, pets(name), households(name)')
+            .eq('status', 'pending').eq('source', 'public').order('check_in');
+        return (data || []).map(b => ({
+            title: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Service'}`,
+            sub: `${b.households?.name || 'Unknown household'} · ${b.check_in ? b.check_in.slice(0, 10) : ''}`,
+            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`
+        }));
+    }
+    if (key === 'tasks-today') {
+        const { data } = await client.from('staff_tasks').select('id, task_text, staff(name)').eq('due_date', ctx.today).eq('is_done', false);
+        return (data || []).map(t => ({ title: t.task_text, sub: t.staff?.name || 'Unassigned' }));
+    }
+    if (key === 'unpaid-invoices') {
+        const { data } = await client.from('invoices').select('id, description, amount, household_id, households(name)').eq('status', 'unpaid').order('due_date');
+        return (data || []).map(i => ({
+            title: `${i.households?.name || 'Household'} — $${Number(i.amount || 0).toFixed(2)}`,
+            sub: i.description || 'Invoice',
+            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${i.household_id}')`
+        }));
+    }
+    if (key === 'training-sessions' || key === 'active-bookings-today') {
+        let q = client.from('bookings').select('id, service_name, household_id, pets(name), households(name)')
+            .neq('status', 'cancelled').lte('check_in', ctx.todayEnd).gte('check_out', ctx.todayStart);
+        if (key === 'training-sessions') q = q.eq('requires_staff_time', true);
+        const { data } = await q;
+        return (data || []).map(b => ({
+            title: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Service'}`,
+            sub: b.households?.name || '',
+            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`
+        }));
+    }
+    if (key.startsWith('resource-type:')) {
+        const type = key.slice('resource-type:'.length);
+        const { data: resources } = await client.from('resources').select('id, name').eq('type', type);
+        const resourceIds = (resources || []).map(r => r.id);
+        if (!resourceIds.length) return [];
+        const { data: bookedRows } = await client.from('booking_resources')
+            .select('resource_id, bookings!inner(id, household_id, check_in, check_out, status, pets(name), households(name))')
+            .in('resource_id', resourceIds)
+            .neq('bookings.status', 'cancelled')
+            .lte('bookings.check_in', ctx.todayEnd).gte('bookings.check_out', ctx.todayStart);
+        const resourceNameById = {};
+        resources.forEach(r => { resourceNameById[r.id] = r.name; });
+        return (bookedRows || []).map(row => ({
+            title: `${resourceNameById[row.resource_id] || 'Resource'} — ${row.bookings?.pets?.name || 'Pet'}`,
+            sub: row.bookings?.households?.name || '',
+            onclick: row.bookings?.household_id ? `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${row.bookings.household_id}')` : undefined
+        }));
+    }
+    return [];
+}
+
+let dashboardBusinessNotificationEmail = null; // not used directly here, placeholder for future
+
 async function renderTodaysOverview() {
     const client = getSupabase();
     if (!client) return;
 
+    const grid = document.getElementById('dashboard-metrics-grid');
+    if (!grid) return;
+
     const today = new Date().toISOString().slice(0, 10);
-    const todayStart = today + 'T00:00:00';
-    const todayEnd = today + 'T23:59:59';
+    const ctx = { today, todayStart: today + 'T00:00:00', todayEnd: today + 'T23:59:59' };
 
-    const [{ data: resources }, { data: todaysBookings }, { data: pendingInvoices }, { data: openTasks }] = await Promise.all([
-        client.from('resources').select('id'),
-        client.from('bookings').select('space_id, requires_staff_time, status')
-            .neq('status', 'cancelled')
-            .lte('check_in', todayEnd).gte('check_out', todayStart),
-        client.from('invoices').select('id').eq('status', 'unpaid'),
-        client.from('staff_tasks').select('id').eq('is_done', false)
-    ]);
+    const { data: business } = await client.from('businesses').select('dashboard_metrics').eq('id', currentBusinessId).single();
+    const availableMetrics = await getAvailableMetrics(client);
+    const availableKeys = new Set(availableMetrics.map(m => m.key));
 
-    const totalResources = (resources || []).length;
-    const occupiedResources = new Set((todaysBookings || []).filter(bk => bk.space_id).map(bk => bk.space_id)).size;
-    const trainingSessions = (todaysBookings || []).filter(bk => bk.requires_staff_time).length;
+    let chosenKeys = (business?.dashboard_metrics && business.dashboard_metrics.length)
+        ? business.dashboard_metrics.filter(k => availableKeys.has(k))
+        : DEFAULT_DASHBOARD_METRICS.filter(k => availableKeys.has(k));
+    if (!chosenKeys.length) chosenKeys = availableMetrics.slice(0, 4).map(m => m.key);
+    chosenKeys = chosenKeys.slice(0, MAX_DASHBOARD_METRICS);
 
-    const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-    setText('stat-kennels', `${occupiedResources} / ${totalResources}`);
-    setText('stat-training', String(trainingSessions));
-    setText('stat-invoices', String((pendingInvoices || []).length));
-    setText('stat-tasks', String((openTasks || []).length));
+    const results = await Promise.all(chosenKeys.map(key => computeMetricValue(key, client, ctx)));
+
+    grid.innerHTML = chosenKeys.map((key, idx) => {
+        const def = availableMetrics.find(m => m.key === key) || { label: metricLabel(key, availableMetrics), icon: 'circle' };
+        const r = results[idx];
+        return `
+            <div class="stat-card biz-clickable ${r.alert ? 'alert' : ''}" onclick="openMetricDetail('${key.replace(/'/g, "\\'")}')">
+                <h3><i data-lucide="${def.icon}" style="width:14px;height:14px;vertical-align:-2px;"></i> ${def.label}</h3>
+                <p>${r.value}</p>
+                <div class="stat-card-hint">View details</div>
+            </div>
+        `;
+    }).join('');
+    refreshIcons();
+
+    // Pending-requests callout — separate from the metrics grid since it's an
+    // action prompt, not just a number, and should stay visible even if the
+    // person hasn't chosen "Pending Requests" as one of their picked metrics.
+    const { data: pending } = await client.from('bookings').select('id').eq('status', 'pending').eq('source', 'public');
+    const pendingCount = (pending || []).length;
+    const callout = document.getElementById('pending-requests-callout');
+    if (callout) {
+        callout.classList.toggle('hidden', pendingCount === 0);
+        const textEl = document.getElementById('pending-requests-text');
+        if (textEl) textEl.textContent = `${pendingCount} new booking request${pendingCount === 1 ? '' : 's'} need${pendingCount === 1 ? 's' : ''} your review`;
+    }
 }
+
+async function openMetricDetail(key) {
+    const client = getSupabase();
+    if (!client) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const ctx = { today, todayStart: today + 'T00:00:00', todayEnd: today + 'T23:59:59' };
+    const availableMetrics = await getAvailableMetrics(client);
+
+    document.getElementById('metric-detail-title').textContent = metricLabel(key, availableMetrics);
+    const body = document.getElementById('metric-detail-body');
+    body.innerHTML = '<div class="biz-empty">Loading...</div>';
+    document.getElementById('metric-detail-modal')?.classList.remove('hidden');
+
+    const items = await getMetricDetailItems(key, client, ctx);
+    body.innerHTML = items.length ? items.map(it => `
+        <div style="padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover,#f9fafb); ${it.onclick ? 'cursor:pointer;' : ''}" ${it.onclick ? `onclick="${it.onclick}"` : ''}>
+            <div style="font-weight:600; font-size:0.88rem;">${it.title}</div>
+            ${it.sub ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">${it.sub}</div>` : ''}
+        </div>
+    `).join('') : '<div class="biz-empty">Nothing here right now.</div>';
+}
+
+function closeMetricDetailModal() {
+    document.getElementById('metric-detail-modal')?.classList.add('hidden');
+}
+
+async function openDashboardSettingsModal() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: business } = await client.from('businesses').select('dashboard_metrics').eq('id', currentBusinessId).single();
+    const availableMetrics = await getAvailableMetrics(client);
+    const chosen = new Set(
+        (business?.dashboard_metrics && business.dashboard_metrics.length ? business.dashboard_metrics : DEFAULT_DASHBOARD_METRICS)
+            .filter(k => availableMetrics.some(m => m.key === k))
+    );
+
+    const list = document.getElementById('dashboard-settings-list');
+    list.innerHTML = availableMetrics.map(m => `
+        <label style="display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.65rem; border:1px solid var(--border); border-radius:0.375rem; font-weight:400; cursor:pointer;">
+            <input type="checkbox" class="dash-metric-chk" value="${m.key}" ${chosen.has(m.key) ? 'checked' : ''} onchange="updateDashboardSettingsCount()">
+            <i data-lucide="${m.icon}" style="width:15px;height:15px;"></i> ${m.label}
+        </label>
+    `).join('');
+    refreshIcons();
+    updateDashboardSettingsCount();
+
+    document.getElementById('dashboard-settings-modal')?.classList.remove('hidden');
+}
+
+function updateDashboardSettingsCount() {
+    const checked = document.querySelectorAll('.dash-metric-chk:checked');
+    const countEl = document.getElementById('dashboard-settings-count');
+    if (countEl) countEl.textContent = `${checked.length} / ${MAX_DASHBOARD_METRICS} selected`;
+
+    // Once 10 are picked, disable the rest rather than letting the count go over
+    const atLimit = checked.length >= MAX_DASHBOARD_METRICS;
+    document.querySelectorAll('.dash-metric-chk').forEach(chk => {
+        if (!chk.checked) chk.disabled = atLimit;
+    });
+}
+
+function closeDashboardSettingsModal() {
+    document.getElementById('dashboard-settings-modal')?.classList.add('hidden');
+}
+
+async function saveDashboardSettings() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const chosen = Array.from(document.querySelectorAll('.dash-metric-chk:checked')).map(chk => chk.value).slice(0, MAX_DASHBOARD_METRICS);
+    if (!chosen.length) return alert('Please select at least one metric.');
+
+    const { error } = await client.from('businesses').update({ dashboard_metrics: chosen }).eq('id', currentBusinessId);
+    if (error) return alert('Failed to save: ' + error.message);
+
+    closeDashboardSettingsModal();
+    renderTodaysOverview();
+}
+
+async function openPendingRequestsModal() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const list = document.getElementById('pending-requests-list');
+    list.innerHTML = '<div class="biz-empty">Loading...</div>';
+    document.getElementById('pending-requests-modal')?.classList.remove('hidden');
+
+    const { data } = await client.from('bookings')
+        .select('id, service_name, check_in, check_out, amount, notes, household_id, pets(name), households(name)')
+        .eq('status', 'pending').eq('source', 'public').order('check_in');
+
+    const requests = data || [];
+    list.innerHTML = requests.length ? requests.map(b => `
+        <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
+            <div style="display:flex; justify-content:space-between; align-items:start; gap:0.5rem;">
+                <div>
+                    <strong>${b.pets?.name || 'Pet'}</strong> <span style="color:var(--text-muted); font-size:0.85rem;">(${b.households?.name || 'Unknown'})</span>
+                    <div style="font-size:0.85rem; margin-top:0.2rem;">${b.service_name || 'Service'} · ${(b.check_in || '').slice(0, 10)}${b.check_out && b.check_out.slice(0, 10) !== (b.check_in || '').slice(0, 10) ? ' → ' + b.check_out.slice(0, 10) : ''}</div>
+                    ${b.amount ? `<div style="font-size:0.85rem; color:var(--text-muted);">$${Number(b.amount).toFixed(2)}</div>` : ''}
+                    ${b.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.35rem; white-space:pre-wrap;">${b.notes}</div>` : ''}
+                </div>
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:0.65rem;">
+                <button class="btn btn-primary" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="respondToPendingRequest('${b.id}', 'confirmed')">Confirm</button>
+                <button class="btn" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="respondToPendingRequest('${b.id}', 'cancelled')">Decline</button>
+                <button class="btn" style="font-size:0.8rem; padding:0.35rem 0.75rem; margin-left:auto;" onclick="closePendingRequestsModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')">View Household</button>
+            </div>
+        </div>
+    `).join('') : '<div class="biz-empty">No pending requests.</div>';
+}
+
+async function respondToPendingRequest(bookingId, newStatus) {
+    const client = getSupabase();
+    if (!client) return;
+    const { error } = await client.from('bookings').update({ status: newStatus }).eq('id', bookingId);
+    if (error) {
+        alert('Failed to update: ' + error.message);
+        return;
+    }
+    openPendingRequestsModal(); // refresh the list in place
+    renderTodaysOverview();
+    if (typeof renderActivities === 'function') renderActivities();
+}
+
+function closePendingRequestsModal() {
+    document.getElementById('pending-requests-modal')?.classList.add('hidden');
+}
+
+
 
 async function renderTodoPanel() {
     const body = document.getElementById('todo-list-body');
@@ -2783,6 +3076,9 @@ function switchBizTab(tab) {
     }
     if (tab === 'public-booking' && typeof loadPublicBookingSettings === 'function') {
         loadPublicBookingSettings();
+    }
+    if (tab === 'email-settings' && typeof loadEmailSettings === 'function') {
+        loadEmailSettings();
     }
 }
 
@@ -6056,7 +6352,7 @@ async function loadPublicBookingSettings() {
     if (!client) return;
 
     const { data: business, error } = await client.from('businesses')
-        .select('name, slug, public_booking_enabled, logo_url, accent_color, welcome_message')
+        .select('name, slug, public_booking_enabled, logo_url, accent_color, welcome_message, notification_email')
         .eq('id', currentBusinessId)
         .single();
 
@@ -6066,6 +6362,7 @@ async function loadPublicBookingSettings() {
     }
 
     document.getElementById('pb-business-name').value = business.name || '';
+    document.getElementById('pb-notify-email').value = business.notification_email || '';
     const enabledChk = document.getElementById('pb-enabled');
     if (enabledChk) enabledChk.checked = !!business.public_booking_enabled;
     document.getElementById('pb-welcome').value = business.welcome_message || '';
@@ -6134,7 +6431,8 @@ async function savePublicBookingSettings() {
         public_booking_enabled: enabled,
         welcome_message: document.getElementById('pb-welcome')?.value.trim() || null,
         logo_url: document.getElementById('pb-logo-url')?.value.trim() || null,
-        accent_color: document.getElementById('pb-accent-color')?.value || '#4f46e5'
+        accent_color: document.getElementById('pb-accent-color')?.value || '#4f46e5',
+        notification_email: document.getElementById('pb-notify-email')?.value.trim() || null
     };
     // slug is NOT NULL in the schema — only include it in the update if there's
     // actually a value, so an empty field never tries to null it out (which
@@ -6167,6 +6465,70 @@ function copyPublicBookingLink() {
         // Fallback for browsers without Clipboard API permission
         document.execCommand('copy');
     });
+}
+
+/* ==========================================================================
+   EMAIL (SMTP) SETTINGS — per-business credentials for booking-request
+   notifications, sent by the create-public-booking Edge Function.
+   ========================================================================== */
+
+async function loadEmailSettings() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data, error } = await client.from('business_email_settings')
+        .select('smtp_host, smtp_port, smtp_username, from_email, from_name')
+        .eq('business_id', currentBusinessId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Failed to load email settings:', error);
+        return;
+    }
+
+    document.getElementById('em-host').value = data?.smtp_host || '';
+    document.getElementById('em-port').value = data?.smtp_port || 587;
+    document.getElementById('em-username').value = data?.smtp_username || '';
+    document.getElementById('em-from-email').value = data?.from_email || '';
+    document.getElementById('em-from-name').value = data?.from_name || '';
+    // Password is intentionally never loaded back into the field — the
+    // placeholder text ("Leave blank to keep current password") is the only
+    // indication one is or isn't already saved.
+    document.getElementById('em-password').value = '';
+}
+
+async function saveEmailSettings() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const host = document.getElementById('em-host')?.value.trim() || '';
+    const port = parseInt(document.getElementById('em-port')?.value, 10) || 587;
+    const username = document.getElementById('em-username')?.value.trim() || '';
+    const fromEmail = document.getElementById('em-from-email')?.value.trim() || '';
+    const fromName = document.getElementById('em-from-name')?.value.trim() || '';
+    const password = document.getElementById('em-password')?.value; // not trimmed — passwords can legitimately have meaningful whitespace
+
+    const payload = {
+        business_id: currentBusinessId,
+        smtp_host: host || null,
+        smtp_port: port,
+        smtp_username: username || null,
+        from_email: fromEmail || null,
+        from_name: fromName || null,
+        updated_at: new Date().toISOString()
+    };
+    // Only touch the password column if they actually typed something —
+    // leaving the field blank means "keep whatever's already saved", not
+    // "clear it out".
+    if (password) payload.smtp_password = password;
+
+    const { error } = await client.from('business_email_settings')
+        .upsert(payload, { onConflict: 'business_id' });
+
+    if (error) return alert('Failed to save: ' + error.message);
+
+    document.getElementById('em-password').value = '';
+    alert('Email settings saved.');
 }
 
 function closeDocumentOverlay() {
