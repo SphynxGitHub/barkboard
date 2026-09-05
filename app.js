@@ -3780,14 +3780,10 @@ function switchBizTab(tab) {
     if (tab === 'invoices' && typeof renderInvoicesList === 'function') {
         renderInvoicesList();
     }
-    if (tab === 'payments' && typeof loadBusinessPaymentSettings === 'function') {
-        loadBusinessPaymentSettings();
-    }
-    if (tab === 'public-booking' && typeof loadPublicBookingSettings === 'function') {
-        loadPublicBookingSettings();
-    }
-    if (tab === 'email-settings' && typeof loadEmailSettings === 'function') {
-        loadEmailSettings();
+    if (tab === 'business-settings') {
+        if (typeof loadPublicBookingSettings === 'function') loadPublicBookingSettings();
+        if (typeof loadBusinessPaymentSettings === 'function') loadBusinessPaymentSettings();
+        if (typeof loadEmailSettings === 'function') loadEmailSettings();
     }
 }
 
@@ -7235,27 +7231,27 @@ async function loadBusinessPaymentSettings() {
     const s = await getBusinessSettings();
     if (!s) return;
     const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-    setVal('pay-business-name', s.business_name);
     setVal('pay-venmo', s.venmo_handle);
     setVal('pay-zelle', s.zelle_info);
     setVal('pay-cash', s.cash_note);
     setVal('pay-square', s.square_link);
-    setVal('pay-logo-url', s.logo_url);
-    const preview = document.getElementById('pay-logo-preview');
-    if (preview && s.logo_url) { preview.src = s.logo_url; preview.style.display = 'block'; }
 }
 
 async function saveBusinessPaymentSettings() {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
+    // business_name/logo_url live in business_settings for historical reasons
+    // (receipts read from here), but are now edited once, in the Business
+    // Information section above, and just kept in sync here rather than
+    // duplicated as their own fields.
     const payload = {
-        business_name: document.getElementById('pay-business-name')?.value.trim() || '',
+        business_name: document.getElementById('pb-business-name')?.value.trim() || '',
+        logo_url: document.getElementById('pb-logo-url')?.value.trim() || '',
         venmo_handle: document.getElementById('pay-venmo')?.value.trim() || '',
         zelle_info: document.getElementById('pay-zelle')?.value.trim() || '',
         cash_note: document.getElementById('pay-cash')?.value.trim() || '',
-        square_link: document.getElementById('pay-square')?.value.trim() || '',
-        logo_url: document.getElementById('pay-logo-url')?.value.trim() || ''
+        square_link: document.getElementById('pay-square')?.value.trim() || ''
     };
 
     const existing = await getBusinessSettings();
