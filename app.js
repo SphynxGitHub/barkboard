@@ -97,6 +97,19 @@ function hideAuthGate() {
     document.getElementById('auth-gate')?.classList.add('hidden');
 }
 
+/* Toggles between the Sign In and Create Account forms on the auth gate. */
+function showAuthTab(tab) {
+    const isSignup = tab === 'signup';
+    document.getElementById('auth-login-form')?.classList.toggle('hidden', isSignup);
+    document.getElementById('auth-signup-form')?.classList.toggle('hidden', !isSignup);
+    document.getElementById('auth-toggle-to-signup')?.classList.toggle('hidden', isSignup);
+    document.getElementById('auth-toggle-to-login')?.classList.toggle('hidden', !isSignup);
+    document.getElementById('auth-gate-subtitle').textContent = isSignup ? 'Create your business account' : 'Sign in to your business';
+    document.getElementById('auth-error')?.classList.add('hidden');
+    document.getElementById('signup-error')?.classList.add('hidden');
+    document.getElementById('auth-success-box')?.classList.add('hidden');
+}
+
 async function handleLoginSubmit() {
     const client = getSupabase();
     if (!client) return showAuthGate('Database connection unavailable.');
@@ -117,6 +130,68 @@ async function handleLoginSubmit() {
 
     currentUser = data.user;
     await resolveBusinessAndEnterApp();
+}
+
+/* Creates a new Supabase Auth user AND a new business for them in one flow,
+   using the create_business_for_current_user() RPC (see migration 005) so
+   the business + owner-membership rows are created atomically and safely,
+   without needing to loosen RLS on businesses/business_members directly. */
+async function handleSignupSubmit() {
+    const client = getSupabase();
+    if (!client) return showSignupError('Database connection unavailable.');
+
+    const businessName = document.getElementById('signup-business-name')?.value.trim();
+    const email = document.getElementById('signup-email')?.value.trim();
+    const password = document.getElementById('signup-password')?.value;
+    const submitBtn = document.getElementById('signup-submit-btn');
+
+    if (!businessName) return showSignupError('Please enter your business name.');
+
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating account...'; }
+
+    const { data: signUpData, error: signUpError } = await client.auth.signUp({ email, password });
+
+    if (signUpError) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
+        return showSignupError(signUpError.message);
+    }
+
+    // If the Supabase project has email confirmation turned on, signUp()
+    // succeeds but doesn't return a usable session yet — the person has to
+    // confirm their email and then log in normally. If confirmation is off,
+    // a session comes back immediately and we can finish setup right away.
+    if (!signUpData.session) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
+        showAuthTab('login');
+        const successBox = document.getElementById('auth-success-box');
+        if (successBox) {
+            successBox.textContent = 'Account created! Check your email to confirm it, then sign in below.';
+            successBox.classList.remove('hidden');
+        }
+        return;
+    }
+
+    currentUser = signUpData.user;
+
+    const slug = slugify(businessName) || `business-${Date.now()}`;
+    const { error: bizError } = await client.rpc('create_business_for_current_user', {
+        business_name: businessName,
+        business_slug: slug
+    });
+
+    if (bizError) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
+        return showSignupError('Account created, but setting up your business failed: ' + bizError.message + '. Please contact support.');
+    }
+
+    await resolveBusinessAndEnterApp();
+}
+
+function showSignupError(message) {
+    const errEl = document.getElementById('signup-error');
+    if (!errEl) return;
+    errEl.textContent = message;
+    errEl.classList.remove('hidden');
 }
 
 async function handleLogout() {
