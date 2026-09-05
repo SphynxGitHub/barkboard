@@ -248,7 +248,13 @@
     <script>
         const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            // Same key as portal.html deliberately — book.html's "already logged in"
+            // fast path (via the portal's "Book a Service" button) depends on
+            // reading that same session. Must stay different from the staff app's
+            // key though, so testing both in one browser doesn't collide.
+            auth: { storageKey: 'barkboard-customer-auth' }
+        });
 
         let currentBusiness = null;
         let allTemplates = [];

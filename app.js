@@ -59,7 +59,14 @@ function getSupabase() {
             console.error('Supabase Client SDK has not loaded yet.');
             return null;
         }
-        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            // Without this, this staff app and the customer portal (portal.html)
+            // share the exact same localStorage session slot by default (same
+            // origin, same Supabase project) — logging into one silently logs
+            // out the other. A distinct storage key per surface keeps their
+            // sessions completely independent.
+            auth: { storageKey: 'barkboard-staff-auth' }
+        });
     }
     return window.supabaseClient;
 }
@@ -668,7 +675,14 @@ function metricLabel(key, availableMetrics) {
    strings so every metric doesn't redo the same Date math. */
 async function computeMetricValue(key, client, ctx) {
     if (key === 'pending-requests') {
-        const { data } = await client.from('bookings').select('id').eq('status', 'pending').eq('source', 'public');
+        // A flexible-time add-on (e.g. a grooming session tacked onto a boarding
+        // stay, to be scheduled whenever works during the visit) stays counted
+        // here even after being "confirmed" — confirming it isn't the same as
+        // actually giving it a real time, and it's easy for a flexible request
+        // with no set time to quietly fall through the cracks otherwise.
+        const { data } = await client.from('bookings').select('id')
+            .eq('source', 'public')
+            .or('status.eq.pending,and(flexible_time.eq.true,status.neq.cancelled)');
         const count = (data || []).length;
         return { value: String(count), alert: count > 0 };
     }
@@ -720,17 +734,23 @@ async function computeMetricValue(key, client, ctx) {
 async function getMetricDetailItems(key, client, ctx) {
     if (key === 'pending-requests') {
         const { data } = await client.from('bookings')
-            .select('id, service_name, check_in, household_id, pets(name), households(name)')
-            .eq('status', 'pending').eq('source', 'public').order('check_in');
-        return (data || []).map(b => ({
-            title: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Service'}`,
-            sub: `${b.households?.name || 'Unknown household'} · ${b.check_in ? b.check_in.slice(0, 10) : ''}`,
-            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`,
-            actions: [
-                { label: 'Confirm', onclick: `event.stopPropagation(); setBookingStatusFromDetail('${b.id}', 'confirmed', '${key}')` },
-                { label: 'Decline', onclick: `event.stopPropagation(); setBookingStatusFromDetail('${b.id}', 'cancelled', '${key}')` }
-            ]
-        }));
+            .select('id, service_name, check_in, household_id, status, flexible_time, pets(name), households(name)')
+            .eq('source', 'public')
+            .or('status.eq.pending,and(flexible_time.eq.true,status.neq.cancelled)')
+            .order('check_in');
+        return (data || []).map(b => {
+            const stillPending = b.status === 'pending';
+            const needsScheduling = b.flexible_time && !stillPending;
+            return {
+                title: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Service'}${needsScheduling ? ' (flexible — needs a time)' : ''}`,
+                sub: `${b.households?.name || 'Unknown household'} · ${b.check_in ? b.check_in.slice(0, 10) : ''}`,
+                onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`,
+                actions: stillPending ? [
+                    { label: 'Confirm', onclick: `event.stopPropagation(); setBookingStatusFromDetail('${b.id}', 'confirmed', '${key}')` },
+                    { label: 'Decline', onclick: `event.stopPropagation(); setBookingStatusFromDetail('${b.id}', 'cancelled', '${key}')` }
+                ] : []
+            };
+        });
     }
     if (key === 'tasks-today') {
         const { data } = await client.from('staff_tasks').select('id, task_text, staff(name)').eq('due_date', ctx.today).eq('is_done', false);
@@ -915,7 +935,9 @@ async function renderTodaysOverview() {
     // Pending-requests callout — separate from the metrics grid since it's an
     // action prompt, not just a number, and should stay visible even if the
     // person hasn't chosen "Pending Requests" as one of their picked metrics.
-    const { data: pending } = await client.from('bookings').select('id').eq('status', 'pending').eq('source', 'public');
+    const { data: pending } = await client.from('bookings').select('id')
+        .eq('source', 'public')
+        .or('status.eq.pending,and(flexible_time.eq.true,status.neq.cancelled)');
     const pendingCount = (pending || []).length;
     const callout = document.getElementById('pending-requests-callout');
     if (callout) {
@@ -1029,8 +1051,10 @@ async function openPendingRequestsModal() {
     document.getElementById('pending-requests-modal')?.classList.remove('hidden');
 
     const { data } = await client.from('bookings')
-        .select('id, service_name, check_in, check_out, amount, notes, household_id, pets(name), households(name)')
-        .eq('status', 'pending').eq('source', 'public').order('check_in');
+        .select('id, service_name, check_in, check_out, amount, notes, flexible_time, status, household_id, pets(name), households(name)')
+        .eq('source', 'public')
+        .or('status.eq.pending,and(flexible_time.eq.true,status.neq.cancelled)')
+        .order('check_in');
 
     const requests = data || [];
     list.innerHTML = requests.length ? requests.map(b => `
@@ -1038,13 +1062,17 @@ async function openPendingRequestsModal() {
             <div style="display:flex; justify-content:space-between; align-items:start; gap:0.5rem;">
                 <div>
                     <strong>${b.pets?.name || 'Pet'}</strong> <span style="color:var(--text-muted); font-size:0.85rem;">(${b.households?.name || 'Unknown'})</span>
+                    ${b.flexible_time ? `<span style="display:inline-block; font-size:0.7rem; font-weight:700; text-transform:uppercase; background:#fef3c7; color:#92400e; padding:0.1rem 0.45rem; border-radius:999px; margin-left:0.4rem;">Needs Scheduling</span>` : ''}
                     <div style="font-size:0.85rem; margin-top:0.2rem;">${b.service_name || 'Service'} · ${(b.check_in || '').slice(0, 10)}${b.check_out && b.check_out.slice(0, 10) !== (b.check_in || '').slice(0, 10) ? ' → ' + b.check_out.slice(0, 10) : ''}</div>
                     ${b.amount ? `<div style="font-size:0.85rem; color:var(--text-muted);">$${Number(b.amount).toFixed(2)}</div>` : ''}
                     ${b.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.35rem; white-space:pre-wrap;">${b.notes}</div>` : ''}
                 </div>
             </div>
             <div style="display:flex; gap:0.5rem; margin-top:0.65rem;">
-                <button class="btn btn-primary" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="respondToPendingRequest('${b.id}', 'confirmed')">Confirm</button>
+                ${b.flexible_time
+                    ? `<button class="btn btn-primary" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="closePendingRequestsModal(); openBookingModal(null, '${b.id}');">Schedule Now</button>`
+                    : `<button class="btn btn-primary" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="respondToPendingRequest('${b.id}', 'confirmed')">Confirm</button>`
+                }
                 <button class="btn" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="respondToPendingRequest('${b.id}', 'cancelled')">Decline</button>
                 <button class="btn" style="font-size:0.8rem; padding:0.35rem 0.75rem; margin-left:auto;" onclick="closePendingRequestsModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')">View Household</button>
             </div>
@@ -1350,6 +1378,8 @@ async function openBookingModal(householdId = null, bookingId = null) {
     if (statusSel) statusSel.value = 'pending';
     if (notesInput) notesInput.value = '';
     if (document.getElementById('bk-notes-visible-customer')) document.getElementById('bk-notes-visible-customer').checked = false;
+    if (document.getElementById('bk-flexible-time')) document.getElementById('bk-flexible-time').checked = false;
+    document.getElementById('bk-flexible-time-row')?.classList.add('hidden');
     bkEventResources = [];
     activeServicePerDayRate = null;
     if (staffTimeField) staffTimeField.classList.add('hidden');
@@ -1425,6 +1455,19 @@ async function openBookingModal(householdId = null, bookingId = null) {
         if (staffSel) staffSel.value = existingBooking.assigned_staff_id || '';
         if (notesInput) notesInput.value = existingBooking.notes || '';
         if (document.getElementById('bk-notes-visible-customer')) document.getElementById('bk-notes-visible-customer').checked = !!existingBooking.notes_visible_to_customer;
+        // Only show the flexible-time toggle at all when the booking actually IS
+        // flexible — staff resolve it by unchecking once they've set a real time,
+        // rather than being able to set it themselves (it's only ever set by the
+        // public booking flow for add-ons).
+        const flexRow = document.getElementById('bk-flexible-time-row');
+        const flexChk = document.getElementById('bk-flexible-time');
+        if (existingBooking.flexible_time) {
+            flexRow?.classList.remove('hidden');
+            if (flexChk) flexChk.checked = true;
+        } else {
+            flexRow?.classList.add('hidden');
+            if (flexChk) flexChk.checked = false;
+        }
         toggleBookingTypeFields();
 
         // Restore the per-day rate directly from the booking itself (set whenever it was last
@@ -1936,6 +1979,12 @@ async function saveBooking() {
     const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const notesVisibleToCustomer = document.getElementById('bk-notes-visible-customer')?.checked || false;
+    // Only actually present (and thus only meaningfully readable) when the row was
+    // shown at all, i.e. the booking was flexible_time to begin with — for a normal
+    // booking this stays false/absent, harmless either way.
+    const flexibleTime = document.getElementById('bk-flexible-time-row') && !document.getElementById('bk-flexible-time-row').classList.contains('hidden')
+        ? (document.getElementById('bk-flexible-time')?.checked || false)
+        : undefined;
     
     const petCheckboxes = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked'));
     const petIds = petCheckboxes.map(cb => cb.value);
@@ -1979,6 +2028,7 @@ async function saveBooking() {
         staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
         notes: notes,
         notes_visible_to_customer: notesVisibleToCustomer,
+        flexible_time: flexibleTime,
         // Persisted so that reopening this booking to edit it can recalculate the total as
         // dates/type change, without needing to re-find or re-select the original template.
         rate_per_day: ratePerDay,
@@ -6808,12 +6858,18 @@ async function saveApptType() {
 
     let response;
     if (editingApptTypeId) {
-        response = await client.from('appointment_type_templates').update(payload).eq('id', editingApptTypeId);
+        response = await client.from('appointment_type_templates').update(payload).eq('id', editingApptTypeId).select();
     } else {
-        response = await client.from('appointment_type_templates').insert([{ ...payload, business_id: currentBusinessId }]);
+        response = await client.from('appointment_type_templates').insert([{ ...payload, business_id: currentBusinessId }]).select();
     }
 
     if (response.error) return alert('Failed to save: ' + response.error.message);
+    // RLS blocking an update matches zero rows and returns success with no
+    // error — a silent no-op that looks identical to "it worked" unless we
+    // explicitly check the affected row count came back non-empty.
+    if (editingApptTypeId && (!response.data || !response.data.length)) {
+        return alert('Nothing was saved — this usually means your session has expired or changed. Please refresh the page and sign in again, then retry.');
+    }
 
     editingApptTypeId = null;
     closeApptTypeModal();
@@ -6824,7 +6880,12 @@ async function deleteApptType(id) {
     if (!confirm('Remove this service?')) return;
     const client = getSupabase();
     if (!client) return;
-    await client.from('appointment_type_templates').delete().eq('id', id);
+    const { data, error } = await client.from('appointment_type_templates').delete().eq('id', id).select();
+    if (error) return alert('Failed to delete: ' + error.message);
+    if (!data || !data.length) {
+        alert('Nothing was deleted — this usually means your session has expired or changed. Please refresh the page and sign in again, then retry.');
+        return;
+    }
     renderApptTypeList();
 }
 

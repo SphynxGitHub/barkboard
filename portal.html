@@ -60,6 +60,28 @@
         }
         .book-service-btn:hover { transform: translateY(-1px); }
         .book-service-btn:active { transform: translateY(0); }
+
+        .filter-row { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .pill-toggle { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.75rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; color: var(--text-muted); }
+        .pill-toggle.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .group-heading { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--text-muted); margin: 1rem 0 0.5rem; }
+        .group-heading:first-child { margin-top: 0; }
+        .item-card-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+        .item-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+        .icon-btn { background: none; border: 1px solid var(--border); border-radius: 7px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.9rem; color: var(--text-muted); }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .paid-pill { background: var(--success); color: var(--success-text); }
+        .unpaid-pill { background: #fef3c7; color: #92400e; }
+        .new-badge { display: inline-block; background: #ef4444; color: #fff; font-size: 0.62rem; font-weight: 800; text-transform: uppercase; padding: 0.08rem 0.4rem; border-radius: 999px; margin-left: 0.4rem; letter-spacing: 0.02em; }
+        .modal-overlay-portal { position: fixed; inset: 0; background: rgba(15,23,42,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 1.5rem; }
+        .change-note-box { font-size: 0.78rem; color: #92400e; background: #fef3c7; padding: 0.5rem 0.65rem; border-radius: 8px; margin-top: 0.5rem; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #print-receipt-content, #print-receipt-content * { visibility: visible; }
+            #print-receipt-content { position: absolute; top: 0; left: 0; width: 100%; padding: 2rem; }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body>
@@ -111,27 +133,62 @@
 
             <div id="review-flag-notice" class="msg-box msg-success hidden">Thanks! We've created your account — a team member will review it shortly to make sure everything's linked up correctly.</div>
 
-            <div class="section-title">Upcoming Appointments</div>
-            <div id="upcoming-list"></div>
-
-            <div class="section-title">Past Appointments</div>
-            <div id="past-list"></div>
+            <div class="section-title">Your Appointments</div>
+            <div class="filter-row" id="group-by-row">
+                <button class="pill-toggle active" data-group="date" onclick="setGroupBy('date')">Date</button>
+                <button class="pill-toggle" data-group="pet" onclick="setGroupBy('pet')">Pet</button>
+                <button class="pill-toggle" data-group="type" onclick="setGroupBy('type')">Activity Type</button>
+                <button class="pill-toggle" data-group="service" onclick="setGroupBy('service')">Service</button>
+                <button class="pill-toggle" data-group="status" onclick="setGroupBy('status')">Status</button>
+            </div>
+            <div id="appointments-list"></div>
 
             <div class="section-title">Notes For You</div>
             <div id="notes-list"></div>
-
-            <div class="section-title">Invoices</div>
-            <div id="invoices-list"></div>
 
             <div class="section-title">Your Pets</div>
             <div id="pets-list"></div>
         </div>
     </div>
 
+    <!-- Print receipt overlay -->
+    <div id="print-overlay" class="modal-overlay-portal hidden no-print">
+        <div class="card" style="width:100%; max-width:400px;">
+            <div id="print-receipt-content">
+                <h2 id="print-biz-name" style="margin:0 0 0.25rem;"></h2>
+                <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 1.25rem;" id="print-receipt-label">Receipt</p>
+                <div id="print-receipt-body" style="font-size:0.9rem; line-height:1.8;"></div>
+            </div>
+            <div style="display:flex; gap:0.6rem; margin-top:1.5rem;" class="no-print">
+                <button type="button" class="icon-btn" style="flex:1; width:auto; height:auto; padding:0.6rem;" onclick="closePrintOverlay()">Close</button>
+                <button type="button" class="btn-primary" onclick="window.print()">🖨️ Print</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reschedule / change request overlay -->
+    <div id="reschedule-overlay" class="modal-overlay-portal hidden">
+        <div class="card" style="width:100%; max-width:400px;">
+            <h3 style="margin:0 0 0.25rem;">Request a Change</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 1rem;" id="reschedule-appt-label"></p>
+            <div class="form-group">
+                <label>What would you like to change?</label>
+                <textarea id="reschedule-message" rows="4" style="width:100%; padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:8px; font-family:var(--font-sans); font-size:0.9rem;" placeholder="e.g. Could we move this to the following week instead?"></textarea>
+            </div>
+            <div id="reschedule-error" class="msg-box msg-error hidden"></div>
+            <div style="display:flex; gap:0.6rem;">
+                <button type="button" class="icon-btn" style="flex:1; width:auto; height:auto; padding:0.6rem;" onclick="closeRescheduleOverlay()">Cancel</button>
+                <button type="button" class="btn-primary" id="reschedule-submit-btn" onclick="submitRescheduleRequest()">Send Request</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = 'https://qhfdtnylbpbooicsbhct.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZmR0bnlsYnBib29pY3NiaGN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTI5NDMsImV4cCI6MjEwNDAyODk0M30.SnLDb2BP0WVI2HCyuDLxt5qdnGBzRmd6cjgHDCpQKRo';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { storageKey: 'barkboard-customer-auth' }
+        });
 
         let currentBiz = null;
         let currentHouseholdId = null;
@@ -252,43 +309,178 @@
             return `<span class="status-pill ${cls}">${status || 'pending'}</span>`;
         }
 
-        async function loadPortalData() {
-            const today = new Date().toISOString().slice(0, 10);
+        // --- Grouping ------------------------------------------------------------
+        let groupBy = 'date';
+        let allBookingsData = [];
+        let invoicesById = {};
+        let serviceCategoryMap = {};
+        let lastVisitedAt = null;
 
+        function setGroupBy(mode) {
+            groupBy = mode;
+            document.querySelectorAll('#group-by-row .pill-toggle').forEach(btn => btn.classList.toggle('active', btn.dataset.group === mode));
+            renderAppointments();
+        }
+
+        function isNewSince(createdAt) {
+            if (!lastVisitedAt || !createdAt) return false; // first-ever visit: nothing is "new" relative to nothing
+            return new Date(createdAt) > new Date(lastVisitedAt);
+        }
+
+        function appointmentCardHtml(b) {
+            const invoice = b.invoice_id ? invoicesById[b.invoice_id] : null;
+            const petName = b.pets?.name || 'Pet';
+            const isNew = isNewSince(b.created_at);
+            const dateRange = b.check_out && b.check_out.slice(0, 10) !== (b.check_in || '').slice(0, 10)
+                ? `${(b.check_in || '').slice(0, 10)} → ${b.check_out.slice(0, 10)}`
+                : (b.check_in || '').slice(0, 10);
+            return `
+                <div class="item-card">
+                    <div class="item-card-row">
+                        <div>
+                            <div class="item-title">${petName} — ${b.service_name}${statusPillHtml(b.status)}${b.flexible_time ? '<span class="status-pill" style="background:#fef3c7;color:#92400e;">Needs Scheduling</span>' : ''}${isNew ? '<span class="new-badge">New</span>' : ''}</div>
+                            <div class="item-sub">${dateRange}${b.amount ? ' · $' + Number(b.amount).toFixed(2) : ''}</div>
+                            ${invoice ? `<div class="item-sub" style="margin-top:0.3rem;"><span class="status-pill ${invoice.status === 'paid' ? 'paid-pill' : 'unpaid-pill'}">${invoice.status}</span></div>` : ''}
+                            ${b.notes ? `<div class="item-sub" style="margin-top:0.4rem;">📝 ${b.notes}</div>` : ''}
+                            ${b.customer_change_request && !b.customer_change_request_resolved ? `<div class="change-note-box">Your request: "${b.customer_change_request}" — awaiting response</div>` : ''}
+                        </div>
+                        <div class="item-actions">
+                            ${invoice ? `<button class="icon-btn" title="${invoice.status === 'paid' ? 'Print receipt' : 'Print invoice'}" onclick="openPrintOverlay('${invoice.id}')">🖨️</button>` : ''}
+                            <button class="icon-btn" title="Request a change" onclick="openRescheduleOverlay('${b.id}', '${petName.replace(/'/g, "\\'")} — ${(b.service_name || '').replace(/'/g, "\\'")}')">✏️</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAppointments() {
+            const el = document.getElementById('appointments-list');
+            if (!allBookingsData.length) {
+                el.innerHTML = '<div class="empty-note">No appointments yet.</div>';
+                return;
+            }
+
+            const groups = {};
+            const groupOrder = [];
+            const addToGroup = (key, b) => {
+                if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+                groups[key].push(b);
+            };
+
+            allBookingsData.forEach(b => {
+                let key;
+                if (groupBy === 'date') key = (b.check_in || '').slice(0, 10) || 'No date';
+                else if (groupBy === 'pet') key = b.pets?.name || 'Unknown pet';
+                else if (groupBy === 'type') {
+                    const cat = serviceCategoryMap[b.service_name];
+                    key = cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'Other';
+                }
+                else if (groupBy === 'service') key = b.service_name || 'Service';
+                else if (groupBy === 'status') key = (b.status || 'pending').toUpperCase();
+                addToGroup(key, b);
+            });
+
+            el.innerHTML = groupOrder.map(key => `
+                <div class="group-heading">${key}</div>
+                ${groups[key].map(appointmentCardHtml).join('')}
+            `).join('');
+        }
+
+        // --- Print overlay ---------------------------------------------------
+        function openPrintOverlay(invoiceId) {
+            const inv = invoicesById[invoiceId];
+            if (!inv) return;
+            document.getElementById('print-biz-name').textContent = currentBiz.name;
+            document.getElementById('print-receipt-label').textContent = inv.status === 'paid' ? 'Receipt' : 'Invoice';
+            document.getElementById('print-receipt-body').innerHTML = `
+                <div><strong>Description:</strong> ${inv.description || ''}</div>
+                <div><strong>Amount:</strong> $${Number(inv.amount || 0).toFixed(2)}</div>
+                <div><strong>Status:</strong> ${inv.status}</div>
+                <div><strong>Due date:</strong> ${inv.due_date || '—'}</div>
+            `;
+            document.getElementById('print-overlay').classList.remove('hidden');
+        }
+        function closePrintOverlay() {
+            document.getElementById('print-overlay').classList.add('hidden');
+        }
+
+        // --- Reschedule / change request ---------------------------------------
+        let rescheduleBookingId = null;
+        function openRescheduleOverlay(bookingId, label) {
+            rescheduleBookingId = bookingId;
+            document.getElementById('reschedule-appt-label').textContent = label;
+            document.getElementById('reschedule-message').value = '';
+            document.getElementById('reschedule-error').classList.add('hidden');
+            document.getElementById('reschedule-overlay').classList.remove('hidden');
+        }
+        function closeRescheduleOverlay() {
+            document.getElementById('reschedule-overlay').classList.add('hidden');
+            rescheduleBookingId = null;
+        }
+        async function submitRescheduleRequest() {
+            const msg = document.getElementById('reschedule-message').value.trim();
+            const errBox = document.getElementById('reschedule-error');
+            errBox.classList.add('hidden');
+            if (!msg) {
+                errBox.textContent = "Please describe what you'd like to change.";
+                errBox.classList.remove('hidden');
+                return;
+            }
+            const btn = document.getElementById('reschedule-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            const { error } = await supabaseClient.rpc('request_booking_change', {
+                p_booking_id: rescheduleBookingId,
+                p_message: msg
+            });
+            btn.disabled = false;
+            btn.textContent = 'Send Request';
+            if (error) {
+                errBox.textContent = error.message;
+                errBox.classList.remove('hidden');
+                return;
+            }
+            closeRescheduleOverlay();
+            await loadPortalData();
+            alert("Your request has been sent — we'll be in touch!");
+        }
+
+        async function loadPortalData() {
             const { data: household } = await supabaseClient.from('households').select('needs_review').eq('id', currentHouseholdId).maybeSingle();
             document.getElementById('review-flag-notice').classList.toggle('hidden', !household?.needs_review);
+
+            // Capture last visit BEFORE marking a new one, so "new" flags reflect
+            // what's changed since they were last here — then bump it for next time.
+            const { data: link } = await supabaseClient.from('customer_household_links').select('last_visited_at').eq('household_id', currentHouseholdId).maybeSingle();
+            lastVisitedAt = link?.last_visited_at || null;
+
+            if (!Object.keys(serviceCategoryMap).length) {
+                const { data: templates } = await supabaseClient.from('appointment_type_templates').select('name, category').eq('business_id', currentBiz.id);
+                (templates || []).forEach(t => {
+                    serviceCategoryMap[t.name] = Array.isArray(t.category) && t.category.length ? t.category[0] : 'other';
+                });
+            }
 
             const { data: bookings } = await supabaseClient
                 .from('customer_bookings_view')
                 .select('*, pets(name)')
                 .eq('household_id', currentHouseholdId)
                 .order('check_in', { ascending: false });
+            allBookingsData = bookings || [];
 
-            const upcoming = (bookings || []).filter(b => (b.check_in || '').slice(0, 10) >= today && b.status !== 'cancelled');
-            const past = (bookings || []).filter(b => (b.check_in || '').slice(0, 10) < today || b.status === 'cancelled');
+            const invoiceIds = Array.from(new Set(allBookingsData.map(b => b.invoice_id).filter(Boolean)));
+            invoicesById = {};
+            if (invoiceIds.length) {
+                const { data: invoices } = await supabaseClient.from('invoices').select('id, amount, status, description, due_date').in('id', invoiceIds);
+                (invoices || []).forEach(inv => { invoicesById[inv.id] = inv; });
+            }
 
-            document.getElementById('upcoming-list').innerHTML = upcoming.length
-                ? upcoming.map(b => `
-                    <div class="item-card">
-                        <div class="item-title">${b.pets?.name || 'Pet'} — ${b.service_name}${statusPillHtml(b.status)}</div>
-                        <div class="item-sub">${(b.check_in || '').slice(0, 10)}${b.check_out && b.check_out.slice(0,10) !== b.check_in.slice(0,10) ? ' → ' + b.check_out.slice(0, 10) : ''}${b.amount ? ' · $' + Number(b.amount).toFixed(2) : ''}</div>
-                        ${b.notes ? `<div class="item-sub" style="margin-top:0.4rem;">📝 ${b.notes}</div>` : ''}
-                    </div>
-                `).join('')
-                : '<div class="empty-note">No upcoming appointments.</div>';
+            renderAppointments();
 
-            document.getElementById('past-list').innerHTML = past.length
-                ? past.slice(0, 10).map(b => `
-                    <div class="item-card">
-                        <div class="item-title">${b.pets?.name || 'Pet'} — ${b.service_name}${statusPillHtml(b.status)}</div>
-                        <div class="item-sub">${(b.check_in || '').slice(0, 10)}${b.amount ? ' · $' + Number(b.amount).toFixed(2) : ''}</div>
-                    </div>
-                `).join('')
-                : '<div class="empty-note">No past appointments yet.</div>';
-
-            const bookingNotes = (bookings || []).filter(b => b.notes).map(b => ({
+            const bookingNotes = allBookingsData.filter(b => b.notes).map(b => ({
                 title: `${b.pets?.name || 'Pet'} — ${b.service_name}`,
-                text: b.notes
+                text: b.notes,
+                isNew: isNewSince(b.created_at)
             }));
 
             const { data: tasks } = await supabaseClient
@@ -297,27 +489,14 @@
                 .order('due_date', { ascending: true });
             const taskNotes = (tasks || []).map(t => ({
                 title: t.pets?.name ? `For ${t.pets.name}` : 'Note',
-                text: t.task_text
+                text: t.task_text,
+                isNew: isNewSince(t.created_at)
             }));
 
             const allNotes = [...bookingNotes, ...taskNotes];
             document.getElementById('notes-list').innerHTML = allNotes.length
-                ? allNotes.map(n => `<div class="item-card"><div class="item-title">${n.title}</div><div class="item-sub" style="margin-top:0.3rem;">${n.text}</div></div>`).join('')
+                ? allNotes.map(n => `<div class="item-card"><div class="item-title">${n.title}${n.isNew ? '<span class="new-badge">New</span>' : ''}</div><div class="item-sub" style="margin-top:0.3rem;">${n.text}</div></div>`).join('')
                 : '<div class="empty-note">Nothing here yet.</div>';
-
-            const { data: invoices } = await supabaseClient
-                .from('invoices')
-                .select('*')
-                .eq('household_id', currentHouseholdId)
-                .order('due_date', { ascending: false });
-            document.getElementById('invoices-list').innerHTML = (invoices || []).length
-                ? invoices.map(i => `
-                    <div class="item-card">
-                        <div class="item-title">${i.description || 'Invoice'} — $${Number(i.amount || 0).toFixed(2)}${statusPillHtml(i.status)}</div>
-                        <div class="item-sub">Due ${i.due_date || '—'}</div>
-                    </div>
-                `).join('')
-                : '<div class="empty-note">No invoices yet.</div>';
 
             const { data: pets } = await supabaseClient
                 .from('pets')
@@ -327,6 +506,9 @@
             document.getElementById('pets-list').innerHTML = (pets || []).length
                 ? pets.map(p => `<div class="item-card"><div class="item-title">${p.name}</div><div class="item-sub">${p.species || ''}</div></div>`).join('')
                 : '<div class="empty-note">No pets on file yet.</div>';
+
+            // Now that "new" flags for this load are computed, mark the visit.
+            await supabaseClient.rpc('mark_portal_visited');
         }
 
         init();
