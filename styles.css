@@ -1440,11 +1440,11 @@ input.biz-select {
   color: var(--text-muted);
 }
 
-#auth-login-form .form-group {
+#auth-login-form .form-group, #auth-signup-form .form-group {
   margin-bottom: 1.1rem;
 }
 
-#auth-login-form label {
+#auth-login-form label, #auth-signup-form label {
   display: block;
   font-size: 0.8rem;
   font-weight: 600;
@@ -1452,7 +1452,7 @@ input.biz-select {
   margin-bottom: 0.4rem;
 }
 
-#auth-login-form input {
+#auth-login-form input, #auth-signup-form input {
   width: 100%;
   padding: 0.65rem 0.8rem;
   border: 1px solid var(--border);
@@ -1463,7 +1463,7 @@ input.biz-select {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-#auth-login-form input:focus {
+#auth-login-form input:focus, #auth-signup-form input:focus {
   outline: none;
   border-color: var(--primary);
   background: #fff;
