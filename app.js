@@ -314,17 +314,21 @@ async function initAuthGate() {
 let obCurrentStep = 0;
 let obRowCounter = 0;
 let obIsReopen = false;
-const OB_STEP_COUNT = 5; // steps 0-4
+const OB_STEP_COUNT = 8; // steps 0-7
+const OB_DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const OB_STEP_META = [
     { title: 'Welcome!', subtitle: "Let's get your business set up.", icon: '🐾' },
+    { title: 'Business Info', subtitle: 'How customers will see and reach you.', icon: '🏢' },
+    { title: 'Hours of Operation', subtitle: 'When are you open?', icon: '🕐' },
+    { title: 'Payment Info', subtitle: 'How can customers pay you?', icon: '💳' },
     { title: 'Your Team', subtitle: 'Add the people who work with you.', icon: '👥' },
     { title: 'Your Spaces', subtitle: 'What do you have room for?', icon: '🏠' },
     { title: 'Your Services', subtitle: 'What can customers book?', icon: '📋' },
     { title: "You're all set!", subtitle: '', icon: '✅' },
 ];
 
-function openOnboardingWizard(businessName, reopen = false) {
+async function openOnboardingWizard(businessName, reopen = false) {
     obIsReopen = reopen;
     obCurrentStep = 0;
     obRowCounter = 0;
@@ -335,8 +339,67 @@ function openOnboardingWizard(businessName, reopen = false) {
     obAddStaffRow();
     obAddResourceRow();
     obAddServiceRow();
+
+    // Prefill Business Info + Hours from whatever's already saved, so
+    // reopening the wizard later (or a slow double-open) doesn't clobber
+    // real settings with blanks.
+    const client = getSupabase();
+    if (client && currentBusinessId) {
+        const { data: biz } = await client.from('businesses')
+            .select('logo_url, accent_color, notification_email, public_booking_enabled')
+            .eq('id', currentBusinessId).single();
+        document.getElementById('ob-logo-url').value = biz?.logo_url || '';
+        document.getElementById('ob-accent-color').value = biz?.accent_color || '#4f46e5';
+        document.getElementById('ob-notify-email').value = biz?.notification_email || '';
+        document.getElementById('ob-enable-public-booking').checked = !!biz?.public_booking_enabled;
+
+        const settings = typeof getBusinessSettings === 'function' ? await getBusinessSettings() : null;
+        document.getElementById('ob-pay-venmo').value = settings?.venmo_handle || '';
+        document.getElementById('ob-pay-zelle').value = settings?.zelle_info || '';
+        document.getElementById('ob-pay-cash').value = settings?.cash_note || '';
+        document.getElementById('ob-pay-square').value = settings?.square_link || '';
+
+        obRenderHoursRows(client);
+    } else {
+        obRenderHoursRows(null);
+    }
+
     renderObStep();
     document.getElementById('onboarding-modal')?.classList.remove('hidden');
+}
+
+async function obRenderHoursRows(client) {
+    let byDay = {};
+    if (client && currentBusinessId) {
+        const { data: hours } = await client.from('business_hours').select('*').eq('business_id', currentBusinessId);
+        (hours || []).forEach(h => { byDay[h.day_of_week] = h; });
+    }
+    const container = document.getElementById('ob-hours-rows');
+    if (!container) return;
+    container.innerHTML = OB_DAYS_OF_WEEK.map((dayName, i) => {
+        const h = byDay[i];
+        const isClosed = h ? h.is_closed : (i === 0);
+        const openVal = h?.open_time ? h.open_time.slice(0, 5) : '09:00';
+        const closeVal = h?.close_time ? h.close_time.slice(0, 5) : '17:00';
+        return `
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span style="width:80px; font-size:0.82rem; font-weight:600;">${dayName}</span>
+                <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.75rem; font-weight:400; width:64px;">
+                    <input type="checkbox" class="ob-hours-closed-chk" data-day="${i}" ${isClosed ? 'checked' : ''} onchange="obToggleHoursRowClosed(${i})"> Closed
+                </label>
+                <input type="time" class="ob-hours-open" data-day="${i}" value="${openVal}" ${isClosed ? 'disabled' : ''} style="flex:1;">
+                <span style="color:var(--text-muted); font-size:0.78rem;">to</span>
+                <input type="time" class="ob-hours-close" data-day="${i}" value="${closeVal}" ${isClosed ? 'disabled' : ''} style="flex:1;">
+            </div>
+        `;
+    }).join('');
+}
+
+function obToggleHoursRowClosed(day) {
+    const closed = document.querySelector(`.ob-hours-closed-chk[data-day="${day}"]`)?.checked;
+    document.querySelectorAll(`.ob-hours-open[data-day="${day}"], .ob-hours-close[data-day="${day}"]`).forEach(el => {
+        el.disabled = closed;
+    });
 }
 
 function renderObStep() {
@@ -442,6 +505,40 @@ async function obFinish(skip = false) {
         })).filter(r => r.name);
 
         try {
+            // Business info (logo, accent color, notify email, public booking toggle)
+            await client.from('businesses').update({
+                logo_url: document.getElementById('ob-logo-url')?.value.trim() || null,
+                accent_color: document.getElementById('ob-accent-color')?.value || '#4f46e5',
+                notification_email: document.getElementById('ob-notify-email')?.value.trim() || null,
+                public_booking_enabled: document.getElementById('ob-enable-public-booking')?.checked || false,
+            }).eq('id', currentBusinessId);
+
+            // Hours of operation — one row per day, upserted by (business_id, day_of_week)
+            const hourRows = OB_DAYS_OF_WEEK.map((_, i) => ({
+                business_id: currentBusinessId,
+                day_of_week: i,
+                is_closed: document.querySelector(`.ob-hours-closed-chk[data-day="${i}"]`)?.checked || false,
+                open_time: document.querySelector(`.ob-hours-open[data-day="${i}"]`)?.value || null,
+                close_time: document.querySelector(`.ob-hours-close[data-day="${i}"]`)?.value || null,
+            }));
+            await client.from('business_hours').upsert(hourRows, { onConflict: 'business_id,day_of_week' });
+
+            // Payment info — same table/columns as Business → Payment Settings
+            const { data: bizForPayment } = await client.from('businesses').select('name').eq('id', currentBusinessId).single();
+            const paymentPayload = {
+                business_name: bizForPayment?.name || '',
+                venmo_handle: document.getElementById('ob-pay-venmo')?.value.trim() || '',
+                zelle_info: document.getElementById('ob-pay-zelle')?.value.trim() || '',
+                cash_note: document.getElementById('ob-pay-cash')?.value.trim() || '',
+                square_link: document.getElementById('ob-pay-square')?.value.trim() || '',
+            };
+            const existingSettings = typeof getBusinessSettings === 'function' ? await getBusinessSettings() : null;
+            if (existingSettings) {
+                await client.from('business_settings').update(paymentPayload).eq('id', existingSettings.id);
+            } else {
+                await client.from('business_settings').insert([{ ...paymentPayload, business_id: currentBusinessId }]);
+            }
+
             if (staffRows.length) {
                 await client.from('staff').insert(staffRows.map(r => ({ name: r.name, role: r.role, business_id: currentBusinessId })));
             }
@@ -3483,9 +3580,68 @@ function switchBizTab(tab) {
     if (tab === 'public-booking' && typeof loadPublicBookingSettings === 'function') {
         loadPublicBookingSettings();
     }
+    if (tab === 'hours' && typeof loadBusinessHours === 'function') {
+        loadBusinessHours();
+    }
     if (tab === 'email-settings' && typeof loadEmailSettings === 'function') {
         loadEmailSettings();
     }
+}
+
+const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+async function loadBusinessHours() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: hours } = await client.from('business_hours').select('*').eq('business_id', currentBusinessId);
+    const byDay = {};
+    (hours || []).forEach(h => { byDay[h.day_of_week] = h; });
+
+    const container = document.getElementById('hours-rows');
+    if (!container) return;
+
+    container.innerHTML = DAYS_OF_WEEK.map((dayName, i) => {
+        const h = byDay[i];
+        const isClosed = h ? h.is_closed : (i === 0); // default: closed Sundays, open other days, for a brand-new business with no rows yet
+        const openVal = h?.open_time ? h.open_time.slice(0, 5) : '09:00';
+        const closeVal = h?.close_time ? h.close_time.slice(0, 5) : '17:00';
+        return `
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+                <span style="width:90px; font-size:0.85rem; font-weight:600;">${dayName}</span>
+                <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; font-weight:400; width:80px;">
+                    <input type="checkbox" class="hours-closed-chk" data-day="${i}" ${isClosed ? 'checked' : ''} onchange="toggleHoursRowClosed(${i})"> Closed
+                </label>
+                <input type="time" class="hours-open" data-day="${i}" value="${openVal}" ${isClosed ? 'disabled' : ''} style="padding:0.4rem; border:1px solid var(--border); border-radius:0.25rem;">
+                <span style="color:var(--text-muted); font-size:0.8rem;">to</span>
+                <input type="time" class="hours-close" data-day="${i}" value="${closeVal}" ${isClosed ? 'disabled' : ''} style="padding:0.4rem; border:1px solid var(--border); border-radius:0.25rem;">
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleHoursRowClosed(day) {
+    const closed = document.querySelector(`.hours-closed-chk[data-day="${day}"]`)?.checked;
+    document.querySelectorAll(`.hours-open[data-day="${day}"], .hours-close[data-day="${day}"]`).forEach(el => {
+        el.disabled = closed;
+    });
+}
+
+async function saveBusinessHours() {
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const rows = DAYS_OF_WEEK.map((_, i) => ({
+        business_id: currentBusinessId,
+        day_of_week: i,
+        is_closed: document.querySelector(`.hours-closed-chk[data-day="${i}"]`)?.checked || false,
+        open_time: document.querySelector(`.hours-open[data-day="${i}"]`)?.value || null,
+        close_time: document.querySelector(`.hours-close[data-day="${i}"]`)?.value || null,
+    }));
+
+    const { error } = await client.from('business_hours').upsert(rows, { onConflict: 'business_id,day_of_week' });
+    if (error) return alert('Failed to save: ' + error.message);
+    alert('Hours saved.');
 }
 
 function bizDateRange() {

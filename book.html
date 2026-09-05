@@ -105,6 +105,7 @@
                 <div id="brand-logo-slot"></div>
                 <h1 id="biz-name"></h1>
                 <p id="biz-welcome"></p>
+                <div id="biz-hours" style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;"></div>
             </div>
 
             <div class="card">
@@ -235,7 +236,36 @@
             serviceTemplates = templates || [];
             populateServiceOptions();
 
+            const { data: hours } = await supabaseClient
+                .from('business_hours')
+                .select('day_of_week, is_closed, open_time, close_time')
+                .eq('business_id', business.id);
+            renderBusinessHours(hours || []);
+
             showState('booking-content');
+        }
+
+        const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        function formatTime12h(t) {
+            if (!t) return '';
+            const [h, m] = t.split(':').map(Number);
+            const period = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `${h12}:${String(m).padStart(2, '0')}${period}`;
+        }
+
+        function renderBusinessHours(hours) {
+            const el = document.getElementById('biz-hours');
+            if (!el || !hours.length) return;
+            const byDay = {};
+            hours.forEach(h => { byDay[h.day_of_week] = h; });
+
+            el.textContent = Array.from({ length: 7 }).map((_, i) => {
+                const h = byDay[i];
+                if (!h || h.is_closed) return `${DAY_NAMES[i]}: Closed`;
+                return `${DAY_NAMES[i]}: ${formatTime12h(h.open_time)}\u2013${formatTime12h(h.close_time)}`;
+            }).join('  •  ');
         }
 
         function applyBranding(business) {

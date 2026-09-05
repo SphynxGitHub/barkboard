@@ -74,12 +74,75 @@
 
             <!-- Step 0: Welcome -->
             <div id="ob-step-0" class="ob-step">
-                <p style="font-size:0.9rem; color:var(--text-muted); text-align:center; margin-bottom:1.5rem;">We'll ask a few quick questions about your staff, resources, and services — this fills in your account so you're not starting from a blank slate. Everything's optional and editable later.</p>
+                <p style="font-size:0.9rem; color:var(--text-muted); text-align:center; margin-bottom:1.5rem;">We'll ask a few quick questions about your business, hours, staff, resources, and services — this fills in your account so you're not starting from a blank slate. Everything's optional and editable later.</p>
                 <button type="button" class="auth-submit-btn" onclick="obNextStep()">Let's go</button>
             </div>
 
-            <!-- Step 1: Staff -->
+            <!-- Step 1: Business Info -->
             <div id="ob-step-1" class="ob-step hidden">
+                <div style="display:flex; flex-direction:column; gap:0.9rem; margin-bottom:1.25rem;">
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Logo URL</label>
+                        <input type="text" id="ob-logo-url" placeholder="https://... (optional)">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Accent Color</label>
+                        <input type="color" id="ob-accent-color" value="#4f46e5" style="width:70px; padding:0.25rem; height:38px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notify Email</label>
+                        <input type="email" id="ob-notify-email" placeholder="owner@yourbusiness.com">
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0.3rem 0 0;">Where booking-request notifications go. Leave blank to use your login email.</p>
+                    </div>
+                    <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600; font-size:0.9rem;">
+                        <input type="checkbox" id="ob-enable-public-booking"> Enable public booking page
+                    </label>
+                </div>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn" style="flex:1;" onclick="obPrevStep()">Back</button>
+                    <button type="button" class="auth-submit-btn" style="flex:2;" onclick="obNextStep()">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Hours of Operation -->
+            <div id="ob-step-2" class="ob-step hidden">
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">When are you open? Shown on your public booking page.</p>
+                <div id="ob-hours-rows" style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.25rem;"></div>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn" style="flex:1;" onclick="obPrevStep()">Back</button>
+                    <button type="button" class="auth-submit-btn" style="flex:2;" onclick="obNextStep()">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Payment Info -->
+            <div id="ob-step-3" class="ob-step hidden">
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">How can customers pay you? Fill in whichever apply — shown on invoices/payment notices.</p>
+                <div style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.25rem;">
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Venmo</label>
+                        <input type="text" id="ob-pay-venmo" placeholder="@your-handle">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Zelle</label>
+                        <input type="text" id="ob-pay-zelle" placeholder="email or phone">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Cash</label>
+                        <input type="text" id="ob-pay-cash" placeholder="e.g. Cash accepted at pickup/drop-off">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Square</label>
+                        <input type="text" id="ob-pay-square" placeholder="https://square.link/...">
+                    </div>
+                </div>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn" style="flex:1;" onclick="obPrevStep()">Back</button>
+                    <button type="button" class="auth-submit-btn" style="flex:2;" onclick="obNextStep()">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Staff -->
+            <div id="ob-step-4" class="ob-step hidden">
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Who's on your team? Add each staff member's name and role.</p>
                 <div id="ob-staff-rows" style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:0.75rem;"></div>
                 <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-bottom:1.25rem;" onclick="obAddStaffRow()">+ Add Staff Member</button>
@@ -89,8 +152,8 @@
                 </div>
             </div>
 
-            <!-- Step 2: Resources -->
-            <div id="ob-step-2" class="ob-step hidden">
+            <!-- Step 5: Resources -->
+            <div id="ob-step-5" class="ob-step hidden">
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">What physical spaces do you manage — kennels, suites, runs, rooms? Give each type a name and how many you have.</p>
                 <div id="ob-resource-rows" style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:0.75rem;"></div>
                 <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-bottom:1.25rem;" onclick="obAddResourceRow()">+ Add Resource Type</button>
@@ -100,8 +163,8 @@
                 </div>
             </div>
 
-            <!-- Step 3: Services -->
-            <div id="ob-step-3" class="ob-step hidden">
+            <!-- Step 6: Services -->
+            <div id="ob-step-6" class="ob-step hidden">
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">What services do you offer? Add a name and price for each — you can mark it as a flat rate or a per-day rate.</p>
                 <div id="ob-service-rows" style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:0.75rem;"></div>
                 <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-bottom:1.25rem;" onclick="obAddServiceRow()">+ Add Service</button>
@@ -111,8 +174,8 @@
                 </div>
             </div>
 
-            <!-- Step 4: Done -->
-            <div id="ob-step-4" class="ob-step hidden">
+            <!-- Step 7: Done -->
+            <div id="ob-step-7" class="ob-step hidden">
                 <p style="font-size:0.9rem; color:var(--text-muted); text-align:center; margin-bottom:1.5rem;">That's everything — we'll save what you entered and take you into your dashboard. You can add or edit any of this anytime from the Templates and Business tabs.</p>
                 <div id="ob-finish-error" class="hidden auth-error-box"></div>
                 <button type="button" class="auth-submit-btn" id="ob-finish-btn" onclick="obFinish()">Finish Setup</button>
@@ -314,6 +377,7 @@
                 <button class="biz-tab" id="biztab-payments" onclick="switchBizTab('payments')"><i data-lucide="credit-card"></i> Payment Settings</button>
                 <button class="biz-tab" id="biztab-availability" onclick="switchBizTab('availability')"><i data-lucide="calendar-days"></i> Business Availability</button>
                 <button class="biz-tab" id="biztab-public-booking" onclick="switchBizTab('public-booking')"><i data-lucide="link"></i> Public Booking Page</button>
+                <button class="biz-tab" id="biztab-hours" onclick="switchBizTab('hours')"><i data-lucide="clock"></i> Hours of Operation</button>
                 <button class="biz-tab" id="biztab-email-settings" onclick="switchBizTab('email-settings')"><i data-lucide="mail"></i> Email (SMTP)</button>
             </div>
 
@@ -500,6 +564,15 @@
 
                     <button class="btn-primary" style="align-self:flex-start; padding:0.5rem 1.25rem;" onclick="savePublicBookingSettings()">Save</button>
                 </div>
+            </div>
+
+            <div id="bizsec-hours" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Hours of operation</h3>
+                </div>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Shown on your public booking page. Doesn't currently restrict which times can be booked internally — just informational for now.</p>
+                <div id="hours-rows" style="display:flex; flex-direction:column; gap:0.5rem; max-width:520px; margin-bottom:1rem;"></div>
+                <button class="btn-primary" style="padding:0.5rem 1.25rem;" onclick="saveBusinessHours()">Save</button>
             </div>
 
             <div id="bizsec-email-settings" class="biz-section">
