@@ -792,11 +792,56 @@ async function getMetricDetailItems(key, client, ctx) {
    Each updates the record, then re-renders both the open modal (so the item
    often just disappears from the list once it no longer matches the metric's
    filter) and the dashboard behind it (so the count stays in sync). */
+/* Bookings created through the internal modal auto-generate & link an invoice
+   at creation time (see saveBooking's "AUTO-GENERATE & LINK INVOICE" block).
+   Public booking-page submissions skip that entirely — they're created by
+   the Edge Function, which only ever touches `bookings`, never `invoices` —
+   so nothing ever invoiced them even after being confirmed. This mirrors
+   that same invoice-creation logic for a single already-existing booking,
+   called at confirm-time instead of create-time. Safe to call on any
+   booking: no-ops if it's already linked to an invoice or has no amount. */
+async function ensureInvoiceForConfirmedBooking(client, bookingId) {
+    const { data: booking } = await client.from('bookings').select('*').eq('id', bookingId).single();
+    if (!booking || booking.invoice_id || !booking.amount || booking.amount <= 0) return;
+
+    const startDate = (booking.check_in || '').slice(0, 10);
+    const endDate = (booking.check_out || '').slice(0, 10);
+    const when = endDate && endDate !== startDate ? `${startDate} → ${endDate}` : startDate;
+
+    let petNames = '';
+    if (booking.pet_id) {
+        const { data: pet } = await client.from('pets').select('name').eq('id', booking.pet_id).single();
+        petNames = pet?.name || '';
+    }
+
+    const { data: createdInvoices, error: invErr } = await client.from('invoices').insert([{
+        household_id: booking.household_id,
+        booking_id: booking.id,
+        description: `${booking.service_name || 'Event'} — ${when}`,
+        amount: booking.amount,
+        status: 'unpaid',
+        due_date: startDate || null,
+        service_start_date: startDate || null,
+        service_end_date: endDate || startDate || null,
+        pet_names: petNames,
+        business_id: booking.business_id
+    }]).select();
+
+    if (invErr) {
+        console.error('Failed to auto-create invoice for confirmed booking:', invErr);
+        return;
+    }
+    if (createdInvoices && createdInvoices.length) {
+        await client.from('bookings').update({ invoice_id: createdInvoices[0].id }).eq('id', booking.id);
+    }
+}
+
 async function setBookingStatusFromDetail(bookingId, newStatus, key) {
     const client = getSupabase();
     if (!client) return;
     const { error } = await client.from('bookings').update({ status: newStatus }).eq('id', bookingId);
     if (error) return alert('Failed to update: ' + error.message);
+    if (newStatus === 'confirmed') await ensureInvoiceForConfirmedBooking(client, bookingId);
     refreshMetricDetail(key);
     if (typeof renderActivities === 'function') renderActivities();
 }
@@ -1015,6 +1060,7 @@ async function respondToPendingRequest(bookingId, newStatus) {
         alert('Failed to update: ' + error.message);
         return;
     }
+    if (newStatus === 'confirmed') await ensureInvoiceForConfirmedBooking(client, bookingId);
     openPendingRequestsModal(); // refresh the list in place
     renderTodaysOverview();
     if (typeof renderActivities === 'function') renderActivities();
@@ -1985,6 +2031,12 @@ async function saveBooking() {
         // instead of leaving it stale until someone happens to reopen the invoice modal.
         if (editingBookingId && existingBookingInvoiceId) {
             await syncInvoiceTotals(client, existingBookingInvoiceId);
+        }
+        // If editing an existing booking that DOESN'T have an invoice yet (e.g. one
+        // that came in through the public booking page, which never creates one) and
+        // it's being confirmed here, generate one now — same as new bookings already do.
+        if (editingBookingId && !existingBookingInvoiceId && status === 'confirmed' && amount > 0) {
+            await ensureInvoiceForConfirmedBooking(client, editingBookingId);
         }
 
         // AUTO-GENERATE & LINK INVOICE

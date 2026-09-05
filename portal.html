@@ -14,13 +14,15 @@
             --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         * { box-sizing: border-box; }
-        body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+        body { margin: 0; font-family: var(--font-sans); background: linear-gradient(160deg, #eef2ff 0%, #f9fafb 55%, #f0f9ff 100%); color: var(--text); min-height: 100vh; }
         .page { max-width: 640px; margin: 0 auto; padding: 2.5rem 1.25rem; }
         .center-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
         .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.75rem; box-shadow: 0 10px 30px -10px rgba(15,23,42,0.08); }
         .brand-header { text-align: center; margin-bottom: 1.5rem; }
         .brand-header h1 { margin: 0.5rem 0 0; font-size: 1.4rem; }
         .brand-header p { margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.88rem; }
+        .brand-logo { width: 56px; height: 56px; border-radius: 14px; object-fit: cover; margin: 0 auto; display: block; }
+        .brand-logo-fallback { width: 56px; height: 56px; border-radius: 14px; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; background: var(--accent); color: #fff; }
         .form-group { margin-bottom: 1rem; }
         label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
         input { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.92rem; font-family: var(--font-sans); background: #fbfbfe; }
@@ -33,7 +35,7 @@
         .hidden { display: none !important; }
         .section-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin: 1.75rem 0 0.75rem; }
         .section-title:first-child { margin-top: 0; }
-        .item-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.6rem; background: var(--surface); }
+        .item-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.6rem; background: var(--surface); box-shadow: 0 2px 8px -4px rgba(15,23,42,0.05); }
         .item-title { font-weight: 600; font-size: 0.92rem; }
         .item-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
         .status-pill { display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 999px; margin-left: 0.5rem; }
@@ -42,10 +44,22 @@
         .status-completed { background: #e5e7eb; color: #374151; }
         .status-cancelled { background: #fee2e2; color: #991b1b; }
         .empty-note { font-size: 0.85rem; color: var(--text-muted); padding: 0.5rem 0; }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+        .top-bar-brand { display: flex; align-items: center; gap: 0.65rem; }
+        .top-bar-brand .brand-logo, .top-bar-brand .brand-logo-fallback { width: 38px; height: 38px; border-radius: 10px; font-size: 1.1rem; }
         .top-bar h1 { font-size: 1.25rem; margin: 0; }
         .logout-link { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; cursor: pointer; }
         .logout-link:hover { color: var(--accent); }
+        .book-service-btn {
+            display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+            width: 100%; padding: 0.8rem; margin-bottom: 1.75rem; border: none; border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #7c74f2));
+            color: #fff; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+            box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--accent) 60%, transparent);
+            transition: transform 0.1s ease;
+        }
+        .book-service-btn:hover { transform: translateY(-1px); }
+        .book-service-btn:active { transform: translateY(0); }
     </style>
 </head>
 <body>
@@ -61,7 +75,7 @@
     <div id="login-state" class="center-page hidden">
         <div class="card" style="width:100%; max-width:380px;">
             <div class="brand-header">
-                <div style="font-size:1.8rem;">🐾</div>
+                <div id="login-logo-slot"></div>
                 <h1 id="login-biz-name">Your Account</h1>
                 <p>Enter your email and we'll send you a secure login link — no password needed.</p>
             </div>
@@ -84,9 +98,16 @@
     <div id="portal-content" class="hidden">
         <div class="page">
             <div class="top-bar">
-                <h1 id="portal-biz-name">Your Account</h1>
+                <div class="top-bar-brand">
+                    <div id="portal-logo-slot"></div>
+                    <h1 id="portal-biz-name">Your Account</h1>
+                </div>
                 <a class="logout-link" onclick="handlePortalLogout()">Sign out</a>
             </div>
+
+            <button type="button" class="book-service-btn" onclick="goToBookService()">
+                <i>📅</i> Book a Service
+            </button>
 
             <div id="review-flag-notice" class="msg-box msg-success hidden">Thanks! We've created your account — a team member will review it shortly to make sure everything's linked up correctly.</div>
 
@@ -131,15 +152,14 @@
 
             const { data: business } = await supabaseClient
                 .from('businesses')
-                .select('id, name, slug, public_booking_enabled')
+                .select('id, name, slug, logo_url, accent_color, public_booking_enabled')
                 .eq('slug', slug)
                 .eq('public_booking_enabled', true)
                 .maybeSingle();
 
             if (!business) return showState('not-available-state');
             currentBiz = business;
-            document.getElementById('login-biz-name').textContent = business.name;
-            document.getElementById('portal-biz-name').textContent = business.name;
+            applyBranding(business);
 
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session?.user) {
@@ -153,6 +173,24 @@
                     enterPortal();
                 }
             });
+        }
+
+        function applyBranding(business) {
+            if (business.accent_color) document.documentElement.style.setProperty('--accent', business.accent_color);
+            document.getElementById('login-biz-name').textContent = business.name;
+            document.getElementById('portal-biz-name').textContent = business.name;
+            document.title = business.name;
+
+            const logoHtml = business.logo_url
+                ? `<img src="${business.logo_url}" class="brand-logo" alt="${business.name}">`
+                : `<div class="brand-logo-fallback">🐾</div>`;
+            document.getElementById('login-logo-slot').innerHTML = logoHtml;
+            document.getElementById('portal-logo-slot').innerHTML = logoHtml;
+        }
+
+        function goToBookService() {
+            const email = encodeURIComponent(currentBiz.customerEmail || '');
+            window.location.href = `book.html?biz=${encodeURIComponent(currentBiz.slug)}&prefillEmail=${email}`;
         }
 
         async function handlePortalLogin() {
@@ -189,6 +227,9 @@
 
         async function enterPortal() {
             const name = document.getElementById('p-name')?.value.trim() || '';
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (currentBiz) currentBiz.customerEmail = user?.email || '';
+
             const { data: householdId, error } = await supabaseClient.rpc('resolve_or_create_customer_household', {
                 business_slug: currentBiz.slug,
                 customer_name: name

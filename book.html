@@ -299,6 +299,19 @@
             document.getElementById('main-content').classList.remove('hidden');
             addBoardingPetRow();
             addServicePetRow();
+
+            // Coming from the portal, already authenticated — skip the email
+            // check/magic-link step entirely and go straight to picking a service.
+            const prefillEmail = new URLSearchParams(window.location.search).get('prefillEmail');
+            if (prefillEmail) {
+                contactInfo.email = decodeURIComponent(prefillEmail);
+                const { data: { user } } = await supabaseClient.auth.getUser();
+                if (user) {
+                    document.getElementById('f-owner-name').value = user.user_metadata?.name || '';
+                    goToStep('category');
+                    return;
+                }
+            }
             goToStep('email');
         }
 
