@@ -1446,7 +1446,7 @@ function renderPetSelectionCheckboxes(pets, selectedIds = []) {
     petBox.innerHTML = (pets && pets.length)
         ? pets.map(p => `
             <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; margin-bottom:0.35rem;">
-                <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" ${selectedIds.includes(p.id) ? 'checked' : ''}>
+                <input type="checkbox" class="bk-pet-checkbox" value="${p.id}" data-species="${(p.species || '').toLowerCase()}" ${selectedIds.includes(p.id) ? 'checked' : ''}>
                 ${p.name} (${p.species})
             </label>
         `).join('')
@@ -1699,11 +1699,24 @@ async function searchServiceTypeForBooking(query) {
     const client = getSupabase();
     if (!client) return;
 
-    let dbQuery = client.from('appointment_type_templates').select('*').order('name').limit(8);
+    let dbQuery = client.from('appointment_type_templates').select('*').order('name').limit(20);
     if (q) dbQuery = dbQuery.ilike('name', `%${q}%`);
-    const { data: matches } = await dbQuery;
+    const { data: allMatches } = await dbQuery;
 
-    const rows = (matches || []).map(t => `
+    // Restrict to templates that apply to the currently-checked pet(s)' species —
+    // a template with no species set (null/empty) is unrestricted and always shows.
+    // With multiple pets of different species checked, a template shows if it
+    // matches ANY of them (union), not all.
+    const checkedSpecies = new Set(
+        Array.from(document.querySelectorAll('.bk-pet-checkbox:checked'))
+            .map(cb => cb.dataset.species)
+            .filter(Boolean)
+    );
+    const matches = checkedSpecies.size
+        ? (allMatches || []).filter(t => !Array.isArray(t.species) || !t.species.length || t.species.some(s => checkedSpecies.has(s)))
+        : (allMatches || []);
+
+    const rows = matches.slice(0, 8).map(t => `
         <div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; border-bottom:1px solid var(--border);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(t.name)}, ${JSON.stringify(t.resource_type || null)}, ${t.default_price != null ? t.default_price : 'null'}, ${!!t.requires_staff_time}, ${t.staff_time_minutes || 'null'}, ${JSON.stringify(t.staff_time_resource_type || null)}, ${JSON.stringify(t.pricing_unit || 'flat')})'>
             <strong>${t.name}</strong>
             <span style="color:var(--text-muted); font-size:0.78rem;">${t.default_price != null ? ' · $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}${t.resource_type ? ' · needs ' + t.resource_type : ''}${t.requires_staff_time ? ' · staff time' : ''}</span>
@@ -6554,7 +6567,7 @@ async function renderApptTypeList() {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); cursor:pointer;" onclick="openApptTypeModal('${t.id}')">
             <div>
                 <strong>${t.name}</strong>
-                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : ' flat') : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''}</span>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${t.default_price != null ? '$' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : ' flat') : ''} ${t.default_duration_minutes ? '· ' + t.default_duration_minutes + ' min' : ''} ${t.resource_type ? '· Resource: ' + t.resource_type : ''} ${t.requires_staff_time ? '· Staff time: ' + (t.staff_time_minutes || '?') + ' min/day' + (t.staff_time_resource_type ? ' (' + t.staff_time_resource_type + ')' : '') : ''} ${Array.isArray(t.species) && t.species.length ? '· ' + t.species.map(s => s[0].toUpperCase() + s.slice(1)).join('/') + ' only' : ''}</span>
                 ${t.notes ? `<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">${t.notes}</div>` : ''}
             </div>
             <div style="display:flex; gap:0.4rem;">
@@ -6612,6 +6625,9 @@ async function openApptTypeModal(id) {
     if (staffTimeMinutesInput) staffTimeMinutesInput.value = t?.staff_time_minutes || '';
     if (staffTimeResourceTypeSel) staffTimeResourceTypeSel.value = t?.staff_time_resource_type || '';
     if (notesInput) notesInput.value = t?.notes || '';
+    document.querySelectorAll('.att-species-chk').forEach(chk => {
+        chk.checked = Array.isArray(t?.species) && t.species.includes(chk.value);
+    });
 
     document.getElementById('appt-type-modal')?.classList.remove('hidden');
 }
@@ -6632,6 +6648,7 @@ async function saveApptType() {
     const staffTimeMinutes = document.getElementById('att-staff-time-minutes')?.value;
     const staffTimeResourceType = document.getElementById('att-staff-time-resource-type')?.value.trim() || null;
     const notes = document.getElementById('att-notes')?.value.trim() || '';
+    const species = Array.from(document.querySelectorAll('.att-species-chk:checked')).map(chk => chk.value);
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
@@ -6645,7 +6662,8 @@ async function saveApptType() {
         requires_staff_time: requiresStaffTime,
         staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
         staff_time_resource_type: requiresStaffTime ? staffTimeResourceType : null,
-        notes
+        notes,
+        species: species.length ? species : null
     };
 
     let response;

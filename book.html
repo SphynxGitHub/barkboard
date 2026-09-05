@@ -137,7 +137,7 @@
                         </div>
                         <div class="form-group">
                             <label>Species</label>
-                            <select id="f-species">
+                            <select id="f-species" onchange="populateServiceOptions()">
                                 <option value="dog">Dog</option>
                                 <option value="cat">Cat</option>
                                 <option value="other">Other</option>
@@ -230,7 +230,7 @@
 
             const { data: templates } = await supabaseClient
                 .from('appointment_type_templates')
-                .select('name, default_price, pricing_unit, default_duration_minutes')
+                .select('name, default_price, pricing_unit, default_duration_minutes, species')
                 .eq('business_id', business.id)
                 .order('name');
             serviceTemplates = templates || [];
@@ -286,9 +286,14 @@
 
         function populateServiceOptions() {
             const sel = document.getElementById('f-service');
+            const currentSpecies = document.getElementById('f-species')?.value || '';
+            const visible = serviceTemplates.filter(t => !Array.isArray(t.species) || !t.species.length || t.species.includes(currentSpecies));
+            const previouslySelected = sel.value;
             sel.innerHTML = '<option value="">Select a service...</option>' +
-                serviceTemplates.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('') +
+                visible.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('') +
                 '<option value="__other__">Other / Not Listed</option>';
+            // Keep the previous selection if it's still valid for the (possibly new) species, otherwise reset
+            if (visible.some(t => t.name === previouslySelected)) sel.value = previouslySelected;
         }
 
         function onServiceChange() {
