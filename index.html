@@ -187,6 +187,23 @@
         </div>
     </div>
 
+    <!-- Payment method picker — used whenever an invoice is marked paid, so
+         it's a real dropdown of the business's own configured methods
+         (plus generic fallbacks) instead of a plain text prompt. -->
+    <div id="mark-paid-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:1950; background:rgba(15,23,42,0.5); display:flex; align-items:center; justify-content:center;">
+        <div style="background:var(--bg-card,#fff); border-radius:0.5rem; padding:1.5rem; width:100%; max-width:340px;">
+            <h3 style="margin:0 0 1rem;">How was this paid?</h3>
+            <div class="form-group">
+                <label>Payment Method</label>
+                <select id="mark-paid-method-select" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;"></select>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:0.75rem; margin-top:1.25rem;">
+                <button type="button" class="btn" onclick="cancelPaymentMethod()">Skip</button>
+                <button type="button" class="btn-primary" onclick="confirmPaymentMethod()">Mark Paid</button>
+            </div>
+        </div>
+    </div>
+
     <div id="owner-banner" class="owner-banner hidden">
         <div>👁️ Admin preview — viewing portal as: <strong id="owner-banner-name">—</strong></div>
         <button class="exit-owner-btn" onclick="exitOwnerView()">✕ Exit Owner View</button>

@@ -913,7 +913,7 @@ async function setInvoiceStatusFromDetail(invoiceId, newStatus, key) {
     const payload = { status: newStatus };
     if (newStatus === 'paid') {
         payload.paid_date = new Date().toISOString().slice(0, 10);
-        payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+        payload.payment_method = await promptForPaymentMethod();
     }
     const { error } = await client.from('invoices').update(payload).eq('id', invoiceId);
     if (error) return alert('Failed to update: ' + error.message);
@@ -2588,10 +2588,46 @@ async function setHouseholdInvoiceStatus(invoiceId, newStatus, householdId) {
     openFullWidthProfile('household', householdId);
 }
 
+/* Shared payment-method picker — used everywhere an invoice gets marked
+   paid, instead of a plain prompt(). Options are built from whichever
+   payment methods the business has actually configured in Payment
+   Settings, plus generic fallbacks that are always offered. Returns a
+   Promise resolving to the chosen method, or null if skipped — marking the
+   invoice paid still proceeds either way, this only affects whether a
+   method gets recorded. */
+let _paymentMethodResolve = null;
+
+async function promptForPaymentMethod() {
+    const settings = typeof getBusinessSettings === 'function' ? await getBusinessSettings() : null;
+    const options = [];
+    if (settings?.venmo_handle) options.push('Venmo');
+    if (settings?.zelle_info) options.push('Zelle');
+    if (settings?.cash_note) options.push('Cash');
+    if (settings?.square_link) options.push('Square');
+    ['Card', 'Check', 'Other'].forEach(o => { if (!options.includes(o)) options.push(o); });
+
+    const sel = document.getElementById('mark-paid-method-select');
+    if (sel) sel.innerHTML = options.map(o => `<option value="${o}">${o}</option>`).join('');
+    document.getElementById('mark-paid-modal')?.classList.remove('hidden');
+
+    return new Promise(resolve => { _paymentMethodResolve = resolve; });
+}
+
+function confirmPaymentMethod() {
+    const val = document.getElementById('mark-paid-method-select')?.value || null;
+    document.getElementById('mark-paid-modal')?.classList.add('hidden');
+    if (_paymentMethodResolve) { _paymentMethodResolve(val); _paymentMethodResolve = null; }
+}
+
+function cancelPaymentMethod() {
+    document.getElementById('mark-paid-modal')?.classList.add('hidden');
+    if (_paymentMethodResolve) { _paymentMethodResolve(null); _paymentMethodResolve = null; }
+}
+
 async function markInvoicePaid(id, householdId) {
     const client = getSupabase();
     if (!client) return;
-    const paymentMethod = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+    const paymentMethod = await promptForPaymentMethod();
     await client.from('invoices').update({ status: 'paid', paid_date: new Date().toISOString().slice(0, 10), payment_method: paymentMethod }).eq('id', id);
     if (typeof showReceipt === 'function') showReceipt(id);
     openFullWidthProfile('household', householdId);
@@ -3998,7 +4034,7 @@ async function setBizInvoiceStatus(kind, id, newStatus) {
     const payload = { status: newStatus };
     if (newStatus === 'paid') {
         payload.paid_date = new Date().toISOString().slice(0, 10);
-        payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+        payload.payment_method = await promptForPaymentMethod();
     }
     await client.from('invoices').update(payload).eq('id', id);
     if (newStatus === 'paid') showReceipt(id);
@@ -5640,7 +5676,7 @@ async function setBookingStatusInProfile(kind, id, newStatus) {
         const payload = { status: newStatus };
         if (newStatus === 'paid') {
             payload.paid_date = new Date().toISOString().slice(0, 10);
-            payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+            payload.payment_method = await promptForPaymentMethod();
         }
         await client.from('invoices').update(payload).eq('id', id);
         if (newStatus === 'paid') showReceipt(id);
@@ -5670,7 +5706,7 @@ async function setStaffFeedInvoiceStatus(kind, id, newStatus) {
     const payload = { status: newStatus };
     if (newStatus === 'paid') {
         payload.paid_date = new Date().toISOString().slice(0, 10);
-        payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+        payload.payment_method = await promptForPaymentMethod();
     }
     await client.from('invoices').update(payload).eq('id', id);
     if (newStatus === 'paid') showReceipt(id);

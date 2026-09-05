@@ -211,22 +211,15 @@
                 <button type="button" class="submit-btn" onclick="finishServiceGroup()">Add to My Requests</button>
             </div>
 
-            <!-- STEP: "book another?" prompt -->
-            <div id="step-another" class="card hidden">
-                <p style="font-size:0.95rem; font-weight:600; text-align:center; margin-bottom:1.25rem;">Added! Want to book another service?</p>
-                <div style="display:flex; flex-direction:column; gap:0.6rem;">
-                    <button type="button" class="submit-btn" onclick="goToStep('category')">Yes, book another service</button>
-                    <button type="button" class="btn-secondary" onclick="goToStep('review')">No, review & submit</button>
-                </div>
-            </div>
-
             <!-- STEP: review & submit -->
             <div id="step-review" class="card hidden">
-                <button type="button" class="step-back" onclick="goToStep('another')">← Back</button>
+                <button type="button" class="step-back" onclick="goToStep('category')">← Back</button>
                 <p style="font-size:0.95rem; font-weight:600; margin-bottom:1rem;">Review your requests</p>
                 <div id="review-groups"></div>
 
-                <div class="form-group" style="margin-top:1rem;">
+                <button type="button" class="add-pet-link-btn" onclick="goToStep('category')">+ Add Another Service</button>
+
+                <div class="form-group" style="margin-top:0.5rem;">
                     <label>Notes</label>
                     <textarea id="f-notes" placeholder="Anything we should know? Allergies, temperament, special requests..."></textarea>
                 </div>
@@ -280,7 +273,7 @@
         }
 
         function goToStep(step) {
-            ['email', 'contact', 'category', 'boarding', 'service-group', 'another', 'review'].forEach(s => {
+            ['email', 'contact', 'category', 'boarding', 'service-group', 'review'].forEach(s => {
                 document.getElementById(`step-${s}`)?.classList.toggle('hidden', s !== step);
             });
             if (step === 'category') renderCategoryGrid();
@@ -288,7 +281,7 @@
         }
 
         function handleCategoryBack() {
-            goToStep('contact');
+            goToStep(bookingGroups.length ? 'review' : 'contact');
         }
 
         // A guest typically has no session, so this just no-ops — but if the
@@ -641,7 +634,7 @@
             document.getElementById('board-dropoff-time').value = '';
             document.getElementById('board-pickup-time').value = '';
 
-            goToStep('another');
+            goToStep('review');
         }
 
         // --- Grooming/Training/Daycare group -------------------------------------
@@ -682,7 +675,7 @@
             document.getElementById('service-date').value = '';
             document.getElementById('service-time').value = '';
 
-            goToStep('another');
+            goToStep('review');
         }
 
         // --- Category picker -----------------------------------------------------
