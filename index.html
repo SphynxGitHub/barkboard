@@ -377,7 +377,6 @@
                 <button class="biz-tab" id="biztab-payments" onclick="switchBizTab('payments')"><i data-lucide="credit-card"></i> Payment Settings</button>
                 <button class="biz-tab" id="biztab-availability" onclick="switchBizTab('availability')"><i data-lucide="calendar-days"></i> Business Availability</button>
                 <button class="biz-tab" id="biztab-public-booking" onclick="switchBizTab('public-booking')"><i data-lucide="link"></i> Public Booking Page</button>
-                <button class="biz-tab" id="biztab-hours" onclick="switchBizTab('hours')"><i data-lucide="clock"></i> Hours of Operation</button>
                 <button class="biz-tab" id="biztab-email-settings" onclick="switchBizTab('email-settings')"><i data-lucide="mail"></i> Email (SMTP)</button>
             </div>
 
@@ -449,6 +448,13 @@
             <!-- ── AVAILABILITY TAB ── -->
             <div id="bizsec-availability" class="biz-section">
                 <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Hours of operation</h3>
+                </div>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Shown on your public booking page. Doesn't currently restrict which times can be booked internally — just informational for now.</p>
+                <div id="hours-rows" style="display:flex; flex-direction:column; gap:0.5rem; max-width:520px; margin-bottom:1rem;"></div>
+                <button class="btn-primary" style="padding:0.5rem 1.25rem; margin-bottom:2rem;" onclick="saveBusinessHours()">Save Hours</button>
+
+                <div class="section-header-row" style="margin-bottom:1rem; padding-top:1.5rem; border-top:1px solid var(--border);">
                     <h3 style="margin:0;">Business closures & staff away dates</h3>
                     <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openAvailabilityModal(null)">+ Add closure</button>
                 </div>
@@ -564,15 +570,6 @@
 
                     <button class="btn-primary" style="align-self:flex-start; padding:0.5rem 1.25rem;" onclick="savePublicBookingSettings()">Save</button>
                 </div>
-            </div>
-
-            <div id="bizsec-hours" class="biz-section">
-                <div class="section-header-row" style="margin-bottom:1rem;">
-                    <h3 style="margin:0;">Hours of operation</h3>
-                </div>
-                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Shown on your public booking page. Doesn't currently restrict which times can be booked internally — just informational for now.</p>
-                <div id="hours-rows" style="display:flex; flex-direction:column; gap:0.5rem; max-width:520px; margin-bottom:1rem;"></div>
-                <button class="btn-primary" style="padding:0.5rem 1.25rem;" onclick="saveBusinessHours()">Save</button>
             </div>
 
             <div id="bizsec-email-settings" class="biz-section">

@@ -3570,6 +3570,7 @@ function switchBizTab(tab) {
     }
     if (tab === 'availability' && typeof renderAvailabilityList === 'function') {
         renderAvailabilityList();
+        if (typeof loadBusinessHours === 'function') loadBusinessHours();
     }
     if (tab === 'invoices' && typeof renderInvoicesList === 'function') {
         renderInvoicesList();
@@ -3579,9 +3580,6 @@ function switchBizTab(tab) {
     }
     if (tab === 'public-booking' && typeof loadPublicBookingSettings === 'function') {
         loadPublicBookingSettings();
-    }
-    if (tab === 'hours' && typeof loadBusinessHours === 'function') {
-        loadBusinessHours();
     }
     if (tab === 'email-settings' && typeof loadEmailSettings === 'function') {
         loadEmailSettings();
