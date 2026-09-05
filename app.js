@@ -7220,6 +7220,57 @@ async function deleteAssessmentTemplate(id) {
    BUSINESS PAYMENT SETTINGS + PAYMENT NOTICE / RECEIPT GENERATION
    ========================================================================== */
 
+/* Shared "Saved ✓" flash used by the auto-save fields in Business Settings —
+   replaces a blocking alert() with a quiet inline confirmation next to the
+   section that was just saved. */
+function flashSaveIndicator(elId) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.classList.remove('hidden');
+    clearTimeout(el._hideTimeout);
+    el._hideTimeout = setTimeout(() => el.classList.add('hidden'), 1800);
+}
+
+function updateLogoPreview() {
+    const url = document.getElementById('pb-logo-url')?.value.trim();
+    const wrap = document.getElementById('pb-logo-preview-wrap');
+    const img = document.getElementById('pb-logo-preview');
+    if (!wrap || !img) return;
+    if (url) {
+        img.src = url;
+        wrap.classList.remove('hidden');
+    } else {
+        wrap.classList.add('hidden');
+    }
+}
+
+async function uploadBusinessLogo() {
+    const fileInput = document.getElementById('pb-logo-file');
+    const file = fileInput?.files?.[0];
+    if (!file) return;
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const ext = file.name.split('.').pop();
+    const path = `${currentBusinessId}/logo-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await client.storage.from('business-logos').upload(path, file, { upsert: true });
+    if (uploadError) {
+        alert('Failed to upload logo: ' + uploadError.message);
+        return;
+    }
+
+    const { data } = client.storage.from('business-logos').getPublicUrl(path);
+    const logoUrlInput = document.getElementById('pb-logo-url');
+    if (logoUrlInput) logoUrlInput.value = data.publicUrl;
+    updateLogoPreview();
+    fileInput.value = '';
+    flashSaveIndicator('pb-logo-upload-status');
+
+    await savePublicBookingSettings();
+}
+
 async function getBusinessSettings() {
     const client = getSupabase();
     if (!client) return null;
@@ -7263,7 +7314,7 @@ async function saveBusinessPaymentSettings() {
     }
 
     if (response.error) return alert('Failed to save: ' + response.error.message);
-    alert('Payment settings saved.');
+    flashSaveIndicator('payments-saved');
 }
 
 /* ==========================================================================
@@ -7293,6 +7344,7 @@ async function loadPublicBookingSettings() {
     if (enabledChk) enabledChk.checked = !!business.public_booking_enabled;
     document.getElementById('pb-welcome').value = business.welcome_message || '';
     document.getElementById('pb-logo-url').value = business.logo_url || '';
+    updateLogoPreview();
     document.getElementById('pb-accent-color').value = business.accent_color || '#4f46e5';
     document.getElementById('pb-slug').value = business.slug || '';
     document.getElementById('pb-slug-prefix').textContent = `${window.location.origin}/book.html?biz=`;
@@ -7380,7 +7432,11 @@ async function savePublicBookingSettings() {
     // Reflect the slugified version back into the field so what's shown matches what saved
     document.getElementById('pb-slug').value = slug;
 
-    alert('Public booking settings saved.');
+    // This one save covers both the Business Information and Scheduling
+    // Settings sections (same `businesses` row) — flash whichever section's
+    // indicator is present, since either one could be what triggered the save.
+    flashSaveIndicator('biz-info-saved');
+    flashSaveIndicator('scheduling-saved');
     loadPublicBookingSettings(); // refresh the link box now that enabled/slug state may have changed
 }
 
@@ -7457,7 +7513,7 @@ async function saveEmailSettings() {
     if (error) return alert('Failed to save: ' + error.message);
 
     document.getElementById('em-password').value = '';
-    alert('Email settings saved.');
+    flashSaveIndicator('email-settings-saved');
 }
 
 function closeDocumentOverlay() {

@@ -511,60 +511,69 @@
 
                     <!-- Business Information -->
                     <div>
-                        <h3 style="margin:0 0 1rem;">Business Information</h3>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                            <h3 style="margin:0;">Business Information</h3>
+                            <button class="btn" style="font-size:0.78rem; padding:0.35rem 0.7rem;" onclick="openOnboardingWizard(null, true)">Run Setup Wizard</button>
+                        </div>
+                        <span id="biz-info-saved" class="save-indicator hidden">Saved ✓</span>
                         <div style="display:flex; flex-direction:column; gap:0.85rem;">
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Business Name</label>
-                                <input type="text" id="pb-business-name" placeholder="Your Business Name" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="pb-business-name" placeholder="Your Business Name" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
                             </div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.85rem;">
                                 <div>
                                     <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Phone</label>
-                                    <input type="tel" id="pb-contact-phone" placeholder="(555) 123-4567" class="biz-select" style="width:100%; padding:0.5rem;">
+                                    <input type="tel" id="pb-contact-phone" placeholder="(555) 123-4567" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
                                 </div>
                                 <div>
                                     <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Contact Email</label>
-                                    <input type="email" id="pb-contact-email" placeholder="hello@yourbusiness.com" class="biz-select" style="width:100%; padding:0.5rem;">
+                                    <input type="email" id="pb-contact-email" placeholder="hello@yourbusiness.com" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
                                 </div>
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Notification Email</label>
-                                <input type="email" id="pb-notify-email" placeholder="owner@yourbusiness.com" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="email" id="pb-notify-email" placeholder="owner@yourbusiness.com" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
                                 <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Where "new booking request" emails get sent. Leave blank to use your login email.</p>
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
-                                <input type="text" id="pb-address" placeholder="123 Main St, Anytown, ST 12345" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="pb-address" placeholder="123 Main St, Anytown, ST 12345" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
                                 <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Shown on invoices/receipts and your booking page.</p>
                             </div>
                             <div>
-                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Logo URL</label>
-                                <input type="text" id="pb-logo-url" placeholder="https://..." class="biz-select" style="width:100%; padding:0.5rem;">
+                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Logo</label>
+                                <div id="pb-logo-preview-wrap" class="hidden" style="margin-bottom:0.5rem;">
+                                    <img id="pb-logo-preview" style="max-height:60px; border-radius:0.25rem; border:1px solid var(--border);">
+                                </div>
+                                <input type="text" id="pb-logo-url" placeholder="https://... (or upload a file below)" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings(); updateLogoPreview();">
+                                <div style="display:flex; align-items:center; gap:0.6rem; margin-top:0.5rem;">
+                                    <input type="file" id="pb-logo-file" accept="image/*" onchange="uploadBusinessLogo()">
+                                    <span id="pb-logo-upload-status" class="save-indicator hidden">Uploaded ✓</span>
+                                </div>
                                 <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Shown on your booking page, invoices, and receipts. Leave blank to show a paw-print icon instead.</p>
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Accent Color</label>
-                                <input type="color" id="pb-accent-color" value="#4f46e5" style="width:70px; padding:0.25rem; border:1px solid var(--border); border-radius:0.25rem;">
+                                <input type="color" id="pb-accent-color" value="#4f46e5" style="width:70px; padding:0.25rem; border:1px solid var(--border); border-radius:0.25rem;" onchange="savePublicBookingSettings()">
                             </div>
                         </div>
                     </div>
 
                     <!-- Scheduling Settings -->
                     <div style="padding-top:0.5rem; border-top:1px solid var(--border);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                            <h3 style="margin:0;">Scheduling Settings</h3>
-                            <button class="btn" style="font-size:0.78rem; padding:0.35rem 0.7rem;" onclick="openOnboardingWizard(null, true)">Run Setup Wizard</button>
-                        </div>
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Let customers request an appointment directly, without calling or emailing. Submissions land in your Activities feed with "Pending" status for you to confirm or decline — nothing goes on the calendar automatically.</p>
+                        <h3 style="margin:0 0 0.25rem;">Scheduling Settings</h3>
+                        <span id="scheduling-saved" class="save-indicator hidden">Saved ✓</span>
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0.25rem 0 1rem;">Let customers request an appointment directly, without calling or emailing. Submissions land in your Activities feed with "Pending" status for you to confirm or decline — nothing goes on the calendar automatically.</p>
                         <div style="display:flex; flex-direction:column; gap:0.85rem;">
                             <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
-                                <input type="checkbox" id="pb-enabled"> Enable public booking page
+                                <input type="checkbox" id="pb-enabled" onchange="savePublicBookingSettings()"> Enable public booking page
                             </label>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Booking Page URL</label>
                                 <div style="display:flex; align-items:center; gap:0.35rem;">
                                     <span id="pb-slug-prefix" style="font-size:0.82rem; color:var(--text-muted); white-space:nowrap;"></span>
-                                    <input type="text" id="pb-slug" placeholder="your-business-name" class="biz-select" style="flex:1; padding:0.5rem;" oninput="previewPublicBookingSlug()">
+                                    <input type="text" id="pb-slug" placeholder="your-business-name" class="biz-select" style="flex:1; padding:0.5rem;" oninput="previewPublicBookingSlug()" onchange="savePublicBookingSettings()">
                                 </div>
                                 <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Letters, numbers, and hyphens only — this becomes part of your public link below.</p>
                             </div>
@@ -577,71 +586,70 @@
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Welcome Message</label>
-                                <textarea id="pb-welcome" rows="2" placeholder="e.g. Request an appointment below and we'll confirm within 24 hours." class="biz-select" style="width:100%; padding:0.5rem;"></textarea>
+                                <textarea id="pb-welcome" rows="2" placeholder="e.g. Request an appointment below and we'll confirm within 24 hours." class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()"></textarea>
                             </div>
                         </div>
-                        <button class="btn-primary" style="margin-top:1rem; padding:0.5rem 1.25rem;" onclick="savePublicBookingSettings()">Save Business & Scheduling Info</button>
                     </div>
 
                     <!-- Payment Settings -->
                     <div style="padding-top:0.5rem; border-top:1px solid var(--border);">
-                        <h3 style="margin:0 0 1rem;">Payment Settings</h3>
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">These show up on payment notices, invoices, and receipts. Square is listed as an accepted method for now — online payment processing isn't wired up yet.</p>
+                        <h3 style="margin:0 0 0.25rem;">Payment Settings</h3>
+                        <span id="payments-saved" class="save-indicator hidden">Saved ✓</span>
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0.25rem 0 1rem;">These show up on payment notices, invoices, and receipts. Square is listed as an accepted method for now — online payment processing isn't wired up yet.</p>
                         <div style="display:flex; flex-direction:column; gap:0.85rem;">
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Venmo Handle</label>
-                                <input type="text" id="pay-venmo" placeholder="@your-handle" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="pay-venmo" placeholder="@your-handle" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveBusinessPaymentSettings()">
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Zelle Info</label>
-                                <input type="text" id="pay-zelle" placeholder="email or phone" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="pay-zelle" placeholder="email or phone" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveBusinessPaymentSettings()">
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Cash Instructions</label>
-                                <input type="text" id="pay-cash" placeholder="e.g. Cash accepted at pickup/drop-off" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="pay-cash" placeholder="e.g. Cash accepted at pickup/drop-off" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveBusinessPaymentSettings()">
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Square Link</label>
-                                <input type="text" id="pay-square" placeholder="https://square.link/..." class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="pay-square" placeholder="https://square.link/..." class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveBusinessPaymentSettings()">
                             </div>
                         </div>
-                        <button class="btn-primary" style="margin-top:1rem; padding:0.5rem 1.25rem;" onclick="saveBusinessPaymentSettings()">Save Payment Settings</button>
                     </div>
 
                     <!-- Email Settings -->
                     <div style="padding-top:0.5rem; border-top:1px solid var(--border);">
-                        <h3 style="margin:0 0 1rem;">Email Settings</h3>
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Send booking-request notifications through your own email provider (Gmail, Office 365, or any SMTP-compatible service). These credentials are only visible to staff in your business.</p>
+                        <h3 style="margin:0 0 0.25rem;">Email Settings</h3>
+                        <span id="email-settings-saved" class="save-indicator hidden">Saved ✓</span>
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0.25rem 0 1rem;">Send booking-request notifications through your own email provider (Gmail, Office 365, or any SMTP-compatible service). These credentials are only visible to staff in your business.</p>
                         <div style="display:flex; flex-direction:column; gap:0.85rem;">
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">SMTP Host</label>
-                                <input type="text" id="em-host" placeholder="smtp.gmail.com" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="em-host" placeholder="smtp.gmail.com" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveEmailSettings()">
                             </div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
                                 <div>
                                     <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Port</label>
-                                    <input type="number" id="em-port" placeholder="587" class="biz-select" style="width:100%; padding:0.5rem;">
+                                    <input type="number" id="em-port" placeholder="587" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveEmailSettings()">
                                 </div>
                                 <div>
                                     <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">From Name</label>
-                                    <input type="text" id="em-from-name" placeholder="Your Business" class="biz-select" style="width:100%; padding:0.5rem;">
+                                    <input type="text" id="em-from-name" placeholder="Your Business" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveEmailSettings()">
                                 </div>
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">From Email</label>
-                                <input type="email" id="em-from-email" placeholder="bookings@yourbusiness.com" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="email" id="em-from-email" placeholder="bookings@yourbusiness.com" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveEmailSettings()">
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">SMTP Username</label>
-                                <input type="text" id="em-username" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="text" id="em-username" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveEmailSettings()">
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">SMTP Password</label>
-                                <input type="password" id="em-password" placeholder="Leave blank to keep current password" class="biz-select" style="width:100%; padding:0.5rem;">
+                                <input type="password" id="em-password" placeholder="Leave blank to keep current password" class="biz-select" style="width:100%; padding:0.5rem;" onchange="saveEmailSettings()">
                                 <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">For Gmail/Office 365, this is usually an app-specific password, not your regular login password.</p>
                             </div>
                         </div>
-                        <button class="btn-primary" style="margin-top:1rem; padding:0.5rem 1.25rem;" onclick="saveEmailSettings()">Save Email Settings</button>
                     </div>
 
                 </div>

@@ -1692,3 +1692,12 @@ input.biz-select {
   background: var(--danger);
   color: var(--danger-text);
 }
+
+.save-indicator {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--success-text, #065f46);
+  margin-left: 0.5rem;
+  transition: opacity 0.3s ease;
+}
