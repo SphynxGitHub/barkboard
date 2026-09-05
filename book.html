@@ -34,6 +34,19 @@
         .add-pet-btn { display: flex; align-items: center; gap: 0.35rem; width: 100%; padding: 0.6rem; margin-bottom: 1.1rem; border: 1.5px dashed var(--border); border-radius: 9px; background: transparent; color: var(--accent); font-size: 0.85rem; font-weight: 600; cursor: pointer; justify-content: center; transition: background 0.15s ease, border-color 0.15s ease; }
         .add-pet-btn:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); border-color: var(--accent); }
         .pet-card { border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; background: #fbfbfe; position: relative; }
+        .existing-pets-grid { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem; }
+        .existing-pet-chip {
+            display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.85rem;
+            border: 1.5px solid var(--border); border-radius: 999px; cursor: pointer; background: var(--surface);
+            font-size: 0.85rem; font-weight: 600; transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .existing-pet-chip:hover { border-color: var(--accent); }
+        .existing-pet-chip.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); }
+        .existing-pet-chip .chip-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border); flex-shrink: 0; }
+        .existing-pet-chip.selected .chip-check { background: var(--accent); border-color: var(--accent); position: relative; }
+        .existing-pet-chip.selected .chip-check::after { content: ''; position: absolute; top: 3px; left: 5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+        .pet-detail-row { border: 1px solid var(--border); border-radius: 10px; padding: 0.9rem; margin-bottom: 0.85rem; background: #fbfbfe; }
+        .pet-detail-row .pet-detail-name { font-weight: 700; font-size: 0.92rem; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center; }
         .pet-card-remove { position: absolute; top: 0.6rem; right: 0.6rem; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.15rem; line-height: 1; padding: 0.15rem 0.4rem; border-radius: 6px; }
         .pet-card-remove:hover { background: var(--danger); color: var(--danger-text); }
         .msg-box { padding: 0.7rem 0.85rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; }
@@ -64,6 +77,19 @@
         .addon-row:last-child { border-bottom: none; }
         .step-back { background: none; border: none; color: var(--text-muted); font-size: 0.82rem; cursor: pointer; padding: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.3rem; }
         .step-back:hover { color: var(--accent); }
+
+        .pet-select-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 0.75rem; margin-bottom: 0.7rem; background: var(--surface); position: relative; transition: border-color 0.15s ease, background 0.15s ease; }
+        .pet-select-card:not(.manual-pet-card) .pet-card-header { display: flex; align-items: center; gap: 0.7rem; cursor: pointer; }
+        .pet-select-card.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+        .pet-check-circle { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
+        .pet-select-card.selected .pet-check-circle { background: var(--accent); border-color: var(--accent); }
+        .pet-select-card.selected .pet-check-circle::after { content: "✓"; color: #fff; font-size: 0.7rem; font-weight: 700; }
+        .pet-card-name { font-weight: 600; font-size: 0.9rem; }
+        .pet-card-species-label { font-size: 0.78rem; color: var(--text-muted); text-transform: capitalize; }
+        .pet-card-service-row { margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px solid var(--border); }
+        .pet-card-service-row label { font-size: 0.75rem; margin-bottom: 0.25rem; }
+        .add-pet-link-btn { background: none; border: none; color: var(--accent); font-size: 0.85rem; font-weight: 600; cursor: pointer; padding: 0.3rem 0; margin-bottom: 1rem; }
+        .add-pet-link-btn:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -107,7 +133,7 @@
                     <input type="tel" id="f-phone">
                     <p class="field-hint">Optional, but helpful if we need to reach you quickly.</p>
                 </div>
-                <button type="button" class="submit-btn" onclick="goToStep('category')">Continue</button>
+                <button type="button" class="submit-btn" onclick="continueFromContactStep()">Continue</button>
             </div>
 
             <!-- STEP: category picker -->
@@ -123,7 +149,7 @@
                 <p style="font-size:0.9rem; font-weight:600; margin-bottom:1rem;">🏠 Boarding</p>
 
                 <div id="boarding-pet-rows"></div>
-                <button type="button" class="add-pet-btn" onclick="addBoardingPetRow()">+ Add Another Pet</button>
+                <button type="button" class="add-pet-link-btn" onclick="addManualPetCard('boarding-pet-rows', 'boarding')">+ Add a pet not listed above</button>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -164,13 +190,8 @@
                 <p style="font-size:0.9rem; font-weight:600; margin-bottom:1rem;" id="service-group-title">Service</p>
 
                 <div id="service-pet-rows"></div>
-                <button type="button" class="add-pet-btn" onclick="addServicePetRow()">+ Add Another Pet</button>
+                <button type="button" class="add-pet-link-btn" onclick="addManualPetCard('service-pet-rows', currentServiceCategory)">+ Add a pet not listed above</button>
                 <p class="field-hint hidden" id="multi-pet-notice" style="margin-top:-0.6rem; margin-bottom:1.1rem;"></p>
-
-                <div class="form-group">
-                    <label>Service *</label>
-                    <select id="service-select" required onchange="updateMultiPetNotice()"></select>
-                </div>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -258,6 +279,15 @@
             goToStep('contact');
         }
 
+        // A guest typically has no session, so this just no-ops — but if the
+        // same browser happens to already be authenticated (e.g. they were
+        // logged into the portal earlier and this tab still has that
+        // session), this picks up their existing pets automatically too.
+        async function continueFromContactStep() {
+            await fetchExistingPetsIfLoggedIn();
+            goToStep('category');
+        }
+
         async function init() {
             const slug = getSlug();
             if (!slug) {
@@ -297,8 +327,6 @@
             renderBusinessHours(hours || []);
 
             document.getElementById('main-content').classList.remove('hidden');
-            addBoardingPetRow();
-            addServicePetRow();
 
             // Coming from the portal, already authenticated — skip the email
             // check/magic-link step entirely and go straight to picking a service.
@@ -308,6 +336,7 @@
                 const { data: { user } } = await supabaseClient.auth.getUser();
                 if (user) {
                     document.getElementById('f-owner-name').value = user.user_metadata?.name || '';
+                    await fetchExistingPetsIfLoggedIn();
                     goToStep('category');
                     return;
                 }
@@ -403,41 +432,113 @@
             goToStep('contact');
         }
 
-        // --- Boarding pet rows ---------------------------------------------------
-        function addBoardingPetRow() {
-            const id = `board-pet-${petRowCounter++}`;
+        // --- Unified pet selection: existing-pet cards (click to select) +
+        // "add a pet not listed" for new pets, each with its own inline
+        // service dropdown filtered by category + species. -------------------
+        let existingPets = []; // fetched once, if logged in: [{id, name, species}]
+
+        async function fetchExistingPetsIfLoggedIn() {
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (!user) return;
+            const { data: householdId } = await supabaseClient.rpc('resolve_or_create_customer_household', {
+                business_slug: currentBusiness.slug,
+                customer_name: document.getElementById('f-owner-name')?.value.trim() || ''
+            });
+            if (!householdId) return;
+            const { data: pets } = await supabaseClient.from('pets').select('id, name, species').eq('household_id', householdId).order('name');
+            existingPets = pets || [];
+        }
+
+        function renderPetCards(containerId, category) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = existingPets.map(p => `
+                <div class="pet-select-card" data-existing="1" data-pet-id="${p.id}" data-name="${(p.name || '').replace(/"/g, '&quot;')}" data-species="${p.species || ''}">
+                    <div class="pet-card-header" onclick="togglePetCard(this, '${category}')">
+                        <span class="pet-check-circle"></span>
+                        <div>
+                            <div class="pet-card-name">${p.name}</div>
+                            <div class="pet-card-species-label">${p.species || ''}</div>
+                        </div>
+                    </div>
+                    <div class="pet-card-service-row hidden">
+                        <label>Service *</label>
+                        <select class="pet-service-select"></select>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function togglePetCard(headerEl, category) {
+            const card = headerEl.closest('.pet-select-card');
+            const nowSelected = !card.classList.contains('selected');
+            card.classList.toggle('selected', nowSelected);
+            card.querySelector('.pet-card-service-row').classList.toggle('hidden', !nowSelected);
+            if (nowSelected) populateServiceSelectForCard(card, category);
+            onPetSelectionChanged(category);
+        }
+
+        function addManualPetCard(containerId, category) {
+            const id = `manual-pet-${petRowCounter++}`;
             const el = document.createElement('div');
             el.id = id;
-            el.className = 'pet-card';
-            const isFirst = !document.querySelector('#boarding-pet-rows .pet-card');
+            el.className = 'pet-select-card selected manual-pet-card';
             el.innerHTML = `
-                ${isFirst ? '' : `<button type="button" class="pet-card-remove" onclick="document.getElementById('${id}').remove(); refreshAddOns();">×</button>`}
-                <div class="form-row">
+                <button type="button" class="pet-card-remove" onclick="document.getElementById('${id}').remove(); onPetSelectionChanged('${category}');">×</button>
+                <div class="form-row" style="margin-bottom:0.7rem;">
                     <div class="form-group" style="margin-bottom:0;">
                         <label>Pet's Name *</label>
-                        <input type="text" class="pet-name-input" required onchange="refreshAddOns()">
+                        <input type="text" class="pet-name-input" required onchange="populateServiceSelectForCard(document.getElementById('${id}'), '${category}'); onPetSelectionChanged('${category}');">
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
                         <label>Species</label>
-                        <select class="pet-species-input" onchange="refreshAddOns()">
+                        <select class="pet-species-input" onchange="populateServiceSelectForCard(document.getElementById('${id}'), '${category}'); onPetSelectionChanged('${category}');">
                             <option value="dog">Dog</option>
                             <option value="cat">Cat</option>
                             <option value="other">Other</option>
                         </select>
                     </div>
                 </div>
+                <div class="pet-card-service-row">
+                    <label>Service *</label>
+                    <select class="pet-service-select"></select>
+                </div>
             `;
-            document.getElementById('boarding-pet-rows').appendChild(el);
-            refreshAddOns();
+            document.getElementById(containerId).appendChild(el);
+            populateServiceSelectForCard(el, category);
+            onPetSelectionChanged(category);
         }
 
-        function getBoardingPets() {
-            return Array.from(document.querySelectorAll('#boarding-pet-rows .pet-card')).map(card => ({
-                name: card.querySelector('.pet-name-input')?.value.trim(),
-                species: card.querySelector('.pet-species-input')?.value
+        function populateServiceSelectForCard(card, category) {
+            const species = card.dataset.existing ? card.dataset.species : (card.querySelector('.pet-species-input')?.value || '');
+            const sel = card.querySelector('.pet-service-select');
+            if (!sel) return;
+            const visible = allTemplates.filter(t =>
+                Array.isArray(t.category) && t.category.includes(category) &&
+                (!Array.isArray(t.species) || !t.species.length || t.species.includes(species))
+            );
+            const prev = sel.value;
+            sel.innerHTML = '<option value="">Select a service...</option>' +
+                visible.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('');
+            if (visible.some(t => t.name === prev)) sel.value = prev;
+        }
+
+        function getSelectedPetsWithServices(containerId) {
+            return Array.from(document.querySelectorAll(`#${containerId} .pet-select-card.selected`)).map(card => ({
+                name: card.dataset.existing ? card.dataset.name : card.querySelector('.pet-name-input')?.value.trim(),
+                species: card.dataset.existing ? card.dataset.species : card.querySelector('.pet-species-input')?.value,
+                serviceName: card.querySelector('.pet-service-select')?.value
             })).filter(p => p.name);
         }
 
+        // Called whenever the selected-pet set changes, to refresh anything
+        // downstream that depends on it (boarding add-ons; the multi-pet
+        // "times may not match" notice on service groups).
+        function onPetSelectionChanged(category) {
+            if (category === 'boarding') refreshAddOns();
+            else updateMultiPetNotice();
+        }
+
+        // --- Boarding group --------------------------------------------------
         function updateBoardingTimeVisibility() {
             const boardingTemplates = allTemplates.filter(t => Array.isArray(t.category) && t.category.includes('boarding'));
             const showTimes = boardingTemplates.some(t => t.prompt_dropoff_pickup_time);
@@ -445,7 +546,7 @@
         }
 
         function refreshAddOns() {
-            const pets = getBoardingPets();
+            const pets = getSelectedPetsWithServices('boarding-pet-rows');
             const speciesInPlay = new Set(pets.map(p => p.species));
             const addOnTemplates = allTemplates.filter(t =>
                 Array.isArray(t.category) && (t.category.includes('grooming') || t.category.includes('training')) &&
@@ -471,17 +572,24 @@
                     ` : `<input type="hidden" class="addon-pet-select" data-index="${i}" value="${pets[0].name.replace(/"/g, '&quot;')}">`}
                 </div>
             `).join('');
+        }
+
+        function openBoardingStep() {
+            renderPetCards('boarding-pet-rows', 'boarding');
             updateBoardingTimeVisibility();
+            refreshAddOns();
+            goToStep('boarding');
         }
 
         function finishBoardingGroup() {
-            const pets = getBoardingPets();
+            const pets = getSelectedPetsWithServices('boarding-pet-rows');
             const startDate = document.getElementById('board-start-date').value;
             const endDate = document.getElementById('board-end-date').value;
             const dropoffTime = document.getElementById('board-dropoff-time').value;
             const pickupTime = document.getElementById('board-pickup-time').value;
 
-            if (!pets.length) return alert('Please enter at least one pet.');
+            if (!pets.length) return alert('Please select or add at least one pet.');
+            if (pets.some(p => !p.serviceName)) return alert('Please select a service for every pet.');
             if (!startDate || !endDate) return alert('Please choose start and end dates.');
 
             const addOns = Array.from(document.querySelectorAll('.addon-chk:checked')).map(chk => {
@@ -492,8 +600,6 @@
 
             bookingGroups.push({ category: 'boarding', pets, startDate, endDate, dropoffTime, pickupTime, addOns });
 
-            document.getElementById('boarding-pet-rows').innerHTML = '';
-            addBoardingPetRow();
             document.getElementById('board-start-date').value = '';
             document.getElementById('board-end-date').value = '';
             document.getElementById('board-dropoff-time').value = '';
@@ -505,44 +611,9 @@
         // --- Grooming/Training/Daycare group -------------------------------------
         let currentServiceCategory = null;
 
-        function addServicePetRow() {
-            const id = `svc-pet-${petRowCounter++}`;
-            const el = document.createElement('div');
-            el.id = id;
-            el.className = 'pet-card';
-            const isFirst = !document.querySelector('#service-pet-rows .pet-card');
-            el.innerHTML = `
-                ${isFirst ? '' : `<button type="button" class="pet-card-remove" onclick="document.getElementById('${id}').remove(); populateServiceSelect(); updateMultiPetNotice();">×</button>`}
-                <div class="form-row">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Pet's Name *</label>
-                        <input type="text" class="pet-name-input" required onchange="populateServiceSelect(); updateMultiPetNotice();">
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Species</label>
-                        <select class="pet-species-input" onchange="populateServiceSelect(); updateMultiPetNotice();">
-                            <option value="dog">Dog</option>
-                            <option value="cat">Cat</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                </div>
-            `;
-            document.getElementById('service-pet-rows').appendChild(el);
-            populateServiceSelect();
-            updateMultiPetNotice();
-        }
-
-        function getServicePets() {
-            return Array.from(document.querySelectorAll('#service-pet-rows .pet-card')).map(card => ({
-                name: card.querySelector('.pet-name-input')?.value.trim(),
-                species: card.querySelector('.pet-species-input')?.value
-            })).filter(p => p.name);
-        }
-
         function updateMultiPetNotice() {
             const notice = document.getElementById('multi-pet-notice');
-            const pets = getServicePets();
+            const pets = getSelectedPetsWithServices('service-pet-rows');
             if (pets.length > 1) {
                 notice.textContent = `We'll confirm exact appointment times for each pet when we approve this request — availability may mean they can't be at the exact same time.`;
                 notice.classList.remove('hidden');
@@ -551,44 +622,27 @@
             }
         }
 
-        function populateServiceSelect() {
-            const sel = document.getElementById('service-select');
-            const pets = getServicePets();
-            const speciesNeeded = pets.map(p => p.species);
-            const visible = allTemplates.filter(t =>
-                Array.isArray(t.category) && t.category.includes(currentServiceCategory) &&
-                (!Array.isArray(t.species) || !t.species.length || speciesNeeded.every(s => t.species.includes(s)))
-            );
-            const previouslySelected = sel.value;
-            sel.innerHTML = '<option value="">Select a service...</option>' +
-                visible.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('');
-            if (visible.some(t => t.name === previouslySelected)) sel.value = previouslySelected;
-        }
-
         function openServiceGroupStep(category) {
             currentServiceCategory = category;
             document.getElementById('service-group-title').textContent = `${CATEGORY_META[category].icon} ${CATEGORY_META[category].label}`;
-            document.getElementById('service-pet-rows').innerHTML = '';
-            addServicePetRow();
+            renderPetCards('service-pet-rows', category);
             document.getElementById('service-date').value = '';
             document.getElementById('service-time').value = '';
+            updateMultiPetNotice();
             goToStep('service-group');
         }
 
         function finishServiceGroup() {
-            const pets = getServicePets();
-            const serviceName = document.getElementById('service-select').value;
+            const pets = getSelectedPetsWithServices('service-pet-rows');
             const date = document.getElementById('service-date').value;
             const time = document.getElementById('service-time').value;
 
-            if (!pets.length) return alert('Please enter at least one pet.');
-            if (!serviceName) return alert('Please select a service.');
+            if (!pets.length) return alert('Please select or add at least one pet.');
+            if (pets.some(p => !p.serviceName)) return alert('Please select a service for every pet.');
             if (!date || !time) return alert('Please choose a date and time.');
 
-            bookingGroups.push({ category: currentServiceCategory, pets, serviceName, date, time });
+            bookingGroups.push({ category: currentServiceCategory, pets, date, time });
 
-            document.getElementById('service-pet-rows').innerHTML = '';
-            addServicePetRow();
             document.getElementById('service-date').value = '';
             document.getElementById('service-time').value = '';
 
@@ -615,9 +669,7 @@
 
         function selectCategory(cat) {
             if (cat === 'boarding') {
-                updateBoardingTimeVisibility();
-                refreshAddOns();
-                goToStep('boarding');
+                openBoardingStep();
             } else {
                 openServiceGroupStep(cat);
             }
@@ -626,25 +678,24 @@
         // --- Review & submit -------------------------------------------------------
         function groupSummaryHtml(group, index) {
             const meta = CATEGORY_META[group.category];
+            const petLine = group.pets.map(p => `${p.name} (${p.serviceName})`).join(', ');
             if (group.category === 'boarding') {
-                const petNames = group.pets.map(p => p.name).join(', ');
                 const addOnsText = group.addOns.length ? group.addOns.map(a => `${a.serviceName} (${a.petName})`).join(', ') : '';
                 return `
                     <div class="group-summary-card">
                         <button type="button" class="group-remove" onclick="removeGroup(${index})">×</button>
                         <span class="cat-tag">${meta.icon} ${meta.label}</span>
-                        <div style="font-weight:600; font-size:0.9rem;">${petNames}</div>
+                        <div style="font-weight:600; font-size:0.9rem;">${petLine}</div>
                         <div class="field-hint" style="margin-top:0.2rem;">${group.startDate} → ${group.endDate}${group.dropoffTime ? ' · Drop-off ' + group.dropoffTime : ''}${group.pickupTime ? ' · Pickup ' + group.pickupTime : ''}</div>
                         ${addOnsText ? `<div class="field-hint" style="margin-top:0.2rem;">Add-ons: ${addOnsText}</div>` : ''}
                     </div>
                 `;
             }
-            const petNames = group.pets.map(p => p.name).join(', ');
             return `
                 <div class="group-summary-card">
                     <button type="button" class="group-remove" onclick="removeGroup(${index})">×</button>
                     <span class="cat-tag">${meta.icon} ${meta.label}</span>
-                    <div style="font-weight:600; font-size:0.9rem;">${petNames} — ${group.serviceName}</div>
+                    <div style="font-weight:600; font-size:0.9rem;">${petLine}</div>
                     <div class="field-hint" style="margin-top:0.2rem;">${group.date} at ${group.time}</div>
                 </div>
             `;
