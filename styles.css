@@ -1135,6 +1135,32 @@ body {
   font-weight: 600;
 }
 
+/* Pill-style toggle buttons — used for "Group By" controls and similar
+   standalone toggle rows that aren't sitting inside a bordered tab-bar
+   container, so they need their own visual chrome to read as clickable. */
+.pill-toggle {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.pill-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.pill-toggle.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
 .biz-section { display: none; }
 .biz-section.active { display: block; }
 

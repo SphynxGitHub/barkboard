@@ -130,26 +130,15 @@
 
                     <hr class="section-divider">
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Pet's Name *</label>
-                            <input type="text" id="f-pet-name" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Species</label>
-                            <select id="f-species" onchange="populateServiceOptions()">
-                                <option value="dog">Dog</option>
-                                <option value="cat">Cat</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                    </div>
+                    <div id="pet-rows"></div>
+                    <button type="button" class="btn" style="margin-bottom:1.1rem;" onclick="addPetRow()">+ Add Another Pet</button>
 
                     <div class="form-group">
                         <label>Service *</label>
                         <select id="f-service" required onchange="onServiceChange()">
                             <option value="">Select a service...</option>
                         </select>
+                        <p class="field-hint">If booking more than one pet, this service applies to all of them together.</p>
                     </div>
 
                     <div class="form-row">
@@ -194,6 +183,33 @@
 
         let currentBusiness = null;
         let serviceTemplates = [];
+        let petRowCounter = 0;
+
+        function addPetRow() {
+            const id = `pet-row-${petRowCounter++}`;
+            const el = document.createElement('div');
+            el.id = id;
+            el.className = 'form-row';
+            el.style.cssText = 'align-items:flex-end; gap:0.6rem;';
+            const isFirst = petRowCounter === 1;
+            el.innerHTML = `
+                <div class="form-group" style="flex:2; margin-bottom:${isFirst ? '' : '1.1rem'};">
+                    <label>Pet's Name *</label>
+                    <input type="text" class="pet-name-input" required>
+                </div>
+                <div class="form-group" style="flex:1; margin-bottom:${isFirst ? '' : '1.1rem'};">
+                    <label>Species</label>
+                    <select class="pet-species-input" onchange="populateServiceOptions()">
+                        <option value="dog">Dog</option>
+                        <option value="cat">Cat</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                ${isFirst ? '' : `<button type="button" onclick="document.getElementById('${id}').remove(); populateServiceOptions();" style="margin-bottom:1.3rem; background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1.2rem;">×</button>`}
+            `;
+            document.getElementById('pet-rows').appendChild(el);
+        }
+        addPetRow(); // first pet row, always present
 
         function getSlugFromUrl() {
             const params = new URLSearchParams(window.location.search);
@@ -286,8 +302,15 @@
 
         function populateServiceOptions() {
             const sel = document.getElementById('f-service');
-            const currentSpecies = document.getElementById('f-species')?.value || '';
-            const visible = serviceTemplates.filter(t => !Array.isArray(t.species) || !t.species.length || t.species.includes(currentSpecies));
+            // Union across every pet row currently on the form — a service shows
+            // if it applies to ANY of the pets being booked together, same logic
+            // the internal booking form uses for multi-pet appointments.
+            const speciesInPlay = new Set(
+                Array.from(document.querySelectorAll('.pet-species-input')).map(s => s.value)
+            );
+            const visible = serviceTemplates.filter(t =>
+                !Array.isArray(t.species) || !t.species.length || t.species.some(s => speciesInPlay.has(s))
+            );
             const previouslySelected = sel.value;
             sel.innerHTML = '<option value="">Select a service...</option>' +
                 visible.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('') +
@@ -318,8 +341,10 @@
             const ownerName = document.getElementById('f-owner-name').value.trim();
             const email = document.getElementById('f-email').value.trim();
             const phone = document.getElementById('f-phone').value.trim();
-            const petName = document.getElementById('f-pet-name').value.trim();
-            const species = document.getElementById('f-species').value;
+            const pets = Array.from(document.querySelectorAll('#pet-rows > div')).map(row => ({
+                name: row.querySelector('.pet-name-input')?.value.trim(),
+                species: row.querySelector('.pet-species-input')?.value
+            })).filter(p => p.name);
             let serviceName = document.getElementById('f-service').value;
             const startDate = document.getElementById('f-start-date').value;
             const endDate = document.getElementById('f-end-date').value;
@@ -332,6 +357,10 @@
 
             if (!email && !phone) {
                 showFormError('Please provide an email or phone number so we can reach you.');
+                return;
+            }
+            if (!pets.length) {
+                showFormError('Please enter at least one pet.');
                 return;
             }
 
@@ -350,7 +379,7 @@
                     body: JSON.stringify({
                         slug: currentBusiness.slug,
                         ownerName, contactEmail: email, contactPhone: phone,
-                        petName, species, serviceName, startDate, endDate, notes
+                        pets, serviceName, startDate, endDate, notes
                     })
                 });
                 const result = await res.json();
