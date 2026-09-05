@@ -282,6 +282,25 @@ async function initAuthGate() {
     } else {
         showAuthGate();
     }
+
+    // Without this, a tab that's already showing the app as one user has no
+    // way to notice if the underlying Supabase session changes out from under
+    // it — e.g. confirming a signup in a new tab while an old session was
+    // still active in this one, or another tab signing out. Supabase updates
+    // its session in localStorage and fires this across tabs; a full reload
+    // is the simplest way to guarantee every in-memory variable (currentUser,
+    // currentBusinessId, whatever's already rendered) gets rebuilt from
+    // scratch for whoever is actually logged in now, rather than trying to
+    // hot-swap partial state and risk exactly the kind of stale-business
+    // mix-up this was added to prevent.
+    let lastKnownUserId = session?.user?.id || null;
+    client.auth.onAuthStateChange((event, newSession) => {
+        const newUserId = newSession?.user?.id || null;
+        if (newUserId !== lastKnownUserId) {
+            lastKnownUserId = newUserId;
+            window.location.reload();
+        }
+    });
 }
 
 /* ==========================================================================
