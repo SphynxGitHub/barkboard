@@ -90,6 +90,10 @@
         .pet-card-service-row label { font-size: 0.75rem; margin-bottom: 0.25rem; }
         .add-pet-link-btn { background: none; border: none; color: var(--accent); font-size: 0.85rem; font-weight: 600; cursor: pointer; padding: 0.3rem 0; margin-bottom: 1rem; }
         .add-pet-link-btn:hover { text-decoration: underline; }
+        .pet-addon-section { margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px dashed var(--border); }
+        .pet-addon-section label.section-label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block; }
+        .pet-addon-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding: 0.25rem 0; font-weight: 400; }
+        .total-fee-box { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: color-mix(in srgb, var(--accent) 6%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); border-radius: 10px; font-weight: 700; font-size: 0.95rem; margin: 0.75rem 0 1.25rem; }
     </style>
 </head>
 <body>
@@ -151,14 +155,16 @@
                 <div id="boarding-pet-rows"></div>
                 <button type="button" class="add-pet-link-btn" onclick="addManualPetCard('boarding-pet-rows', 'boarding')">+ Add a pet not listed above</button>
 
+                <div id="board-total-fee" class="total-fee-box">Estimated Total: $0.00</div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>Start Date *</label>
-                        <input type="date" id="board-start-date" required>
+                        <input type="date" id="board-start-date" required onchange="updateBoardingTotal()">
                     </div>
                     <div class="form-group">
                         <label>End Date *</label>
-                        <input type="date" id="board-end-date" required>
+                        <input type="date" id="board-end-date" required onchange="updateBoardingTotal()">
                     </div>
                 </div>
 
@@ -171,12 +177,6 @@
                         <label>Pickup Time</label>
                         <input type="time" id="board-pickup-time">
                     </div>
-                </div>
-
-                <div id="addon-section" class="hidden">
-                    <label>Add-ons (optional)</label>
-                    <p class="field-hint" style="margin-top:0; margin-bottom:0.5rem;">These don't need a specific time — we'll schedule them during the stay and make sure they're done before pickup.</p>
-                    <div id="addon-rows" style="border:1px solid var(--border); border-radius:8px; padding:0 0.75rem;"></div>
                 </div>
 
                 <div style="margin-top:1.25rem;">
@@ -468,7 +468,8 @@
                     </div>
                     <div class="pet-card-service-row hidden">
                         <label>Service *</label>
-                        <select class="pet-service-select"></select>
+                        <select class="pet-service-select" onchange="${category === 'boarding' ? 'updateBoardingTotal()' : ''}"></select>
+                        ${category === 'boarding' ? '<div class="pet-addon-section"><label class="section-label">Add-ons (optional)</label><div class="pet-addon-list"></div></div>' : ''}
                     </div>
                 </div>
             `).join('');
@@ -506,7 +507,8 @@
                 </div>
                 <div class="pet-card-service-row">
                     <label>Service *</label>
-                    <select class="pet-service-select"></select>
+                    <select class="pet-service-select" onchange="${category === 'boarding' ? 'updateBoardingTotal()' : ''}"></select>
+                    ${category === 'boarding' ? '<div class="pet-addon-section"><label class="section-label">Add-ons (optional)</label><div class="pet-addon-list"></div></div>' : ''}
                 </div>
             `;
             document.getElementById(containerId).appendChild(el);
@@ -526,21 +528,46 @@
             sel.innerHTML = '<option value="">Select a service...</option>' +
                 visible.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}</option>`).join('');
             if (visible.some(t => t.name === prev)) sel.value = prev;
+
+            if (category === 'boarding') populateAddOnsForCard(card, species);
+        }
+
+        // Add-ons render inline under each pet, filtered by that pet's own
+        // species — a dog's card shows dog-eligible grooming/training options,
+        // a cat's card shows cat-eligible ones, independently of each other.
+        function populateAddOnsForCard(card, species) {
+            const list = card.querySelector('.pet-addon-list');
+            if (!list) return;
+            const addOnTemplates = allTemplates.filter(t =>
+                Array.isArray(t.category) && (t.category.includes('grooming') || t.category.includes('training')) &&
+                (!Array.isArray(t.species) || !t.species.length || t.species.includes(species))
+            );
+            if (!addOnTemplates.length) {
+                list.innerHTML = '<p class="field-hint" style="margin:0;">No add-ons available for this pet.</p>';
+                return;
+            }
+            list.innerHTML = addOnTemplates.map((t, i) => `
+                <label class="pet-addon-row">
+                    <input type="checkbox" class="pet-addon-chk" data-name="${t.name.replace(/"/g, '&quot;')}" onchange="updateBoardingTotal()">
+                    ${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) + (t.pricing_unit === 'per_day' ? '/day' : '') : ''}
+                </label>
+            `).join('');
         }
 
         function getSelectedPetsWithServices(containerId) {
             return Array.from(document.querySelectorAll(`#${containerId} .pet-select-card.selected`)).map(card => ({
                 name: card.dataset.existing ? card.dataset.name : card.querySelector('.pet-name-input')?.value.trim(),
                 species: card.dataset.existing ? card.dataset.species : card.querySelector('.pet-species-input')?.value,
-                serviceName: card.querySelector('.pet-service-select')?.value
+                serviceName: card.querySelector('.pet-service-select')?.value,
+                addOns: Array.from(card.querySelectorAll('.pet-addon-chk:checked')).map(chk => chk.dataset.name)
             })).filter(p => p.name);
         }
 
         // Called whenever the selected-pet set changes, to refresh anything
-        // downstream that depends on it (boarding add-ons; the multi-pet
+        // downstream that depends on it (the running total; the multi-pet
         // "times may not match" notice on service groups).
         function onPetSelectionChanged(category) {
-            if (category === 'boarding') refreshAddOns();
+            if (category === 'boarding') updateBoardingTotal();
             else updateMultiPetNotice();
         }
 
@@ -551,39 +578,37 @@
             document.getElementById('board-times-row').classList.toggle('hidden', !showTimes);
         }
 
-        function refreshAddOns() {
-            const pets = getSelectedPetsWithServices('boarding-pet-rows');
-            const speciesInPlay = new Set(pets.map(p => p.species));
-            const addOnTemplates = allTemplates.filter(t =>
-                Array.isArray(t.category) && (t.category.includes('grooming') || t.category.includes('training')) &&
-                (!Array.isArray(t.species) || !t.species.length || t.species.some(s => speciesInPlay.has(s)))
-            );
-
-            const section = document.getElementById('addon-section');
-            const rows = document.getElementById('addon-rows');
-            if (!addOnTemplates.length || !pets.length) {
-                section.classList.add('hidden');
-                rows.innerHTML = '';
-                return;
+        // Looks up a template's price for the currently-entered boarding dates —
+        // multiplies per-day rates by night count, same logic used everywhere
+        // else prices are calculated.
+        function priceForBoardingDates(templateName) {
+            const t = allTemplates.find(tpl => tpl.name === templateName);
+            if (!t || t.default_price == null) return 0;
+            if (t.pricing_unit === 'per_day') {
+                const start = document.getElementById('board-start-date').value;
+                const end = document.getElementById('board-end-date').value;
+                if (start && end && end !== start) {
+                    const days = Math.max(1, Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)));
+                    return Number(t.default_price) * days;
+                }
             }
-            section.classList.remove('hidden');
-            rows.innerHTML = addOnTemplates.map((t, i) => `
-                <div class="addon-row">
-                    <input type="checkbox" class="addon-chk" data-name="${t.name.replace(/"/g, '&quot;')}" id="addon-${i}">
-                    <label for="addon-${i}" style="margin:0; font-weight:400; flex:1;">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) : ''}</label>
-                    ${pets.length > 1 ? `
-                        <select class="addon-pet-select" data-index="${i}" style="width:auto; padding:0.3rem 0.5rem; font-size:0.8rem;">
-                            ${pets.map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`).join('')}
-                        </select>
-                    ` : `<input type="hidden" class="addon-pet-select" data-index="${i}" value="${pets[0].name.replace(/"/g, '&quot;')}">`}
-                </div>
-            `).join('');
+            return Number(t.default_price);
+        }
+
+        function updateBoardingTotal() {
+            const pets = getSelectedPetsWithServices('boarding-pet-rows');
+            let total = 0;
+            pets.forEach(p => {
+                if (p.serviceName) total += priceForBoardingDates(p.serviceName);
+                (p.addOns || []).forEach(name => { total += priceForBoardingDates(name); });
+            });
+            document.getElementById('board-total-fee').textContent = `Estimated Total: $${total.toFixed(2)}`;
         }
 
         function openBoardingStep() {
             renderPetCards('boarding-pet-rows', 'boarding');
             updateBoardingTimeVisibility();
-            refreshAddOns();
+            updateBoardingTotal();
             goToStep('boarding');
         }
 
@@ -598,13 +623,11 @@
             if (pets.some(p => !p.serviceName)) return alert('Please select a service for every pet.');
             if (!startDate || !endDate) return alert('Please choose start and end dates.');
 
-            const addOns = Array.from(document.querySelectorAll('.addon-chk:checked')).map(chk => {
-                const idx = chk.id.replace('addon-', '');
-                const petSelect = document.querySelector(`.addon-pet-select[data-index="${idx}"]`);
-                return { serviceName: chk.dataset.name, petName: petSelect?.value || pets[0].name };
-            });
+            // Flatten each pet's chosen add-ons into the shape the Edge Function expects.
+            const addOns = pets.flatMap(p => (p.addOns || []).map(serviceName => ({ serviceName, petName: p.name })));
+            const petsForSubmit = pets.map(({ name, species, serviceName }) => ({ name, species, serviceName }));
 
-            bookingGroups.push({ category: 'boarding', pets, startDate, endDate, dropoffTime, pickupTime, addOns });
+            bookingGroups.push({ category: 'boarding', pets: petsForSubmit, startDate, endDate, dropoffTime, pickupTime, addOns });
 
             document.getElementById('board-start-date').value = '';
             document.getElementById('board-end-date').value = '';
