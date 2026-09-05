@@ -62,6 +62,26 @@
             background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
         }
         .submit-btn:disabled { opacity: 0.6; cursor: default; }
+        .add-pet-btn {
+            display: flex; align-items: center; gap: 0.35rem;
+            width: 100%; padding: 0.6rem; margin-bottom: 1.1rem;
+            border: 1.5px dashed var(--border); border-radius: 9px;
+            background: transparent; color: var(--accent);
+            font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            justify-content: center;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .add-pet-btn:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); border-color: var(--accent); }
+        .pet-card {
+            border: 1px solid var(--border); border-radius: 10px; padding: 1rem;
+            margin-bottom: 1rem; background: #fbfbfe; position: relative;
+        }
+        .pet-card-remove {
+            position: absolute; top: 0.6rem; right: 0.6rem;
+            background: none; border: none; cursor: pointer; color: var(--text-muted);
+            font-size: 1.15rem; line-height: 1; padding: 0.15rem 0.4rem; border-radius: 6px;
+        }
+        .pet-card-remove:hover { background: var(--danger); color: var(--danger-text); }
         .msg-box { padding: 0.7rem 0.85rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; }
         .msg-error { background: var(--danger); color: var(--danger-text); }
         .msg-success { background: var(--success); color: var(--success-text); }
@@ -131,15 +151,7 @@
                     <hr class="section-divider">
 
                     <div id="pet-rows"></div>
-                    <button type="button" class="btn" style="margin-bottom:1.1rem;" onclick="addPetRow()">+ Add Another Pet</button>
-
-                    <div class="form-group">
-                        <label>Service *</label>
-                        <select id="f-service" required onchange="onServiceChange()">
-                            <option value="">Select a service...</option>
-                        </select>
-                        <p class="field-hint">If booking more than one pet, this service applies to all of them together.</p>
-                    </div>
+                    <button type="button" class="add-pet-btn" onclick="addPetRow()">+ Add Another Pet</button>
 
                     <div class="form-row">
                         <div class="form-group">
@@ -189,25 +201,33 @@
             const id = `pet-row-${petRowCounter++}`;
             const el = document.createElement('div');
             el.id = id;
-            el.className = 'form-row';
-            el.style.cssText = 'align-items:flex-end; gap:0.6rem;';
+            el.className = 'pet-card';
             const isFirst = petRowCounter === 1;
             el.innerHTML = `
-                <div class="form-group" style="flex:2; margin-bottom:${isFirst ? '' : '1.1rem'};">
-                    <label>Pet's Name *</label>
-                    <input type="text" class="pet-name-input" required>
+                ${isFirst ? '' : `<button type="button" class="pet-card-remove" onclick="document.getElementById('${id}').remove();">×</button>`}
+                <div class="form-row">
+                    <div class="form-group" style="flex:2;">
+                        <label>Pet's Name *</label>
+                        <input type="text" class="pet-name-input" required>
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>Species</label>
+                        <select class="pet-species-input" onchange="populateServiceOptionsForRow('${id}')">
+                            <option value="dog">Dog</option>
+                            <option value="cat">Cat</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group" style="flex:1; margin-bottom:${isFirst ? '' : '1.1rem'};">
-                    <label>Species</label>
-                    <select class="pet-species-input" onchange="populateServiceOptions()">
-                        <option value="dog">Dog</option>
-                        <option value="cat">Cat</option>
-                        <option value="other">Other</option>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Service *</label>
+                    <select class="pet-service-input" required>
+                        <option value="">Select a service...</option>
                     </select>
                 </div>
-                ${isFirst ? '' : `<button type="button" onclick="document.getElementById('${id}').remove(); populateServiceOptions();" style="margin-bottom:1.3rem; background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1.2rem;">×</button>`}
             `;
             document.getElementById('pet-rows').appendChild(el);
+            populateServiceOptionsForRow(id);
         }
         addPetRow(); // first pet row, always present
 
@@ -250,7 +270,9 @@
                 .eq('business_id', business.id)
                 .order('name');
             serviceTemplates = templates || [];
-            populateServiceOptions();
+            // Populate the service dropdown on every pet row already on the form
+            // (the first one, added before templates finished loading).
+            document.querySelectorAll('.pet-card').forEach(card => populateServiceOptionsForRow(card.id));
 
             const { data: hours } = await supabaseClient
                 .from('business_hours')
@@ -300,16 +322,13 @@
             }
         }
 
-        function populateServiceOptions() {
-            const sel = document.getElementById('f-service');
-            // Union across every pet row currently on the form — a service shows
-            // if it applies to ANY of the pets being booked together, same logic
-            // the internal booking form uses for multi-pet appointments.
-            const speciesInPlay = new Set(
-                Array.from(document.querySelectorAll('.pet-species-input')).map(s => s.value)
-            );
+        function populateServiceOptionsForRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const sel = row.querySelector('.pet-service-input');
+            const species = row.querySelector('.pet-species-input')?.value || '';
             const visible = serviceTemplates.filter(t =>
-                !Array.isArray(t.species) || !t.species.length || t.species.some(s => speciesInPlay.has(s))
+                !Array.isArray(t.species) || !t.species.length || t.species.includes(species)
             );
             const previouslySelected = sel.value;
             sel.innerHTML = '<option value="">Select a service...</option>' +
@@ -317,11 +336,6 @@
                 '<option value="__other__">Other / Not Listed</option>';
             // Keep the previous selection if it's still valid for the (possibly new) species, otherwise reset
             if (visible.some(t => t.name === previouslySelected)) sel.value = previouslySelected;
-        }
-
-        function onServiceChange() {
-            // No-op hook for future per-service behavior (e.g. auto-toggling multi-day fields
-            // based on the template); kept simple for now since dates are always both shown.
         }
 
         function showFormError(message) {
@@ -341,19 +355,27 @@
             const ownerName = document.getElementById('f-owner-name').value.trim();
             const email = document.getElementById('f-email').value.trim();
             const phone = document.getElementById('f-phone').value.trim();
-            const pets = Array.from(document.querySelectorAll('#pet-rows > div')).map(row => ({
-                name: row.querySelector('.pet-name-input')?.value.trim(),
-                species: row.querySelector('.pet-species-input')?.value
-            })).filter(p => p.name);
-            let serviceName = document.getElementById('f-service').value;
+
+            const pets = [];
+            for (const card of document.querySelectorAll('.pet-card')) {
+                const name = card.querySelector('.pet-name-input')?.value.trim();
+                if (!name) continue;
+                const species = card.querySelector('.pet-species-input')?.value;
+                let serviceName = card.querySelector('.pet-service-input')?.value;
+                if (serviceName === '__other__') {
+                    serviceName = prompt(`Please describe the service you're requesting for ${name}:`) || '';
+                    if (!serviceName.trim()) return;
+                }
+                if (!serviceName) {
+                    showFormError(`Please select a service for ${name}.`);
+                    return;
+                }
+                pets.push({ name, species, serviceName });
+            }
+
             const startDate = document.getElementById('f-start-date').value;
             const endDate = document.getElementById('f-end-date').value;
             const notes = document.getElementById('f-notes').value.trim();
-
-            if (serviceName === '__other__') {
-                serviceName = prompt('Please describe the service you\'re requesting:') || '';
-                if (!serviceName.trim()) return;
-            }
 
             if (!email && !phone) {
                 showFormError('Please provide an email or phone number so we can reach you.');
@@ -379,7 +401,7 @@
                     body: JSON.stringify({
                         slug: currentBusiness.slug,
                         ownerName, contactEmail: email, contactPhone: phone,
-                        pets, serviceName, startDate, endDate, notes
+                        pets, startDate, endDate, notes
                     })
                 });
                 const result = await res.json();
