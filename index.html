@@ -1435,7 +1435,10 @@
         
                         <!-- Submit Bar -->
                         <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; margin-top:1rem; border-top:1px solid var(--border); padding-top:1rem;">
-                            <button type="button" id="bk-delete-btn" class="btn hidden" style="color:#dc2626; border-color:#dc2626;" onclick="deleteBookingFromModal()">Delete Event</button>
+                            <div style="display:flex; gap:0.5rem;">
+                                <button type="button" id="bk-delete-btn" class="btn hidden" style="color:#dc2626; border-color:#dc2626;" onclick="deleteBookingFromModal()">Delete Event</button>
+                                <button type="button" id="bk-calendar-btn" class="btn hidden" onclick="downloadBookingICS()"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Add to Calendar</button>
+                            </div>
                             <div style="display:flex; gap:0.75rem; margin-left:auto;">
                                 <button type="button" class="btn" onclick="closeBookingModal()">Cancel</button>
                                 <button type="submit" class="btn btn-primary">Save Event</button>

@@ -72,8 +72,11 @@
         .category-card .cat-label { font-weight: 700; font-size: 0.9rem; }
         .group-summary-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; background: #fbfbfe; position: relative; }
         .group-summary-card .cat-tag { display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--accent); margin-bottom: 0.3rem; }
-        .group-remove { position: absolute; top: 0.7rem; right: 0.7rem; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.1rem; padding: 0.1rem 0.4rem; border-radius: 6px; }
+        .group-remove { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.1rem; padding: 0.1rem 0.4rem; border-radius: 6px; }
         .group-remove:hover { background: var(--danger); color: var(--danger-text); }
+        .group-actions { position: absolute; top: 0.6rem; right: 0.6rem; display: flex; gap: 0.2rem; }
+        .group-edit { background: none; border: none; cursor: pointer; font-size: 0.9rem; padding: 0.15rem 0.4rem; border-radius: 6px; }
+        .group-edit:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
         .addon-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
         .addon-row:last-child { border-bottom: none; }
         .step-back { background: none; border: none; color: var(--text-muted); font-size: 0.82rem; cursor: pointer; padding: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.3rem; }
@@ -242,6 +245,7 @@
                 </div>
                 <h2>Requests Sent!</h2>
                 <p id="success-message"></p>
+                <p id="portal-redirect-note" class="field-hint hidden" style="margin-top:1rem;">Taking you back to your account...</p>
             </div>
         </div>
     </div>
@@ -262,6 +266,7 @@
         let contactInfo = { name: '', email: '', phone: '' };
         let bookingGroups = [];
         let petRowCounter = 0;
+        let arrivedFromPortal = false; // set true when prefillEmail is present — used to redirect back on success
 
         const CATEGORY_META = {
             boarding: { label: 'Boarding', icon: '🏠' },
@@ -342,6 +347,7 @@
                 contactInfo.email = decodeURIComponent(prefillEmail);
                 const { data: { user } } = await supabaseClient.auth.getUser();
                 if (user) {
+                    arrivedFromPortal = true;
                     document.getElementById('f-owner-name').value = user.user_metadata?.name || '';
                     await fetchExistingPetsIfLoggedIn();
                     goToStep('category');
@@ -709,11 +715,12 @@
         function groupSummaryHtml(group, index) {
             const meta = CATEGORY_META[group.category];
             const petLine = group.pets.map(p => `${p.name} (${p.serviceName})`).join(', ');
+            const editBtn = `<button type="button" class="group-edit" onclick="editGroup(${index})" title="Edit">✏️</button>`;
             if (group.category === 'boarding') {
                 const addOnsText = group.addOns.length ? group.addOns.map(a => `${a.serviceName} (${a.petName})`).join(', ') : '';
                 return `
                     <div class="group-summary-card">
-                        <button type="button" class="group-remove" onclick="removeGroup(${index})">×</button>
+                        <div class="group-actions">${editBtn}<button type="button" class="group-remove" onclick="removeGroup(${index})">×</button></div>
                         <span class="cat-tag">${meta.icon} ${meta.label}</span>
                         <div style="font-weight:600; font-size:0.9rem;">${petLine}</div>
                         <div class="field-hint" style="margin-top:0.2rem;">${group.startDate} → ${group.endDate}${group.dropoffTime ? ' · Drop-off ' + group.dropoffTime : ''}${group.pickupTime ? ' · Pickup ' + group.pickupTime : ''}</div>
@@ -723,7 +730,7 @@
             }
             return `
                 <div class="group-summary-card">
-                    <button type="button" class="group-remove" onclick="removeGroup(${index})">×</button>
+                    <div class="group-actions">${editBtn}<button type="button" class="group-remove" onclick="removeGroup(${index})">×</button></div>
                     <span class="cat-tag">${meta.icon} ${meta.label}</span>
                     <div style="font-weight:600; font-size:0.9rem;">${petLine}</div>
                     <div class="field-hint" style="margin-top:0.2rem;">${group.date} at ${group.time}</div>
@@ -734,6 +741,68 @@
         function removeGroup(index) {
             bookingGroups.splice(index, 1);
             renderReview();
+        }
+
+        // Pulls a group back out of the list and reopens its step, prefilled,
+        // so the customer can tweak or remove one piece (like a failing add-on)
+        // instead of having to discard the whole request and start over.
+        function editGroup(index) {
+            const group = bookingGroups[index];
+            bookingGroups.splice(index, 1);
+            if (group.category === 'boarding') {
+                openBoardingStep();
+                prefillBoardingGroup(group);
+            } else {
+                openServiceGroupStep(group.category);
+                prefillServiceGroup(group);
+            }
+        }
+
+        function findOrCreatePetCard(containerId, category, name, species) {
+            const existingCard = Array.from(document.querySelectorAll(`#${containerId} .pet-select-card[data-existing="1"]`))
+                .find(c => c.dataset.name === name);
+            if (existingCard) {
+                existingCard.classList.add('selected');
+                existingCard.querySelector('.pet-card-service-row').classList.remove('hidden');
+                populateServiceSelectForCard(existingCard, category);
+                return existingCard;
+            }
+            addManualPetCard(containerId, category);
+            const newCard = document.querySelector(`#${containerId} .pet-select-card:last-child`);
+            newCard.querySelector('.pet-name-input').value = name;
+            if (species) newCard.querySelector('.pet-species-input').value = species;
+            populateServiceSelectForCard(newCard, category);
+            return newCard;
+        }
+
+        function prefillBoardingGroup(group) {
+            group.pets.forEach(p => {
+                const card = findOrCreatePetCard('boarding-pet-rows', 'boarding', p.name, p.species);
+                const sel = card.querySelector('.pet-service-select');
+                if (sel) sel.value = p.serviceName;
+            });
+            (group.addOns || []).forEach(a => {
+                const card = Array.from(document.querySelectorAll('#boarding-pet-rows .pet-select-card.selected'))
+                    .find(c => (c.dataset.existing ? c.dataset.name : c.querySelector('.pet-name-input')?.value) === a.petName);
+                const chk = card && Array.from(card.querySelectorAll('.pet-addon-chk')).find(c => c.dataset.name === a.serviceName);
+                if (chk) chk.checked = true;
+            });
+            document.getElementById('board-start-date').value = group.startDate || '';
+            document.getElementById('board-end-date').value = group.endDate || '';
+            document.getElementById('board-dropoff-time').value = group.dropoffTime || '';
+            document.getElementById('board-pickup-time').value = group.pickupTime || '';
+            updateBoardingTotal();
+        }
+
+        function prefillServiceGroup(group) {
+            group.pets.forEach(p => {
+                const card = findOrCreatePetCard('service-pet-rows', group.category, p.name, p.species);
+                const sel = card.querySelector('.pet-service-select');
+                if (sel) sel.value = p.serviceName;
+            });
+            document.getElementById('service-date').value = group.date || '';
+            document.getElementById('service-time').value = group.time || '';
+            updateMultiPetNotice();
         }
 
         function renderReview() {
@@ -788,6 +857,13 @@
                 document.getElementById('success-message').textContent = result.message;
                 document.getElementById('main-content').classList.add('hidden');
                 document.getElementById('success-state').classList.remove('hidden');
+
+                if (arrivedFromPortal) {
+                    document.getElementById('portal-redirect-note').classList.remove('hidden');
+                    setTimeout(() => {
+                        window.location.href = `portal.html?biz=${encodeURIComponent(currentBusiness.slug)}`;
+                    }, 2500);
+                }
             } catch (err) {
                 console.error(err);
                 errBox.textContent = 'Could not reach the server. Please check your connection and try again.';

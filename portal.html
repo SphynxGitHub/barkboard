@@ -77,9 +77,13 @@
         .change-note-box { font-size: 0.78rem; color: #92400e; background: #fef3c7; padding: 0.5rem 0.65rem; border-radius: 8px; margin-top: 0.5rem; }
 
         @media print {
-            body * { visibility: hidden; }
-            #print-receipt-content, #print-receipt-content * { visibility: visible; }
-            #print-receipt-content { position: absolute; top: 0; left: 0; width: 100%; padding: 2rem; }
+            /* display:none (not visibility) so the hidden content's layout space
+               actually collapses — the visibility-only approach still reserved
+               the full page height of everything else, which is what produced
+               a mostly-blank extra page. */
+            #portal-content, #login-state, #not-available-state, #loading-state, #reschedule-overlay { display: none !important; }
+            #print-overlay { position: static !important; background: none !important; padding: 0 !important; display: block !important; }
+            #print-overlay .card { box-shadow: none !important; border: none !important; }
             .no-print { display: none !important; }
         }
     </style>
@@ -152,7 +156,7 @@
     </div>
 
     <!-- Print receipt overlay -->
-    <div id="print-overlay" class="modal-overlay-portal hidden no-print">
+    <div id="print-overlay" class="modal-overlay-portal hidden">
         <div class="card" style="width:100%; max-width:400px;">
             <div id="print-receipt-content">
                 <h2 id="print-biz-name" style="margin:0 0 0.25rem;"></h2>
@@ -304,6 +308,59 @@
             await loadPortalData();
         }
 
+        // --- Add to Calendar (.ics download) ------------------------------------
+        function toICSDateTime(isoLike) {
+            // Expects "YYYY-MM-DDTHH:MM:SS" (or similar) — strips separators for the
+            // ICS DATE-TIME format. Treated as floating local time (no explicit Z),
+            // which is the simplest correct-enough behavior without pulling in a
+            // timezone library; most calendar apps interpret this as the device's
+            // local time, matching what was actually entered.
+            return (isoLike || '').replace(/[-:]/g, '').slice(0, 15);
+        }
+
+        function downloadICSEvent({ uid, summary, description, location, start, end }) {
+            const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+            const ics = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//BarkBoard//Booking//EN',
+                'BEGIN:VEVENT',
+                `UID:${uid}@barkboard`,
+                `DTSTAMP:${now}`,
+                `DTSTART:${toICSDateTime(start)}`,
+                `DTEND:${toICSDateTime(end)}`,
+                `SUMMARY:${esc(summary)}`,
+                description ? `DESCRIPTION:${esc(description)}` : '',
+                location ? `LOCATION:${esc(location)}` : '',
+                'END:VEVENT',
+                'END:VCALENDAR'
+            ].filter(Boolean).join('\r\n');
+
+            const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(summary || 'appointment').replace(/[^a-z0-9]/gi, '-')}.ics`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function addAppointmentToCalendar(bookingId) {
+            const b = allBookingsData.find(x => x.id === bookingId);
+            if (!b) return;
+            downloadICSEvent({
+                uid: b.id,
+                summary: `${b.pets?.name || 'Pet'} — ${b.service_name}`,
+                description: b.notes || '',
+                location: currentBiz?.name || '',
+                start: b.check_in,
+                end: b.check_out || b.check_in
+            });
+        }
+
         function statusPillHtml(status) {
             const cls = { pending: 'status-pending', confirmed: 'status-confirmed', completed: 'status-completed', cancelled: 'status-cancelled' }[status] || 'status-pending';
             return `<span class="status-pill ${cls}">${status || 'pending'}</span>`;
@@ -345,6 +402,7 @@
                             ${b.customer_change_request && !b.customer_change_request_resolved ? `<div class="change-note-box">Your request: "${b.customer_change_request}" — awaiting response</div>` : ''}
                         </div>
                         <div class="item-actions">
+                            <button class="icon-btn" title="Add to calendar" onclick="addAppointmentToCalendar('${b.id}')">📅</button>
                             ${invoice ? `<button class="icon-btn" title="${invoice.status === 'paid' ? 'Print receipt' : 'Print invoice'}" onclick="openPrintOverlay('${invoice.id}')">🖨️</button>` : ''}
                             <button class="icon-btn" title="Request a change" onclick="openRescheduleOverlay('${b.id}', '${petName.replace(/'/g, "\\'")} — ${(b.service_name || '').replace(/'/g, "\\'")}')">✏️</button>
                         </div>

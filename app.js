@@ -640,7 +640,7 @@ function bootstrapApp() {
    DASHBOARD METRICS SYSTEM (Staff Feed "Today's Overview")
    ========================================================================== */
 
-const DEFAULT_DASHBOARD_METRICS = ['pending-requests', 'tasks-today', 'unpaid-invoices', 'training-sessions'];
+const DEFAULT_DASHBOARD_METRICS = ['pending-requests', 'change-requests', 'tasks-today', 'unpaid-invoices', 'training-sessions'];
 const MAX_DASHBOARD_METRICS = 10;
 
 // Static metric definitions. Resource-type metrics (kennels/suites/runs/etc.)
@@ -650,6 +650,7 @@ const MAX_DASHBOARD_METRICS = 10;
 // set up in Templates → Resources.
 const STATIC_METRIC_DEFS = {
     'pending-requests': { label: 'Pending Requests', icon: 'bell' },
+    'change-requests': { label: 'Customer Change Requests', icon: 'message-square' },
     'tasks-today': { label: 'Tasks Remaining', icon: 'list-checks' },
     'unpaid-invoices': { label: 'Pending Invoices', icon: 'receipt' },
     'training-sessions': { label: 'Training Sessions', icon: 'dumbbell' },
@@ -683,6 +684,13 @@ async function computeMetricValue(key, client, ctx) {
         const { data } = await client.from('bookings').select('id')
             .eq('source', 'public')
             .or('status.eq.pending,and(flexible_time.eq.true,status.neq.cancelled)');
+        const count = (data || []).length;
+        return { value: String(count), alert: count > 0 };
+    }
+    if (key === 'change-requests') {
+        const { data } = await client.from('bookings').select('id')
+            .not('customer_change_request', 'is', null)
+            .eq('customer_change_request_resolved', false);
         const count = (data || []).length;
         return { value: String(count), alert: count > 0 };
     }
@@ -751,6 +759,21 @@ async function getMetricDetailItems(key, client, ctx) {
                 ] : []
             };
         });
+    }
+    if (key === 'change-requests') {
+        const { data } = await client.from('bookings')
+            .select('id, service_name, check_in, household_id, customer_change_request, pets(name), households(name)')
+            .not('customer_change_request', 'is', null)
+            .eq('customer_change_request_resolved', false)
+            .order('customer_change_requested_at', { ascending: false });
+        return (data || []).map(b => ({
+            title: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Service'}`,
+            sub: `${b.households?.name || 'Unknown household'} · "${b.customer_change_request}"`,
+            onclick: `closeMetricDetailModal(); switchView('crm-view'); openFullWidthProfile('household', '${b.household_id}')`,
+            actions: [
+                { label: 'Mark Resolved', onclick: `event.stopPropagation(); resolveChangeRequestFromDetail('${b.id}', '${key}')` }
+            ]
+        }));
     }
     if (key === 'tasks-today') {
         const { data } = await client.from('staff_tasks').select('id, task_text, staff(name)').eq('due_date', ctx.today).eq('is_done', false);
@@ -862,6 +885,15 @@ async function setBookingStatusFromDetail(bookingId, newStatus, key) {
     const { error } = await client.from('bookings').update({ status: newStatus }).eq('id', bookingId);
     if (error) return alert('Failed to update: ' + error.message);
     if (newStatus === 'confirmed') await ensureInvoiceForConfirmedBooking(client, bookingId);
+    refreshMetricDetail(key);
+    if (typeof renderActivities === 'function') renderActivities();
+}
+
+async function resolveChangeRequestFromDetail(bookingId, key) {
+    const client = getSupabase();
+    if (!client) return;
+    const { error } = await client.from('bookings').update({ customer_change_request_resolved: true }).eq('id', bookingId);
+    if (error) return alert('Failed to update: ' + error.message);
     refreshMetricDetail(key);
     if (typeof renderActivities === 'function') renderActivities();
 }
@@ -1361,6 +1393,7 @@ async function openBookingModal(householdId = null, bookingId = null) {
 
     if (titleEl) titleEl.textContent = bookingId ? 'Edit Event' : 'Add Event';
     document.getElementById('bk-delete-btn')?.classList.toggle('hidden', !bookingId);
+    document.getElementById('bk-calendar-btn')?.classList.toggle('hidden', !bookingId);
 
     // Reset fields
     if (typeSel) typeSel.value = 'appointment';
@@ -4895,6 +4928,58 @@ async function openFullWidthProfile(type, id) {
 
 function detailField(label, value) {
     return `<div><span style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em;">${label}</span><div style="font-size:0.9rem; margin-top:0.1rem;">${value || '—'}</div></div>`;
+}
+
+// --- Add to Calendar (.ics download) — mirrors the same simple generator
+// used in portal.html. Duplicated rather than shared since the staff app
+// and portal are separate standalone pages with no common included script.
+function toICSDateTime(isoLike) {
+    return (isoLike || '').replace(/[-:]/g, '').slice(0, 15);
+}
+
+function downloadICSEvent({ uid, summary, description, location, start, end }) {
+    const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+    const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//BarkBoard//Booking//EN',
+        'BEGIN:VEVENT',
+        `UID:${uid}@barkboard`,
+        `DTSTAMP:${now}`,
+        `DTSTART:${toICSDateTime(start)}`,
+        `DTEND:${toICSDateTime(end)}`,
+        `SUMMARY:${esc(summary)}`,
+        description ? `DESCRIPTION:${esc(description)}` : '',
+        location ? `LOCATION:${esc(location)}` : '',
+        'END:VEVENT',
+        'END:VCALENDAR'
+    ].filter(Boolean).join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(summary || 'appointment').replace(/[^a-z0-9]/gi, '-')}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function downloadBookingICS() {
+    if (!editingBookingId) return;
+    const client = getSupabase();
+    if (!client) return;
+    const { data: b } = await client.from('bookings').select('*, pets(name)').eq('id', editingBookingId).single();
+    if (!b) return;
+    downloadICSEvent({
+        uid: b.id,
+        summary: `${b.pets?.name || 'Pet'} — ${b.service_name || 'Appointment'}`,
+        description: b.notes || '',
+        start: b.check_in,
+        end: b.check_out || b.check_in
+    });
 }
 
 async function markHouseholdReviewed(householdId) {
