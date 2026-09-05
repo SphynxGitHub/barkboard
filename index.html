@@ -60,6 +60,70 @@
         </div>
     </div>
 
+    <!-- Onboarding wizard: shown once after signup (businesses.onboarding_completed = false),
+         re-openable later via Business settings. Sits above everything except the auth gate. -->
+    <div id="onboarding-modal" class="hidden" style="position:fixed; inset:0; z-index:1900; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg, #eef2ff 0%, #f9fafb 55%, #f0f9ff 100%); padding:1.5rem;">
+        <div class="auth-card" style="max-width:520px;">
+            <div class="auth-card-brand">
+                <div id="ob-step-icon" class="auth-card-logo">🐾</div>
+                <h1 id="ob-step-title">Welcome!</h1>
+                <p id="ob-step-subtitle">Let's get your business set up.</p>
+            </div>
+
+            <div id="ob-progress" style="display:flex; gap:0.35rem; justify-content:center; margin-bottom:1.5rem;"></div>
+
+            <!-- Step 0: Welcome -->
+            <div id="ob-step-0" class="ob-step">
+                <p style="font-size:0.9rem; color:var(--text-muted); text-align:center; margin-bottom:1.5rem;">We'll ask a few quick questions about your staff, resources, and services — this fills in your account so you're not starting from a blank slate. Everything's optional and editable later.</p>
+                <button type="button" class="auth-submit-btn" onclick="obNextStep()">Let's go</button>
+            </div>
+
+            <!-- Step 1: Staff -->
+            <div id="ob-step-1" class="ob-step hidden">
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Who's on your team? Add each staff member's name and role.</p>
+                <div id="ob-staff-rows" style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:0.75rem;"></div>
+                <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-bottom:1.25rem;" onclick="obAddStaffRow()">+ Add Staff Member</button>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn" style="flex:1;" onclick="obPrevStep()">Back</button>
+                    <button type="button" class="auth-submit-btn" style="flex:2;" onclick="obNextStep()">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Resources -->
+            <div id="ob-step-2" class="ob-step hidden">
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">What physical spaces do you manage — kennels, suites, runs, rooms? Give each type a name and how many you have.</p>
+                <div id="ob-resource-rows" style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:0.75rem;"></div>
+                <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-bottom:1.25rem;" onclick="obAddResourceRow()">+ Add Resource Type</button>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn" style="flex:1;" onclick="obPrevStep()">Back</button>
+                    <button type="button" class="auth-submit-btn" style="flex:2;" onclick="obNextStep()">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Services -->
+            <div id="ob-step-3" class="ob-step hidden">
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">What services do you offer? Add a name and price for each — you can mark it as a flat rate or a per-day rate.</p>
+                <div id="ob-service-rows" style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:0.75rem;"></div>
+                <button type="button" class="btn" style="font-size:0.8rem; padding:0.35rem 0.7rem; margin-bottom:1.25rem;" onclick="obAddServiceRow()">+ Add Service</button>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn" style="flex:1;" onclick="obPrevStep()">Back</button>
+                    <button type="button" class="auth-submit-btn" style="flex:2;" onclick="obNextStep()">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Done -->
+            <div id="ob-step-4" class="ob-step hidden">
+                <p style="font-size:0.9rem; color:var(--text-muted); text-align:center; margin-bottom:1.5rem;">That's everything — we'll save what you entered and take you into your dashboard. You can add or edit any of this anytime from the Templates and Business tabs.</p>
+                <div id="ob-finish-error" class="hidden auth-error-box"></div>
+                <button type="button" class="auth-submit-btn" id="ob-finish-btn" onclick="obFinish()">Finish Setup</button>
+            </div>
+
+            <p class="auth-toggle-row" id="ob-skip-row">
+                <a href="#" onclick="event.preventDefault(); obFinish(true);">Skip setup for now</a>
+            </p>
+        </div>
+    </div>
+
     <div id="owner-banner" class="owner-banner hidden">
         <div>👁️ Admin preview — viewing portal as: <strong id="owner-banner-name">—</strong></div>
         <button class="exit-owner-btn" onclick="exitOwnerView()">✕ Exit Owner View</button>
@@ -381,8 +445,9 @@
             </div>
 
             <div id="bizsec-public-booking" class="biz-section">
-                <div class="section-header-row" style="margin-bottom:1rem;">
+                <div class="section-header-row" style="margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
                     <h3 style="margin:0;">Public booking page</h3>
+                    <button class="btn" style="font-size:0.78rem; padding:0.35rem 0.7rem;" onclick="openOnboardingWizard(null, true)">Run Setup Wizard</button>
                 </div>
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Let customers request an appointment directly, without calling or emailing. Submissions land in your Activities feed with "Pending" status for you to confirm or decline — nothing goes on the calendar automatically.</p>
 

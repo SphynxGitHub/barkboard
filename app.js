@@ -149,7 +149,23 @@ async function handleSignupSubmit() {
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating account...'; }
 
-    const { data: signUpData, error: signUpError } = await client.auth.signUp({ email, password });
+    const { data: signUpData, error: signUpError } = await client.auth.signUp({
+        email,
+        password,
+        options: {
+            // Stashed here specifically so the business can still be created after
+            // email confirmation, when signUp() doesn't hand back a session and
+            // this browser tab has no memory of what was typed by the time they
+            // actually log in later — see the pending_business_name check in
+            // resolveBusinessAndEnterApp().
+            data: { pending_business_name: businessName },
+            // Explicit redirect target so confirmation always lands back on this
+            // app regardless of what's configured as the project's Site URL —
+            // that dashboard setting is still required as a fallback/allowlist
+            // entry, but this takes precedence when both are set.
+            emailRedirectTo: window.location.origin + window.location.pathname
+        }
+    });
 
     if (signUpError) {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
@@ -211,7 +227,31 @@ async function resolveBusinessAndEnterApp() {
     const client = getSupabase();
     if (!client) return showAuthGate('Database connection unavailable.');
 
-    const { data: businessId, error } = await client.rpc('current_business_id');
+    let { data: businessId, error } = await client.rpc('current_business_id');
+
+    // No business yet — but if this login is completing a signup that required
+    // email confirmation (pending_business_name was stashed on the user at
+    // signup time), finish creating it now instead of leaving them stuck.
+    if ((error || !businessId) && currentUser?.user_metadata?.pending_business_name) {
+        const pendingName = currentUser.user_metadata.pending_business_name;
+        const slug = slugify(pendingName) || `business-${Date.now()}`;
+        const { data: newBusinessId, error: createError } = await client.rpc('create_business_for_current_user', {
+            business_name: pendingName,
+            business_slug: slug
+        });
+
+        if (createError) {
+            showAuthGate('Could not finish setting up your business: ' + createError.message + '. Please contact support.');
+            return;
+        }
+
+        businessId = newBusinessId;
+        error = null;
+
+        // Clear the pending flag now that it's been used, so a later signup
+        // hiccup or metadata edit can't accidentally re-trigger this.
+        await client.auth.updateUser({ data: { pending_business_name: null } });
+    }
 
     if (error || !businessId) {
         showAuthGate("Your account isn't linked to a business yet. Contact your admin.");
@@ -220,7 +260,13 @@ async function resolveBusinessAndEnterApp() {
 
     currentBusinessId = businessId;
     hideAuthGate();
-    bootstrapApp();
+
+    const { data: business } = await client.from('businesses').select('name, onboarding_completed').eq('id', currentBusinessId).single();
+    if (business && !business.onboarding_completed) {
+        openOnboardingWizard(business.name);
+    } else {
+        bootstrapApp();
+    }
 }
 
 /* Runs once on page load: checks for an existing Supabase Auth session
@@ -235,6 +281,191 @@ async function initAuthGate() {
         await resolveBusinessAndEnterApp();
     } else {
         showAuthGate();
+    }
+}
+
+/* ==========================================================================
+   ONBOARDING WIZARD — shown once after signup to collect starter data
+   (staff, resources, services) and turn it into real records, rather than
+   leaving a brand-new account completely empty. Re-openable later via
+   Business settings (openOnboardingWizard called with reopen=true skips
+   touching onboarding_completed on finish, since it's already been done).
+   ========================================================================== */
+
+let obCurrentStep = 0;
+let obRowCounter = 0;
+let obIsReopen = false;
+const OB_STEP_COUNT = 5; // steps 0-4
+
+const OB_STEP_META = [
+    { title: 'Welcome!', subtitle: "Let's get your business set up.", icon: '🐾' },
+    { title: 'Your Team', subtitle: 'Add the people who work with you.', icon: '👥' },
+    { title: 'Your Spaces', subtitle: 'What do you have room for?', icon: '🏠' },
+    { title: 'Your Services', subtitle: 'What can customers book?', icon: '📋' },
+    { title: "You're all set!", subtitle: '', icon: '✅' },
+];
+
+function openOnboardingWizard(businessName, reopen = false) {
+    obIsReopen = reopen;
+    obCurrentStep = 0;
+    obRowCounter = 0;
+    document.getElementById('ob-staff-rows').innerHTML = '';
+    document.getElementById('ob-resource-rows').innerHTML = '';
+    document.getElementById('ob-service-rows').innerHTML = '';
+    document.getElementById('ob-finish-error')?.classList.add('hidden');
+    obAddStaffRow();
+    obAddResourceRow();
+    obAddServiceRow();
+    renderObStep();
+    document.getElementById('onboarding-modal')?.classList.remove('hidden');
+}
+
+function renderObStep() {
+    document.querySelectorAll('.ob-step').forEach((el, i) => el.classList.toggle('hidden', i !== obCurrentStep));
+    const meta = OB_STEP_META[obCurrentStep];
+    document.getElementById('ob-step-title').textContent = meta.title;
+    document.getElementById('ob-step-subtitle').textContent = meta.subtitle;
+    document.getElementById('ob-step-icon').textContent = meta.icon;
+    document.getElementById('ob-skip-row').classList.toggle('hidden', obCurrentStep === OB_STEP_COUNT - 1);
+
+    const progress = document.getElementById('ob-progress');
+    progress.innerHTML = Array.from({ length: OB_STEP_COUNT }).map((_, i) =>
+        `<span style="width:8px; height:8px; border-radius:50%; background:${i === obCurrentStep ? 'var(--primary)' : 'var(--border)'};"></span>`
+    ).join('');
+}
+
+function obNextStep() {
+    if (obCurrentStep < OB_STEP_COUNT - 1) {
+        obCurrentStep++;
+        renderObStep();
+    }
+}
+
+function obPrevStep() {
+    if (obCurrentStep > 0) {
+        obCurrentStep--;
+        renderObStep();
+    }
+}
+
+function obRemoveRow(rowId) {
+    document.getElementById(rowId)?.remove();
+}
+
+function obAddStaffRow() {
+    const id = `ob-staff-row-${obRowCounter++}`;
+    const el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'display:flex; gap:0.5rem; align-items:center;';
+    el.innerHTML = `
+        <input type="text" class="ob-staff-name" placeholder="Name" style="flex:2;">
+        <input type="text" class="ob-staff-role" placeholder="Role (e.g. Groomer)" style="flex:2;">
+        <button type="button" onclick="obRemoveRow('${id}')" style="background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1.1rem; padding:0.25rem;">×</button>
+    `;
+    document.getElementById('ob-staff-rows').appendChild(el);
+}
+
+function obAddResourceRow() {
+    const id = `ob-resource-row-${obRowCounter++}`;
+    const el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'display:flex; gap:0.5rem; align-items:center;';
+    el.innerHTML = `
+        <input type="text" class="ob-resource-type" placeholder="e.g. Dog Suite" style="flex:3;">
+        <input type="number" class="ob-resource-count" placeholder="Count" min="1" style="flex:1;">
+        <button type="button" onclick="obRemoveRow('${id}')" style="background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1.1rem; padding:0.25rem;">×</button>
+    `;
+    document.getElementById('ob-resource-rows').appendChild(el);
+}
+
+function obAddServiceRow() {
+    const id = `ob-service-row-${obRowCounter++}`;
+    const el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'display:flex; gap:0.5rem; align-items:center;';
+    el.innerHTML = `
+        <input type="text" class="ob-service-name" placeholder="e.g. Boarding" style="flex:2;">
+        <input type="number" step="0.01" class="ob-service-price" placeholder="Price" style="flex:1;">
+        <select class="ob-service-unit" style="flex:1;">
+            <option value="flat">Flat</option>
+            <option value="per_day">Per day</option>
+        </select>
+        <button type="button" onclick="obRemoveRow('${id}')" style="background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1.1rem; padding:0.25rem;">×</button>
+    `;
+    document.getElementById('ob-service-rows').appendChild(el);
+}
+
+/* Reads every filled-in row across all three steps and bulk-inserts them as
+   real records. Empty rows (no name typed) are silently skipped rather than
+   erroring — someone may have added a row and decided not to use it. */
+async function obFinish(skip = false) {
+    const client = getSupabase();
+    if (!client) return;
+
+    const finishBtn = document.getElementById('ob-finish-btn');
+    if (finishBtn) { finishBtn.disabled = true; finishBtn.textContent = 'Saving...'; }
+
+    if (!skip) {
+        const staffRows = Array.from(document.querySelectorAll('#ob-staff-rows > div')).map(row => ({
+            name: row.querySelector('.ob-staff-name')?.value.trim(),
+            role: row.querySelector('.ob-staff-role')?.value.trim() || null,
+        })).filter(r => r.name);
+
+        const resourceRows = Array.from(document.querySelectorAll('#ob-resource-rows > div')).map(row => ({
+            type: row.querySelector('.ob-resource-type')?.value.trim(),
+            count: parseInt(row.querySelector('.ob-resource-count')?.value, 10) || 1,
+        })).filter(r => r.type);
+
+        const serviceRows = Array.from(document.querySelectorAll('#ob-service-rows > div')).map(row => ({
+            name: row.querySelector('.ob-service-name')?.value.trim(),
+            price: row.querySelector('.ob-service-price')?.value,
+            unit: row.querySelector('.ob-service-unit')?.value || 'flat',
+        })).filter(r => r.name);
+
+        try {
+            if (staffRows.length) {
+                await client.from('staff').insert(staffRows.map(r => ({ name: r.name, role: r.role, business_id: currentBusinessId })));
+            }
+            if (resourceRows.length) {
+                // One row per resource TYPE, with `seats` as the count — matches the
+                // seat-based capacity model the rest of the app already uses for
+                // availability checks (see the booking form's resource search).
+                await client.from('resources').insert(resourceRows.map(r => ({
+                    name: r.type, type: r.type, seats: r.count, default_mode: 'all_day', business_id: currentBusinessId
+                })));
+            }
+            if (serviceRows.length) {
+                await client.from('appointment_type_templates').insert(serviceRows.map(r => ({
+                    name: r.name,
+                    default_price: r.price ? parseFloat(r.price) : null,
+                    pricing_unit: r.unit,
+                    business_id: currentBusinessId
+                })));
+            }
+        } catch (e) {
+            console.error('Onboarding save failed:', e);
+            const errEl = document.getElementById('ob-finish-error');
+            if (errEl) {
+                errEl.textContent = 'Something went wrong saving your setup — you can add these later from Templates and Business settings.';
+                errEl.classList.remove('hidden');
+            }
+        }
+    }
+
+    if (!obIsReopen) {
+        await client.from('businesses').update({ onboarding_completed: true }).eq('id', currentBusinessId);
+    }
+
+    document.getElementById('onboarding-modal')?.classList.add('hidden');
+    if (finishBtn) { finishBtn.disabled = false; finishBtn.textContent = 'Finish Setup'; }
+
+    if (obIsReopen) {
+        // Reopened from settings after the app was already loaded — just refresh
+        // the relevant views instead of re-running the whole app bootstrap.
+        if (typeof initStaffView === 'function') initStaffView();
+        alert('Setup saved.');
+    } else {
+        bootstrapApp();
     }
 }
 
