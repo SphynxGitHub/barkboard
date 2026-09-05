@@ -159,6 +159,7 @@
     <div id="print-overlay" class="modal-overlay-portal hidden">
         <div class="card" style="width:100%; max-width:400px;">
             <div id="print-receipt-content">
+                <div id="print-logo-slot" style="margin-bottom:0.75rem;"></div>
                 <h2 id="print-biz-name" style="margin:0 0 0.25rem;"></h2>
                 <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 1.25rem;" id="print-receipt-label">Receipt</p>
                 <div id="print-receipt-body" style="font-size:0.9rem; line-height:1.8;"></div>
@@ -448,6 +449,9 @@
         function openPrintOverlay(invoiceId) {
             const inv = invoicesById[invoiceId];
             if (!inv) return;
+            document.getElementById('print-logo-slot').innerHTML = currentBiz.logo_url
+                ? `<img src="${currentBiz.logo_url}" style="max-height:56px; max-width:180px;" alt="${currentBiz.name}">`
+                : '';
             document.getElementById('print-biz-name').textContent = currentBiz.name;
             document.getElementById('print-receipt-label').textContent = inv.status === 'paid' ? 'Receipt' : 'Invoice';
             document.getElementById('print-receipt-body').innerHTML = `
@@ -455,6 +459,8 @@
                 <div><strong>Amount:</strong> $${Number(inv.amount || 0).toFixed(2)}</div>
                 <div><strong>Status:</strong> ${inv.status}</div>
                 <div><strong>Due date:</strong> ${inv.due_date || '—'}</div>
+                ${inv.paid_date ? `<div><strong>Paid Date:</strong> ${inv.paid_date}</div>` : ''}
+                ${inv.payment_method ? `<div><strong>Payment Method:</strong> ${inv.payment_method}</div>` : ''}
             `;
             document.getElementById('print-overlay').classList.remove('hidden');
         }
@@ -529,7 +535,7 @@
             const invoiceIds = Array.from(new Set(allBookingsData.map(b => b.invoice_id).filter(Boolean)));
             invoicesById = {};
             if (invoiceIds.length) {
-                const { data: invoices } = await supabaseClient.from('invoices').select('id, amount, status, description, due_date').in('id', invoiceIds);
+                const { data: invoices } = await supabaseClient.from('invoices').select('id, amount, status, description, due_date, paid_date, payment_method').in('id', invoiceIds);
                 (invoices || []).forEach(inv => { invoicesById[inv.id] = inv; });
             }
 

@@ -910,7 +910,12 @@ async function setTaskDoneFromDetail(taskId, key) {
 async function setInvoiceStatusFromDetail(invoiceId, newStatus, key) {
     const client = getSupabase();
     if (!client) return;
-    const { error } = await client.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+    const payload = { status: newStatus };
+    if (newStatus === 'paid') {
+        payload.paid_date = new Date().toISOString().slice(0, 10);
+        payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+    }
+    const { error } = await client.from('invoices').update(payload).eq('id', invoiceId);
     if (error) return alert('Failed to update: ' + error.message);
     refreshMetricDetail(key);
 }
@@ -2586,7 +2591,8 @@ async function setHouseholdInvoiceStatus(invoiceId, newStatus, householdId) {
 async function markInvoicePaid(id, householdId) {
     const client = getSupabase();
     if (!client) return;
-    await client.from('invoices').update({ status: 'paid' }).eq('id', id);
+    const paymentMethod = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+    await client.from('invoices').update({ status: 'paid', paid_date: new Date().toISOString().slice(0, 10), payment_method: paymentMethod }).eq('id', id);
     if (typeof showReceipt === 'function') showReceipt(id);
     openFullWidthProfile('household', householdId);
 }
@@ -3989,7 +3995,12 @@ async function renderInvoicesList() {
 async function setBizInvoiceStatus(kind, id, newStatus) {
     const client = getSupabase();
     if (!client) return;
-    await client.from('invoices').update({ status: newStatus }).eq('id', id);
+    const payload = { status: newStatus };
+    if (newStatus === 'paid') {
+        payload.paid_date = new Date().toISOString().slice(0, 10);
+        payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+    }
+    await client.from('invoices').update(payload).eq('id', id);
     if (newStatus === 'paid') showReceipt(id);
     renderInvoicesList();
 }
@@ -5626,7 +5637,12 @@ async function setBookingStatusInProfile(kind, id, newStatus) {
     if (kind === 'appointment') {
         await client.from('bookings').update({ status: newStatus }).eq('id', id);
     } else if (kind === 'invoice') {
-        await client.from('invoices').update({ status: newStatus }).eq('id', id);
+        const payload = { status: newStatus };
+        if (newStatus === 'paid') {
+            payload.paid_date = new Date().toISOString().slice(0, 10);
+            payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+        }
+        await client.from('invoices').update(payload).eq('id', id);
         if (newStatus === 'paid') showReceipt(id);
     }
 
@@ -5651,7 +5667,12 @@ async function setStaffFeedAppointmentStatus(kind, id, newStatus) {
 async function setStaffFeedInvoiceStatus(kind, id, newStatus) {
     const client = getSupabase();
     if (!client) return;
-    await client.from('invoices').update({ status: newStatus }).eq('id', id);
+    const payload = { status: newStatus };
+    if (newStatus === 'paid') {
+        payload.paid_date = new Date().toISOString().slice(0, 10);
+        payload.payment_method = prompt('How was this paid? (e.g. Cash, Check, Venmo, Zelle, Card)') || null;
+    }
+    await client.from('invoices').update(payload).eq('id', id);
     if (newStatus === 'paid') showReceipt(id);
     renderStaffGuests();
     if (typeof renderTodaysOverview === 'function') renderTodaysOverview();
@@ -7469,6 +7490,8 @@ async function showReceipt(invoiceId) {
         <p style="color:var(--text-muted);">${inv.households?.name || ''}</p>
         ${inv.pet_names ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.3rem;"><strong>Pet(s):</strong> ${inv.pet_names}</p>` : ''}
         ${serviceWhen ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Service Date(s):</strong> ${serviceWhen}</p>` : ''}
+        ${inv.paid_date ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Paid Date:</strong> ${inv.paid_date}</p>` : ''}
+        ${inv.payment_method ? `<p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.1rem;"><strong>Payment Method:</strong> ${inv.payment_method}</p>` : ''}
         <p style="color:var(--text-muted); font-size:0.85rem; margin-top:1rem;">Paid in full. Thank you!</p>
         <p style="color:var(--text-muted); font-size:0.78rem; margin-top:0.75rem; font-style:italic;">Note: email delivery isn't set up yet — this receipt is view/print only for now.</p>
     `);
