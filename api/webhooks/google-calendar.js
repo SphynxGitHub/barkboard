@@ -17,10 +17,10 @@ export default async function handler(req, res) {
   if (resourceState === 'sync') return;
 
   try {
-    // 1. Retrieve watch channel and linked OAuth credentials
+    // 1. Retrieve watch channel, OAuth credentials, and staff's business ID
     const { data: channel, error: chErr } = await supabase
       .from('calendar_watch_channels')
-      .select('*, staff_oauth_tokens(*)')
+      .select('*, staff_oauth_tokens(*), staff(business_id)')
       .eq('channel_id', channelId)
       .single();
 
@@ -30,6 +30,8 @@ export default async function handler(req, res) {
     }
 
     const tokenData = channel.staff_oauth_tokens;
+    const businessId = channel.staff?.business_id || null;
+
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -100,8 +102,9 @@ export default async function handler(req, res) {
           .update({ status: 'cancelled' })
           .eq('google_event_id', event.id);
       } else {
-        const startIso = event.start?.dateTime || `${event.start?.date}T00:00:00Z`;
-        const endIso = event.end?.dateTime || `${event.end?.date}T23:59:59Z`;
+        // Standardize timestamps (handle dateTime vs all-day date strings)
+        const startIso = event.start?.dateTime || `${event.start?.date}T09:00:00`;
+        const endIso = event.end?.dateTime || `${event.end?.date}T17:00:00`;
 
         const { error: upsertErr } = await supabase.from('bookings').upsert({
           google_event_id: event.id,
@@ -109,8 +112,9 @@ export default async function handler(req, res) {
           check_in: startIso,
           check_out: endIso,
           assigned_staff_id: channel.staff_id,
-          flexible_time: false, // Explicitly set to satisfy NOT NULL constraint
-          household_id: null,   // Handles non-client external events
+          business_id: businessId, // Links event to the correct business tenant
+          flexible_time: false,    // Satisfies NOT NULL constraint
+          household_id: null,      // Handles non-client external events
           notes: event.description || '',
           status: 'confirmed'
         }, { onConflict: 'google_event_id' });
