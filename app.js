@@ -1629,6 +1629,16 @@ let qbSingleCalYear, qbSingleCalMonth, qbSelectedDate = null, qbSelectedTime = n
 let qbHouseholdPets = [];
 let qbTemplatesCache = null;
 
+// Opens the new multi-pet flow with a household already selected — used by
+// the "+ Add Event" button on a household/pet profile, so staff don't have
+// to search for the household they're already looking at.
+async function openQuickBookingForHousehold(householdId) {
+    await openQuickBookingModal();
+    const client = getSupabase();
+    const { data: household } = client ? await client.from('households').select('name').eq('id', householdId).single() : { data: null };
+    if (household) await selectQbHousehold(householdId, household.name);
+}
+
 async function openQuickBookingModal() {
     qbSelectedHouseholdId = null;
     qbSelectedCategory = null;
@@ -1637,6 +1647,11 @@ async function openQuickBookingModal() {
     qbSelectedDate = null;
     qbSelectedTime = null;
     qbHouseholdPets = [];
+    qbSelectedResources = [];
+    document.getElementById('qb-resource-chips').innerHTML = '';
+    document.getElementById('qb-resource-search').value = '';
+    document.getElementById('qb-resources-section').classList.add('hidden');
+    document.getElementById('qb-staff-field').classList.add('hidden');
     document.getElementById('qb-household-search').value = '';
     document.getElementById('qb-household-selected').classList.add('hidden');
     document.getElementById('qb-household-search').classList.remove('hidden');
@@ -1744,6 +1759,7 @@ function selectQbCategory(cat) {
     renderQbCategoryPicker();
     document.getElementById('qb-pets-section').classList.remove('hidden');
     document.getElementById('qb-date-section').classList.remove('hidden');
+    document.getElementById('qb-resources-section').classList.remove('hidden');
     document.getElementById('qb-boarding-cal-wrap').classList.toggle('hidden', cat !== 'boarding');
     document.getElementById('qb-single-cal-wrap').classList.toggle('hidden', cat === 'boarding');
 
@@ -1751,6 +1767,7 @@ function selectQbCategory(cat) {
     qbSelectedDate = null; qbSelectedTime = null;
 
     if (qbSelectedHouseholdId) renderQbPetRows();
+    updateQbStaffFieldVisibility();
 
     if (cat === 'boarding') {
         const today = new Date();
@@ -1819,12 +1836,72 @@ function getQbSelectedPets() {
 
 function onQbPetToggled() {
     if (qbSelectedDate) renderQbSlotPicker(qbSelectedDate);
+    updateQbStaffFieldVisibility();
     updateQbReview();
 }
 
 function onQbServiceChanged() {
     if (qbSelectedDate) renderQbSlotPicker(qbSelectedDate);
+    updateQbStaffFieldVisibility();
     updateQbReview();
+}
+
+// Staff selection only makes sense when at least one currently-selected
+// pet's service actually requires dedicated staff/trainer time — otherwise
+// it's a field with no real purpose taking up space.
+function updateQbStaffFieldVisibility() {
+    const pets = getQbSelectedPets();
+    const needsStaff = pets.some(p => {
+        const t = (qbTemplatesCache || []).find(tpl => tpl.name === p.serviceName);
+        return !!t?.requires_staff_time;
+    });
+    document.getElementById('qb-staff-field')?.classList.toggle('hidden', !needsStaff);
+}
+
+// --- Resources needed (multi-select, shared across all pets in this submission) ---
+let qbSelectedResources = [];
+let qbResourceSearchTimer = null;
+
+function searchQbResources(query) {
+    clearTimeout(qbResourceSearchTimer);
+    qbResourceSearchTimer = setTimeout(async () => {
+        const container = document.getElementById('qb-resource-search-results');
+        const q = query.trim();
+        if (!q) { container.classList.add('hidden'); return; }
+        const client = getSupabase();
+        if (!client) return;
+        const { data } = await client.from('resources').select('id, name, type').eq('business_id', currentBusinessId).ilike('name', `%${q}%`).limit(15);
+        const selectedIds = new Set(qbSelectedResources.map(r => r.id));
+        const filtered = (data || []).filter(r => !selectedIds.has(r.id));
+        container.innerHTML = filtered.length
+            ? filtered.map(r => `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem;" onmousedown='addQbResource(${JSON.stringify(r.id)}, ${JSON.stringify(r.name)})'>${r.name}${r.type ? ' · ' + r.type : ''}</div>`).join('')
+            : `<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching resources.</div>`;
+        container.classList.remove('hidden');
+    }, 200);
+}
+
+function addQbResource(id, name) {
+    if (qbSelectedResources.some(r => r.id === id)) return;
+    qbSelectedResources.push({ id, name });
+    document.getElementById('qb-resource-search').value = '';
+    document.getElementById('qb-resource-search-results').classList.add('hidden');
+    renderQbResourceChips();
+}
+
+function removeQbResource(id) {
+    qbSelectedResources = qbSelectedResources.filter(r => r.id !== id);
+    renderQbResourceChips();
+}
+
+function renderQbResourceChips() {
+    const el = document.getElementById('qb-resource-chips');
+    if (!el) return;
+    el.innerHTML = qbSelectedResources.map(r => `
+        <span style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.3rem 0.6rem; background:var(--bg-hover,#f3f4f6); border-radius:999px; font-size:0.82rem;">
+            ${r.name}
+            <button type="button" onclick='removeQbResource(${JSON.stringify(r.id)})' style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0;line-height:1;">×</button>
+        </span>
+    `).join('');
 }
 
 // --- Boarding range calendar (mirrors the public booking page's version) --
@@ -2158,8 +2235,19 @@ async function submitQuickBooking() {
         });
     }
 
-    const { error } = await client.from('bookings').insert(rows);
+    const { data: createdBookings, error } = await client.from('bookings').insert(rows).select('id');
     if (error) return alert('Failed to create booking(s): ' + error.message);
+
+    if (qbSelectedResources.length && createdBookings?.length) {
+        const resourceRows = [];
+        for (const booking of createdBookings) {
+            for (const res of qbSelectedResources) {
+                resourceRows.push({ booking_id: booking.id, resource_id: res.id, all_day: true, business_id: currentBusinessId });
+            }
+        }
+        const { error: resErr } = await client.from('booking_resources').insert(resourceRows);
+        if (resErr) console.error('Failed to link resources to new booking(s):', resErr.message);
+    }
 
     closeQuickBookingModal();
     if (typeof renderAllDashboards === 'function') renderAllDashboards();
@@ -6589,7 +6677,7 @@ async function setStaffFeedInvoiceStatus(kind, id, newStatus) {
 function renderEventsCard(bookings, householdId, opts) {
     const { pets = [], showPetName = true } = opts || {};
     const addButton = householdId
-        ? `<button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openBookingModal('${householdId}')">+ Add Event</button>`
+        ? `<button class="btn btn-primary" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="openQuickBookingForHousehold('${householdId}')">+ Add Event</button>`
         : '';
     const list = bookings && bookings.length ? bookings
         .slice()
@@ -7776,6 +7864,49 @@ async function renderApptTypeList() {
     refreshIcons();
 }
 
+// Duration doesn't mean anything for a pure boarding stay (it's date-range
+// based, not time-slot based) — hidden when Boarding is the only category
+// checked. Shown again the moment any other category is also checked, since
+// a combo package (e.g. Board + Train) still needs it for the non-boarding side.
+function updateApptDurationVisibility() {
+    const checked = Array.from(document.querySelectorAll('.att-category-chk:checked')).map(c => c.value);
+    const isPureBoarding = checked.length === 1 && checked[0] === 'boarding';
+    document.getElementById('att-duration-field')?.classList.toggle('hidden', isPureBoarding);
+}
+
+function updateApptStaffFieldsVisibility() {
+    const checked = document.getElementById('att-requires-staff-time')?.checked;
+    const fields = document.getElementById('att-staff-time-fields');
+    if (fields) fields.style.display = checked ? 'flex' : 'none';
+}
+
+let apptResourceTypeOptions = [];
+function renderApptResourceTypeChecks(types, selectedResourceTypes, selectedStaffResourceTypes) {
+    apptResourceTypeOptions = types;
+    const mainEl = document.getElementById('att-resource-type-checks');
+    const staffEl = document.getElementById('att-staff-resource-type-checks');
+    const build = (el, selected, cls) => {
+        if (!el) return;
+        el.innerHTML = types.length
+            ? types.map(ty => `<label style="display:flex; align-items:center; gap:0.4rem; font-weight:400; font-size:0.85rem;"><input type="checkbox" class="${cls}" value="${ty}" ${selected.includes(ty) ? 'checked' : ''}> ${ty}</label>`).join('')
+            : `<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">No resource types yet — add one below.</p>`;
+    };
+    build(mainEl, selectedResourceTypes, 'att-resource-type-chk');
+    build(staffEl, selectedStaffResourceTypes, 'att-staff-resource-type-chk');
+}
+
+function addNewApptResourceTypeOption() {
+    const input = document.getElementById('att-new-resource-type');
+    const val = input?.value.trim();
+    if (!val) return;
+    if (!apptResourceTypeOptions.includes(val)) apptResourceTypeOptions.push(val);
+    apptResourceTypeOptions.sort();
+    const currentMain = Array.from(document.querySelectorAll('.att-resource-type-chk:checked')).map(c => c.value);
+    const currentStaff = Array.from(document.querySelectorAll('.att-staff-resource-type-chk:checked')).map(c => c.value);
+    renderApptResourceTypeChecks(apptResourceTypeOptions, [...currentMain, val], currentStaff);
+    input.value = '';
+}
+
 async function openApptTypeModal(id) {
     editingApptTypeId = id;
     const titleEl = document.getElementById('appt-type-modal-title');
@@ -7784,11 +7915,8 @@ async function openApptTypeModal(id) {
     const nameInput = document.getElementById('att-name');
     const priceInput = document.getElementById('att-price');
     const durationInput = document.getElementById('att-duration');
-    const resourceTypeSel = document.getElementById('att-resource-type');
     const requiresStaffTimeChk = document.getElementById('att-requires-staff-time');
-    const staffTimeFields = document.getElementById('att-staff-time-fields');
     const staffTimeMinutesInput = document.getElementById('att-staff-time-minutes');
-    const staffTimeResourceTypeSel = document.getElementById('att-staff-time-resource-type');
     const notesInput = document.getElementById('att-notes');
     const pricingFlatRadio = document.getElementById('att-pricing-flat');
     const pricingPerDayRadio = document.getElementById('att-pricing-per-day');
@@ -7800,16 +7928,20 @@ async function openApptTypeModal(id) {
         t = data;
     }
 
-    // Pull real resource types from the resources table into the shared datalist, so both
-    // fields can suggest existing types while still letting the user type a brand-new custom one.
+    // Resource type checkboxes — pulled from the distinct types already in
+    // use on the resources table, plus whichever ones this template already
+    // has selected (so an existing selection is never silently dropped even
+    // if no resource currently uses that type).
     if (client) {
         const { data: resourceRows } = await client.from('resources').select('type');
         const types = Array.from(new Set((resourceRows || []).map(r => r.type).filter(Boolean))).sort();
-        if (t?.resource_type && !types.includes(t.resource_type)) types.push(t.resource_type);
-        if (t?.staff_time_resource_type && !types.includes(t.staff_time_resource_type)) types.push(t.staff_time_resource_type);
+        const selectedResourceTypes = t?.resource_types || (t?.resource_type ? [t.resource_type] : []);
+        const selectedStaffResourceTypes = t?.staff_time_resource_types || (t?.staff_time_resource_type ? [t.staff_time_resource_type] : []);
+        selectedResourceTypes.forEach(ty => { if (!types.includes(ty)) types.push(ty); });
+        selectedStaffResourceTypes.forEach(ty => { if (!types.includes(ty)) types.push(ty); });
+        types.sort();
 
-        const datalist = document.getElementById('att-resource-type-options');
-        if (datalist) datalist.innerHTML = types.map(ty => `<option value="${ty.replace(/"/g, '&quot;')}"></option>`).join('');
+        renderApptResourceTypeChecks(types, selectedResourceTypes, selectedStaffResourceTypes);
     }
 
     if (nameInput) nameInput.value = t?.name || '';
@@ -7817,11 +7949,8 @@ async function openApptTypeModal(id) {
     if (pricingFlatRadio) pricingFlatRadio.checked = (t?.pricing_unit || 'flat') !== 'per_day';
     if (pricingPerDayRadio) pricingPerDayRadio.checked = t?.pricing_unit === 'per_day';
     if (durationInput) durationInput.value = t?.default_duration_minutes || '';
-    if (resourceTypeSel) resourceTypeSel.value = t?.resource_type || '';
     if (requiresStaffTimeChk) requiresStaffTimeChk.checked = !!t?.requires_staff_time;
-    if (staffTimeFields) staffTimeFields.style.display = t?.requires_staff_time ? 'flex' : 'none';
     if (staffTimeMinutesInput) staffTimeMinutesInput.value = t?.staff_time_minutes || '';
-    if (staffTimeResourceTypeSel) staffTimeResourceTypeSel.value = t?.staff_time_resource_type || '';
     if (notesInput) notesInput.value = t?.notes || '';
     document.querySelectorAll('.att-species-chk').forEach(chk => {
         chk.checked = Array.isArray(t?.species) && t.species.includes(chk.value);
@@ -7830,6 +7959,8 @@ async function openApptTypeModal(id) {
         chk.checked = Array.isArray(t?.category) && t.category.includes(chk.value);
     });
     if (document.getElementById('att-prompt-times')) document.getElementById('att-prompt-times').checked = !!t?.prompt_dropoff_pickup_time;
+    updateApptDurationVisibility();
+    updateApptStaffFieldsVisibility();
 
     // Render notice checkboxes from the business's active templates, checked
     // against whichever ones are already applied to this service (junction
@@ -7882,10 +8013,10 @@ async function saveApptType() {
     const price = document.getElementById('att-price')?.value;
     const pricingUnit = document.getElementById('att-pricing-per-day')?.checked ? 'per_day' : 'flat';
     const duration = document.getElementById('att-duration')?.value;
-    const resourceType = document.getElementById('att-resource-type')?.value.trim() || null;
+    const resourceTypes = Array.from(document.querySelectorAll('.att-resource-type-chk:checked')).map(c => c.value);
     const requiresStaffTime = document.getElementById('att-requires-staff-time')?.checked || false;
     const staffTimeMinutes = document.getElementById('att-staff-time-minutes')?.value;
-    const staffTimeResourceType = document.getElementById('att-staff-time-resource-type')?.value.trim() || null;
+    const staffTimeResourceTypes = Array.from(document.querySelectorAll('.att-staff-resource-type-chk:checked')).map(c => c.value);
     const notes = document.getElementById('att-notes')?.value.trim() || '';
     const species = Array.from(document.querySelectorAll('.att-species-chk:checked')).map(chk => chk.value);
     const category = Array.from(document.querySelectorAll('.att-category-chk:checked')).map(chk => chk.value);
@@ -7899,10 +8030,18 @@ async function saveApptType() {
         default_price: price ? parseFloat(price) : null,
         pricing_unit: pricingUnit,
         default_duration_minutes: duration ? parseInt(duration, 10) : null,
-        resource_type: resourceType,
+        // Old singular columns kept in sync (first selected value) for
+        // backward compatibility — the availability RPCs and both booking
+        // flows (public + staff) still key off these for actual capacity
+        // checking. The new array columns are the real multi-select data;
+        // extending availability math to require ALL selected resource
+        // types simultaneously is a separate follow-up, not done here.
+        resource_type: resourceTypes[0] || null,
+        resource_types: resourceTypes.length ? resourceTypes : null,
         requires_staff_time: requiresStaffTime,
         staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
-        staff_time_resource_type: requiresStaffTime ? staffTimeResourceType : null,
+        staff_time_resource_type: requiresStaffTime ? (staffTimeResourceTypes[0] || null) : null,
+        staff_time_resource_types: requiresStaffTime && staffTimeResourceTypes.length ? staffTimeResourceTypes : null,
         notes,
         species: species.length ? species : null,
         category: category.length ? category : null,
