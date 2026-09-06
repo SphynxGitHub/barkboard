@@ -2748,6 +2748,14 @@ async function renderStaffRoster() {
         return;
     }
 
+    // Which staff already have Google Calendar connected, so the button can
+    // reflect actual state instead of always just saying "Connect".
+    const { data: connectedTokens } = await client
+        .from('staff_oauth_tokens')
+        .select('staff_id')
+        .eq('provider', 'google');
+    const connectedStaffIds = new Set((connectedTokens || []).map(t => t.staff_id));
+
     // Render cards: clicking opens the full staff profile, matching household/person/pet/vet
     el.innerHTML = staff.map(s => `
         <div class="staff-card">
@@ -2761,6 +2769,10 @@ async function renderStaffRoster() {
                 ${s.notes ? `<p style="font-size:0.78rem;color:var(--text-muted);">${s.notes}</p>` : ''}
             </div>
             <div class="staff-actions">
+                ${connectedStaffIds.has(s.id)
+                    ? `<span style="font-size:0.75rem; color:var(--success-text,#065f46); background:var(--success,#d1fae5); padding:0.25rem 0.6rem; border-radius:999px; font-weight:600; white-space:nowrap;">✓ Calendar Synced</span>`
+                    : `<button class="btn" style="font-size:0.78rem; padding:0.35rem 0.7rem; white-space:nowrap;" onclick="event.stopPropagation(); connectGoogleCalendar('${s.id}')"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Connect Calendar</button>`
+                }
                 <button class="btn-icon" style="background:none; border:none; cursor:pointer; color:var(--danger-text);" onclick="event.stopPropagation(); deleteStaff('${s.id}')" title="Remove"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
             </div>
         </div>

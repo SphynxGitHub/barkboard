@@ -1,6 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/api/auth/google/callback", "destination": "/api/auth-callback" },
-    { "source": "/api/webhooks/google-calendar", "destination": "/api/webhook-handler" }
+  "crons": [
+    { "path": "/api/cron/renew-calendar-watches", "schedule": "0 6 * * *" }
   ]
 }
