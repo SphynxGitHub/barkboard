@@ -5165,7 +5165,7 @@ function renderDetailsStrip(type, id, data) {
 function renderEntitySections(type, data, id) {
     if (type === 'household') {
         return `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:start;">
+            <div style="display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:1.5rem; align-items:start;">
                 <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 <!-- Household Members -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
@@ -5317,7 +5317,7 @@ function renderEntitySections(type, data, id) {
         `;
     } else if (type === 'pet') {
         return `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:start;">
+            <div style="display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:1.5rem; align-items:start;">
                 <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 <!-- Linked Household -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
@@ -5425,7 +5425,7 @@ function renderEntitySections(type, data, id) {
         `;
     } else if (type === 'staff') {
         return `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:start;">
+            <div style="display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:1.5rem; align-items:start;">
                 <div style="display:flex; flex-direction:column; gap:1.5rem;">
                 <!-- Assigned Pets -->
                 <div class="stat-card" style="padding:1.25rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card);">
@@ -5784,26 +5784,26 @@ function renderEventsCard(bookings, householdId, opts) {
             const isStay = outDate && outDate !== inDate;
             const when = isStay ? `${inDate} → ${outDate}` : `${inDate}${inTime ? ' at ' + inTime : ''}`;
             return `
-                <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb);">
+                <div style="margin-top:0.75rem; padding:0.75rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-hover, #f9fafb); max-width:100%; overflow:hidden;">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                        <div style="flex:1;">
-                            <strong>${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem; gap:0.5rem;">
+                        <div style="flex:1; min-width:0; overflow-wrap:break-word; word-break:break-word;">
+                            <strong style="overflow-wrap:break-word; word-break:break-word;">${bk.service_name || (isStay ? 'Stay' : 'Appointment')}</strong>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem; gap:0.5rem; flex-wrap:wrap;">
                                 <span style="font-size:0.82rem; color:var(--text-muted);">${when}</span>
                                 <span onclick="event.stopPropagation();" style="display:inline-block;">${renderStatusTag('appointment', bk.id, bk.status || 'pending', 'setBookingStatusInProfile')}</span>
                             </div>
                             ${bk.amount || bk.invoice_id ? `
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.25rem; gap:0.5rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.25rem; gap:0.5rem; flex-wrap:wrap;">
                                     <span style="font-size:0.82rem; color:var(--text-muted);">${bk.amount ? '$' + Number(bk.amount).toFixed(2) : ''}</span>
                                     ${bk.invoice_id ? `<span onclick="event.stopPropagation();" style="display:inline-block;">${renderStatusTag('invoice', bk.invoice_id, bk.invoiceStatus || 'unpaid', 'setBookingStatusInProfile')}</span>` : ''}
                                 </div>
                             ` : ''}
-                            ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.3rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
-                            ${(bk.resourceAssignments || []).map(r => `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${r.name}${r.allDay ? ' (all day)' : (r.startTime ? ' (' + r.startTime.slice(0,5) + (r.endTime ? '–' + r.endTime.slice(0,5) : '') + ')' : ' (time-based)')}</div>`).join('')}
-                            ${bk.requires_staff_time ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${bk.staff_time_minutes || '?'} min/day staff time${bk.staff_time_resource?.name ? ' · ' + bk.staff_time_resource.name : ''}</div>` : ''}
-                            ${bk.notes && !bk.google_event_id ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
+                            ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.3rem; overflow-wrap:break-word; word-break:break-word;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
+                            ${(bk.resourceAssignments || []).map(r => `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem; overflow-wrap:break-word; word-break:break-word;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${r.name}${r.allDay ? ' (all day)' : (r.startTime ? ' (' + r.startTime.slice(0,5) + (r.endTime ? '–' + r.endTime.slice(0,5) : '') + ')' : ' (time-based)')}</div>`).join('')}
+                            ${bk.requires_staff_time ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem; overflow-wrap:break-word; word-break:break-word;"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${bk.staff_time_minutes || '?'} min/day staff time${bk.staff_time_resource?.name ? ' · ' + bk.staff_time_resource.name : ''}</div>` : ''}
+                            ${bk.notes && !bk.google_event_id ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem; overflow-wrap:break-word; word-break:break-word;">${bk.notes}</div>` : ''}
                         </div>
-                        <div style="display:flex; gap:0.35rem;">
+                        <div style="display:flex; gap:0.35rem; flex-shrink:0;">
                             <button class="btn-icon" onclick="openBookingModal('${householdId}', '${bk.id}')" title="Edit event" style="background:none; border:none; cursor:pointer;">
                                 <i data-lucide="pencil" style="width:14px;height:14px;"></i>
                             </button>
