@@ -2326,6 +2326,7 @@ async function submitQuickBooking() {
     const notes = document.getElementById('qb-notes')?.value.trim() || null;
 
     const rows = [];
+    const templatesByPetIndex = [];
     for (const p of pets) {
         let petId = p.petId;
         if (!petId) {
@@ -2335,6 +2336,7 @@ async function submitQuickBooking() {
             petId = newPet.id;
         }
         const template = (qbTemplatesCache || []).find(t => t.name === p.serviceName);
+        templatesByPetIndex.push(template);
         rows.push({
             business_id: currentBusinessId,
             household_id: qbSelectedHouseholdId,
@@ -2356,12 +2358,32 @@ async function submitQuickBooking() {
     if (error) return alert('Failed to create booking(s): ' + error.message);
 
     if (qbSelectedResources.length && createdBookings?.length) {
+        // Auto-derive each resource's occupied window the same way the
+        // single-booking modal does — multi-day (boarding) blocks the
+        // resource all day; a single-day appointment blocks it only for its
+        // actual duration plus the service's buffer minutes, not all day.
+        const isMultiDay = checkIn.slice(0, 10) !== checkOut.slice(0, 10);
         const resourceRows = [];
-        for (const booking of createdBookings) {
-            for (const res of qbSelectedResources) {
-                resourceRows.push({ booking_id: booking.id, resource_id: res.id, all_day: true, business_id: currentBusinessId });
+        createdBookings.forEach((booking, idx) => {
+            const template = templatesByPetIndex[idx];
+            let allDay = true, startTime = null, endTime = null;
+            if (!isMultiDay) {
+                const duration = template?.default_duration_minutes || 60;
+                const bufferBefore = template?.buffer_before_minutes || 0;
+                const bufferAfter = template?.buffer_after_minutes || 0;
+                const checkInMs = new Date(checkIn).getTime();
+                const toHHMM = ms => {
+                    const d = new Date(ms);
+                    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+                };
+                allDay = false;
+                startTime = toHHMM(checkInMs - bufferBefore * 60000);
+                endTime = toHHMM(checkInMs + duration * 60000 + bufferAfter * 60000);
             }
-        }
+            for (const res of qbSelectedResources) {
+                resourceRows.push({ booking_id: booking.id, resource_id: res.id, all_day: allDay, start_time: startTime, end_time: endTime, business_id: currentBusinessId });
+            }
+        });
         const { error: resErr } = await client.from('booking_resources').insert(resourceRows);
         if (resErr) console.error('Failed to link resources to new booking(s):', resErr.message);
     }
@@ -2754,24 +2776,12 @@ let bkEventResources = []; // [{ resourceId, name, type, defaultMode, allDay, st
 // booking row generated for that event. See saveBooking()'s resource-save loop.
 
 /* Adds a resource to this event's resource list (not tied to any specific pet).
-   Defaults to the event's own start/end time rather than "all day" — a
-   resource used for a 3-4pm grooming slot should default to occupying it for
-   that hour, not the whole day, while still being editable afterward. */
-function addResourceToBooking(resourceId, name, type, defaultMode) {
+   No manual time entry anymore — the actual occupied window is always
+   derived automatically from the event's own start/end time (plus the
+   service's buffer minutes) when the booking is saved. */
+function addResourceToBooking(resourceId, name, type) {
     if (bkEventResources.some(r => r.resourceId === resourceId)) return;
-
-    const eventStartTime = document.getElementById('bk-start-time')?.value || '';
-    const eventEndTime = document.getElementById('bk-end-time')?.value || eventStartTime;
-
-    bkEventResources.push({
-        resourceId,
-        name,
-        type,
-        defaultMode,
-        allDay: false,
-        startTime: eventStartTime,
-        endTime: eventEndTime
-    });
+    bkEventResources.push({ resourceId, name, type });
     renderBkResourcesList();
 
     // Clear search input and results dropdown
@@ -2786,32 +2796,12 @@ function renderBkResourcesList() {
     if (!el) return;
 
     el.innerHTML = bkEventResources.length ? bkEventResources.map((r, idx) => `
-        <div style="padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card);">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong style="font-size:0.8rem;">${r.name} <span style="color:var(--text-muted); font-weight:400;">(${r.type})</span></strong>
-                <button type="button" class="btn-icon" onclick="removeBkResource(${idx})" title="Remove" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
-            </div>
-            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; margin-top:0.3rem;">
-                <input type="checkbox" ${r.allDay ? 'checked' : ''} onchange="setBkResourceAllDay(${idx}, this.checked)"> All day
-            </label>
-            ${!r.allDay ? `
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem; margin-top:0.3rem;">
-                    <input type="time" value="${r.startTime || ''}" onchange="setBkResourceTime(${idx}, 'startTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
-                    <input type="time" value="${r.endTime || ''}" onchange="setBkResourceTime(${idx}, 'endTime', this.value)" style="padding:0.35rem; border:1px solid var(--border); border-radius:0.25rem; font-size:0.78rem;">
-                </div>
-            ` : ''}
+        <div style="padding:0.4rem 0.5rem; border:1px solid var(--border); border-radius:0.25rem; background:var(--bg-card); display:flex; justify-content:space-between; align-items:center;">
+            <strong style="font-size:0.8rem;">${r.name} <span style="color:var(--text-muted); font-weight:400;">(${r.type})</span></strong>
+            <button type="button" class="btn-icon" onclick="removeBkResource(${idx})" title="Remove" style="background:none; border:none; cursor:pointer;"><i data-lucide="x" style="width:13px;height:13px;"></i></button>
         </div>
     `).join('') : '<p style="font-size:0.78rem; color:var(--text-muted);">No resources assigned yet.</p>';
     refreshIcons();
-}
-
-function setBkResourceAllDay(idx, checked) {
-    if (bkEventResources[idx]) bkEventResources[idx].allDay = checked;
-    renderBkResourcesList();
-}
-
-function setBkResourceTime(idx, field, value) {
-    if (bkEventResources[idx]) bkEventResources[idx][field] = value;
 }
 
 function removeBkResource(idx) {
@@ -2851,10 +2841,22 @@ async function searchServiceTypeForBooking(query) {
         </div>
     `).join('');
 
-    const customRow = q ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown='selectServiceTypeTemplate(${JSON.stringify(q)}, null, null, false, null, null, "flat")'>Use custom: "${q}"</div>` : '';
+    // Only offered when nothing actually matches — previously shown
+    // alongside real matches, which made it easy to accidentally save a
+    // free-text service name (e.g. containing an extra pet name typed while
+    // searching) instead of the real template one row above it. A custom
+    // service name silently disconnects the booking from pricing, duration,
+    // resource type, and notices, since nothing else references it by name.
+    const customRow = (q && !matches.length) ? `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem; color:var(--text-muted);" onmousedown='confirmCustomServiceType(${JSON.stringify(q)})'>Use custom: "${q}" (won't have pricing, duration, or resource rules)</div>` : '';
 
     container.innerHTML = rows + customRow || '<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching services — start typing to enter a custom one.</div>';
     container.classList.remove('hidden');
+}
+
+function confirmCustomServiceType(text) {
+    if (!confirm(`"${text}" doesn't match any existing service. It won't have automatic pricing, duration, or resource-availability rules — you'd need to set those manually on this booking. Use it anyway?`)) return;
+    selectServiceTypeTemplate(text, null, null, false, null, null, 'flat');
+    document.getElementById('bk-service-type-results')?.classList.add('hidden');
 }
 
 function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime, staffTimeMinutes, staffTimeResourceType, pricingUnit) {
@@ -2981,13 +2983,43 @@ async function saveBookingResources(client, bookingId, resourceList) {
 
     if (!resourceList || !resourceList.length) return;
 
+    // Auto-derive the occupied window from the booking's own time plus the
+    // service's buffer minutes, instead of a manual per-resource time picker.
+    // A multi-day booking (boarding) blocks the resource all day, as it
+    // genuinely does; a single-day appointment blocks it only for its actual
+    // duration (+ buffer), not the whole day.
+    const { data: bk } = await client.from('bookings').select('check_in, check_out, service_name').eq('id', bookingId).single();
+    let allDay = true, startTime = null, endTime = null;
+    if (bk) {
+        const checkInDate = (bk.check_in || '').slice(0, 10);
+        const checkOutDate = (bk.check_out || bk.check_in || '').slice(0, 10);
+        if (checkInDate === checkOutDate) {
+            const { data: template } = await client.from('appointment_type_templates')
+                .select('default_duration_minutes, buffer_before_minutes, buffer_after_minutes')
+                .eq('business_id', currentBusinessId).eq('name', bk.service_name).maybeSingle();
+            const duration = template?.default_duration_minutes || 60;
+            const bufferBefore = template?.buffer_before_minutes || 0;
+            const bufferAfter = template?.buffer_after_minutes || 0;
+            const checkInMs = new Date(bk.check_in).getTime();
+            const startMs = checkInMs - bufferBefore * 60000;
+            const endMs = checkInMs + duration * 60000 + bufferAfter * 60000;
+            const toHHMM = ms => {
+                const d = new Date(ms);
+                return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            };
+            allDay = false;
+            startTime = toHHMM(startMs);
+            endTime = toHHMM(endMs);
+        }
+    }
+
     // Format rows for Supabase insertion
     const rows = resourceList.map(r => ({
         booking_id: bookingId,
         resource_id: r.resourceId,
-        all_day: r.allDay !== false,
-        start_time: r.allDay ? null : (r.startTime || null),
-        end_time: r.allDay ? null : (r.endTime || null),
+        all_day: allDay,
+        start_time: allDay ? null : startTime,
+        end_time: allDay ? null : endTime,
         business_id: currentBusinessId
     }));
 
@@ -8221,6 +8253,8 @@ function updateApptDurationVisibility() {
     const checked = Array.from(document.querySelectorAll('.att-category-chk:checked')).map(c => c.value);
     const isPureBoarding = checked.length === 1 && checked[0] === 'boarding';
     document.getElementById('att-duration-field')?.classList.toggle('hidden', isPureBoarding);
+    document.getElementById('att-buffer-field')?.classList.toggle('hidden', isPureBoarding);
+    document.getElementById('att-buffer-hint')?.classList.toggle('hidden', isPureBoarding);
 }
 
 function updateApptStaffFieldsVisibility() {
@@ -8292,6 +8326,8 @@ async function openApptTypeModal(id) {
     if (pricingFlatRadio) pricingFlatRadio.checked = (t?.pricing_unit || 'flat') !== 'per_day';
     if (pricingPerDayRadio) pricingPerDayRadio.checked = t?.pricing_unit === 'per_day';
     if (durationInput) durationInput.value = t?.default_duration_minutes || '';
+    if (document.getElementById('att-buffer-before')) document.getElementById('att-buffer-before').value = t?.buffer_before_minutes || '';
+    if (document.getElementById('att-buffer-after')) document.getElementById('att-buffer-after').value = t?.buffer_after_minutes || '';
     if (requiresStaffTimeChk) requiresStaffTimeChk.checked = !!t?.requires_staff_time;
     if (notesInput) notesInput.value = t?.notes || '';
     document.querySelectorAll('.att-species-chk').forEach(chk => {
@@ -8355,6 +8391,8 @@ async function saveApptType() {
     const price = document.getElementById('att-price')?.value;
     const pricingUnit = document.getElementById('att-pricing-per-day')?.checked ? 'per_day' : 'flat';
     const duration = document.getElementById('att-duration')?.value;
+    const bufferBefore = document.getElementById('att-buffer-before')?.value;
+    const bufferAfter = document.getElementById('att-buffer-after')?.value;
     const resourceTypes = Array.from(document.querySelectorAll('.att-resource-type-chk:checked')).map(c => c.value);
     const requiresStaffTime = document.getElementById('att-requires-staff-time')?.checked || false;
     const notes = document.getElementById('att-notes')?.value.trim() || '';
@@ -8370,6 +8408,8 @@ async function saveApptType() {
         default_price: price ? parseFloat(price) : null,
         pricing_unit: pricingUnit,
         default_duration_minutes: duration ? parseInt(duration, 10) : null,
+        buffer_before_minutes: bufferBefore ? parseInt(bufferBefore, 10) : 0,
+        buffer_after_minutes: bufferAfter ? parseInt(bufferAfter, 10) : 0,
         // Old singular column kept in sync (first selected value) for
         // backward compatibility — the availability RPCs and both booking
         // flows (public + staff) still key off this for actual capacity

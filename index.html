@@ -1216,6 +1216,11 @@
                 </div>
 
                 <div class="form-group" id="att-duration-field" style="margin-top:1.1rem;"><label>Default Duration (minutes)</label><input type="number" id="att-duration" placeholder="60"></div>
+                <div class="form-group" id="att-buffer-field" style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                    <div><label>Buffer Before (minutes)</label><input type="number" id="att-buffer-before" placeholder="0" min="0"></div>
+                    <div><label>Buffer After (minutes)</label><input type="number" id="att-buffer-after" placeholder="0" min="0"></div>
+                </div>
+                <p id="att-buffer-hint" style="font-size:0.75rem; color:var(--text-muted); margin:-0.6rem 0 1rem;">Extends both the appointment and any resource it uses — e.g. 15 min after a grooming for cleanup, during which the room can't be double-booked.</p>
                 <div class="form-group">
                     <label style="display:flex; align-items:center; gap:0.5rem; font-weight:400;"><input type="checkbox" id="att-prompt-times"> Ask customers for a specific drop-off/pickup time on the public booking page</label>
                     <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0 1.7rem;">Mainly relevant for Boarding. Leave unchecked if exact times don't matter to you.</p>
