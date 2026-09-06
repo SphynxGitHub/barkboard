@@ -7791,12 +7791,22 @@ async function renderActivitiesCalendar() {
                 ? `${it.checkIn.slice(0, 10)} → ${it.checkOut.slice(0, 10)}`
                 : `${it.checkIn.slice(0, 10)} at ${it.checkIn.slice(11, 16)}`;
             tooltip = `${it.title} — ${timeLabel}`;
+            if (isMultiDay && isStartDay) tooltip += ' (check-in)';
+            if (isMultiDay && isEndDay) tooltip += ' (check-out)';
         }
+
+        // Check-in/check-out markers on the first/last day of a multi-day
+        // booking — separate from the service-type icon, so both are visible
+        // rather than one replacing the other.
+        const checkIconHtml = isMultiDay
+            ? (isStartDay ? `<i data-lucide="log-in" style="width:12px; height:12px; color:#16a34a; flex-shrink:0;" title="Check-in"></i>` : '')
+              + (isEndDay ? `<i data-lucide="log-out" style="width:12px; height:12px; color:#dc2626; flex-shrink:0;" title="Check-out"></i>` : '')
+            : '';
 
         return `
             <div title="${tooltip.replace(/"/g, '&quot;')}" style="padding:${compact ? '0.2rem 0.3rem' : '0.35rem 0.45rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer; border:1px solid var(--border); ${radiusStyle}" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
                 <div style="display:flex; align-items:center; gap:0.35rem; font-weight:600; color:var(--text-main,#0f172a);">
-                    <span style="display:inline-flex; gap:0.15rem; align-items:center;">${iconHtml}</span>
+                    <span style="display:inline-flex; gap:0.15rem; align-items:center;">${checkIconHtml}${iconHtml}</span>
                     <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${displayLabel}${isMultiDay && !isEndDay ? ' →' : ''}</span>
                 </div>
                 ${!compact ? `
