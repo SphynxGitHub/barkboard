@@ -89,6 +89,14 @@ let currentUser = null;
 
 function showAuthGate(errorMessage) {
     document.getElementById('auth-gate')?.classList.remove('hidden');
+    document.getElementById('auth-form-wrap')?.classList.remove('hidden');
+    const subtitleEl = document.getElementById('auth-gate-subtitle');
+    // Only reset to the default text if a tab hasn't already set something
+    // more specific (showAuthTab handles login vs signup wording) — this
+    // just needs to stop saying "Loading…" once we know there's no session.
+    if (subtitleEl && subtitleEl.textContent === 'Loading…') {
+        subtitleEl.textContent = 'Sign in to your business';
+    }
     const errEl = document.getElementById('auth-error');
     if (errEl) {
         if (errorMessage) {
