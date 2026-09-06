@@ -7735,8 +7735,8 @@ async function exportFinancialSummaryCSV() {
 function connectGoogleCalendar(staffId) {
   if (!staffId) return alert('Select a staff member or business account first.');
 
-  const clientId = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
-  const redirectUri = encodeURIComponent('https://your-vercel-domain.vercel.app/api/auth/google/callback');
+  const clientId = '98334060087-joojoek72rhn66lqn7d94lod0s9e7g03.apps.googleusercontent.com';
+  const redirectUri = encodeURIComponent('https://barkboard-three.vercel.app/api/auth/google/callback');
   const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
   
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&access_type=offline&prompt=consent&state=${staffId}`;
