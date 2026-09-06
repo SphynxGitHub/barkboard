@@ -7,9 +7,6 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // Acknowledge Google immediately so it doesn't retry or drop the channel
-  res.status(200).send('OK');
-
   const channelId = req.headers['x-goog-channel-id'];
   const resourceState = req.headers['x-goog-resource-state'];
   const resourceId = req.headers['x-goog-resource-id'];
@@ -21,7 +18,7 @@ export default async function handler(req, res) {
   // Ignore initial ping upon watch channel creation
   if (resourceState === 'sync') {
     console.log('[Webhook] Ignoring "sync" handshake ping — not a real change notification.');
-    return;
+    return res.status(200).send('OK');
   }
 
   try {
@@ -39,7 +36,7 @@ export default async function handler(req, res) {
 
     if (chErr || !channel) {
       console.warn(`[Webhook] No active channel found for ID: ${channelId}`);
-      return;
+      return res.status(200).send('OK');
     }
 
     const { data: tokenData, error: tokenErr } = await supabase
@@ -51,7 +48,7 @@ export default async function handler(req, res) {
 
     if (tokenErr || !tokenData) {
       console.warn(`[Webhook] No Google OAuth tokens found for staff: ${channel.staff_id}`);
-      return;
+      return res.status(200).send('OK');
     }
 
     const { data: staffRow } = await supabase
@@ -160,10 +157,20 @@ export default async function handler(req, res) {
 
         if (upsertErr) {
           console.error(`[Webhook] Failed to save Google event ${event.id}:`, upsertErr.message);
+        } else {
+          console.log(`[Webhook] Upserted booking for Google event ${event.id}`);
         }
       }
     }
+
+    console.log(`[Webhook] Done — processed ${(eventsData.items || []).length} event(s).`);
+    return res.status(200).send('OK');
   } catch (error) {
     console.error('Webhook Handler Error:', error.message || error);
+    // Still ack with 200 — Google will retry (and eventually drop the
+    // channel) on non-2xx responses, and a retry won't fix an internal
+    // error like this. Better to log it here and let the next real change
+    // notification come through cleanly than get the channel torn down.
+    return res.status(200).send('OK');
   }
 }
