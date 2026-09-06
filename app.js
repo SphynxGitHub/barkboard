@@ -7881,10 +7881,9 @@ function updateApptStaffFieldsVisibility() {
 }
 
 let apptResourceTypeOptions = [];
-function renderApptResourceTypeChecks(types, selectedResourceTypes, selectedStaffResourceTypes) {
+function renderApptResourceTypeChecks(types, selectedResourceTypes) {
     apptResourceTypeOptions = types;
     const mainEl = document.getElementById('att-resource-type-checks');
-    const staffEl = document.getElementById('att-staff-resource-type-checks');
     const build = (el, selected, cls) => {
         if (!el) return;
         el.innerHTML = types.length
@@ -7892,7 +7891,6 @@ function renderApptResourceTypeChecks(types, selectedResourceTypes, selectedStaf
             : `<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">No resource types yet — add one below.</p>`;
     };
     build(mainEl, selectedResourceTypes, 'att-resource-type-chk');
-    build(staffEl, selectedStaffResourceTypes, 'att-staff-resource-type-chk');
 }
 
 function addNewApptResourceTypeOption() {
@@ -7902,8 +7900,7 @@ function addNewApptResourceTypeOption() {
     if (!apptResourceTypeOptions.includes(val)) apptResourceTypeOptions.push(val);
     apptResourceTypeOptions.sort();
     const currentMain = Array.from(document.querySelectorAll('.att-resource-type-chk:checked')).map(c => c.value);
-    const currentStaff = Array.from(document.querySelectorAll('.att-staff-resource-type-chk:checked')).map(c => c.value);
-    renderApptResourceTypeChecks(apptResourceTypeOptions, [...currentMain, val], currentStaff);
+    renderApptResourceTypeChecks(apptResourceTypeOptions, [...currentMain, val]);
     input.value = '';
 }
 
@@ -7916,7 +7913,6 @@ async function openApptTypeModal(id) {
     const priceInput = document.getElementById('att-price');
     const durationInput = document.getElementById('att-duration');
     const requiresStaffTimeChk = document.getElementById('att-requires-staff-time');
-    const staffTimeMinutesInput = document.getElementById('att-staff-time-minutes');
     const notesInput = document.getElementById('att-notes');
     const pricingFlatRadio = document.getElementById('att-pricing-flat');
     const pricingPerDayRadio = document.getElementById('att-pricing-per-day');
@@ -7936,12 +7932,10 @@ async function openApptTypeModal(id) {
         const { data: resourceRows } = await client.from('resources').select('type');
         const types = Array.from(new Set((resourceRows || []).map(r => r.type).filter(Boolean))).sort();
         const selectedResourceTypes = t?.resource_types || (t?.resource_type ? [t.resource_type] : []);
-        const selectedStaffResourceTypes = t?.staff_time_resource_types || (t?.staff_time_resource_type ? [t.staff_time_resource_type] : []);
         selectedResourceTypes.forEach(ty => { if (!types.includes(ty)) types.push(ty); });
-        selectedStaffResourceTypes.forEach(ty => { if (!types.includes(ty)) types.push(ty); });
         types.sort();
 
-        renderApptResourceTypeChecks(types, selectedResourceTypes, selectedStaffResourceTypes);
+        renderApptResourceTypeChecks(types, selectedResourceTypes);
     }
 
     if (nameInput) nameInput.value = t?.name || '';
@@ -7950,7 +7944,6 @@ async function openApptTypeModal(id) {
     if (pricingPerDayRadio) pricingPerDayRadio.checked = t?.pricing_unit === 'per_day';
     if (durationInput) durationInput.value = t?.default_duration_minutes || '';
     if (requiresStaffTimeChk) requiresStaffTimeChk.checked = !!t?.requires_staff_time;
-    if (staffTimeMinutesInput) staffTimeMinutesInput.value = t?.staff_time_minutes || '';
     if (notesInput) notesInput.value = t?.notes || '';
     document.querySelectorAll('.att-species-chk').forEach(chk => {
         chk.checked = Array.isArray(t?.species) && t.species.includes(chk.value);
@@ -8015,8 +8008,6 @@ async function saveApptType() {
     const duration = document.getElementById('att-duration')?.value;
     const resourceTypes = Array.from(document.querySelectorAll('.att-resource-type-chk:checked')).map(c => c.value);
     const requiresStaffTime = document.getElementById('att-requires-staff-time')?.checked || false;
-    const staffTimeMinutes = document.getElementById('att-staff-time-minutes')?.value;
-    const staffTimeResourceTypes = Array.from(document.querySelectorAll('.att-staff-resource-type-chk:checked')).map(c => c.value);
     const notes = document.getElementById('att-notes')?.value.trim() || '';
     const species = Array.from(document.querySelectorAll('.att-species-chk:checked')).map(chk => chk.value);
     const category = Array.from(document.querySelectorAll('.att-category-chk:checked')).map(chk => chk.value);
@@ -8030,18 +8021,20 @@ async function saveApptType() {
         default_price: price ? parseFloat(price) : null,
         pricing_unit: pricingUnit,
         default_duration_minutes: duration ? parseInt(duration, 10) : null,
-        // Old singular columns kept in sync (first selected value) for
+        // Old singular column kept in sync (first selected value) for
         // backward compatibility — the availability RPCs and both booking
-        // flows (public + staff) still key off these for actual capacity
-        // checking. The new array columns are the real multi-select data;
-        // extending availability math to require ALL selected resource
-        // types simultaneously is a separate follow-up, not done here.
+        // flows (public + staff) still key off this for actual capacity
+        // checking. resource_types is the real multi-select data.
         resource_type: resourceTypes[0] || null,
         resource_types: resourceTypes.length ? resourceTypes : null,
         requires_staff_time: requiresStaffTime,
-        staff_time_minutes: requiresStaffTime && staffTimeMinutes ? parseInt(staffTimeMinutes, 10) : null,
-        staff_time_resource_type: requiresStaffTime ? (staffTimeResourceTypes[0] || null) : null,
-        staff_time_resource_types: requiresStaffTime && staffTimeResourceTypes.length ? staffTimeResourceTypes : null,
+        // Staff time per day and its own separate resource were removed from
+        // the editor — explicitly nulled here so editing and saving an older
+        // service that still had these values clears them, rather than
+        // leaving stale data with no UI left to manage it.
+        staff_time_minutes: null,
+        staff_time_resource_type: null,
+        staff_time_resource_types: null,
         notes,
         species: species.length ? species : null,
         category: category.length ? category : null,
