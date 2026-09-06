@@ -238,12 +238,11 @@
                 </div>
                 <input type="hidden" id="service-date" required>
 
-                <div id="slot-picker-section" class="hidden">
+                <div id="per-pet-slot-section" class="hidden">
                     <label>Time *</label>
-                    <div id="slot-picker-grid" class="slot-grid"></div>
-                    <p class="field-hint hidden" id="slot-picker-empty">No available times on this date — please choose another day.</p>
+                    <p class="field-hint" style="margin-top:-0.4rem;">Each pet gets its own time — when a resource can only serve one at a time, later pets automatically won't be offered times already taken by an earlier one.</p>
+                    <div id="per-pet-slot-rows"></div>
                 </div>
-                <input type="hidden" id="service-time" required>
 
                 <button type="button" class="submit-btn" onclick="finishServiceGroup()">Add to My Requests</button>
             </div>
@@ -610,7 +609,8 @@
                 name: card.dataset.existing ? card.dataset.name : card.querySelector('.pet-name-input')?.value.trim(),
                 species: card.dataset.existing ? card.dataset.species : card.querySelector('.pet-species-input')?.value,
                 serviceName: card.querySelector('.pet-service-select')?.value,
-                addOns: Array.from(card.querySelectorAll('.pet-addon-chk:checked')).map(chk => chk.dataset.name)
+                addOns: Array.from(card.querySelectorAll('.pet-addon-chk:checked')).map(chk => chk.dataset.name),
+                time: card.dataset.selectedTime || null
             })).filter(p => p.name);
         }
 
@@ -626,7 +626,7 @@
         }
 
         function refreshSlotsIfDateSelected() {
-            if (selectedServiceDate) renderSlotPicker(selectedServiceDate);
+            if (selectedServiceDate) renderPerPetSlotPickers(selectedServiceDate);
         }
 
         // --- Boarding group --------------------------------------------------
@@ -869,10 +869,9 @@
             document.getElementById('service-group-title').textContent = `${CATEGORY_META[category].icon} ${CATEGORY_META[category].label}`;
             renderPetCards('service-pet-rows', category);
             selectedServiceDate = null;
-            selectedServiceTime = null;
             document.getElementById('service-date').value = '';
-            document.getElementById('service-time').value = '';
-            document.getElementById('slot-picker-section').classList.add('hidden');
+            document.getElementById('per-pet-slot-section').classList.add('hidden');
+            document.getElementById('per-pet-slot-rows').innerHTML = '';
             const today = new Date();
             miniCalYear = today.getFullYear();
             miniCalMonth = today.getMonth();
@@ -932,11 +931,9 @@
 
         function selectMiniCalDay(dateStr) {
             selectedServiceDate = dateStr;
-            selectedServiceTime = null;
             document.getElementById('service-date').value = dateStr;
-            document.getElementById('service-time').value = '';
             renderMiniCal();
-            renderSlotPicker(dateStr);
+            renderPerPetSlotPickers(dateStr);
         }
 
         let slotDataCache = {}; // `${serviceName}|${dateStr}` -> RPC result, avoids re-fetching the same service/date repeatedly
@@ -974,17 +971,17 @@
             return count;
         }
 
-        // Real capacity-aware slot list: business-hours bounds, existing
-        // bookings against the service's resource type(s), and the demand
-        // this specific request itself would add (so two pets both needing
-        // the last free spot at the same time can't both slip through).
-        async function renderSlotPicker(dateStr) {
-            const section = document.getElementById('slot-picker-section');
-            const grid = document.getElementById('slot-picker-grid');
-            const emptyMsg = document.getElementById('slot-picker-empty');
+        // Renders one slot-picker per checked pet, sequentially — each pet's
+        // available times account for real DB usage PLUS every earlier pet's
+        // already-chosen time in this same submission. Two pets both needing
+        // the sole grooming room no longer both get blocked outright; the
+        // second pet just can't pick the same time the first one already took.
+        async function renderPerPetSlotPickers(dateStr) {
+            const section = document.getElementById('per-pet-slot-section');
+            const rowsEl = document.getElementById('per-pet-slot-rows');
+            if (!section || !rowsEl) return;
             section.classList.remove('hidden');
-            grid.innerHTML = '<div class="slot-loading">Checking availability...</div>';
-            emptyMsg.classList.add('hidden');
+            rowsEl.innerHTML = '<div class="slot-loading">Checking availability...</div>';
 
             const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
             const hoursRow = businessHours.find(bh => bh.day_of_week === dayOfWeek);
@@ -992,113 +989,130 @@
             const closeTime = hoursRow?.close_time?.slice(0, 5) || '17:00';
             const increment = currentBusiness?.slot_increment_minutes || 30;
 
-            const pets = getSelectedPetsWithServices('service-pet-rows');
-            const petNeeds = pets.map(p => {
-                const t = allTemplates.find(tpl => tpl.name === p.serviceName);
+            const petCards = Array.from(document.querySelectorAll('#service-pet-rows .pet-select-card.selected'));
+            if (!petCards.length) { rowsEl.innerHTML = ''; return; }
+
+            const petInfo = petCards.map(card => {
+                const serviceName = card.querySelector('.pet-service-select')?.value;
+                const t = allTemplates.find(tpl => tpl.name === serviceName);
                 return {
+                    card,
+                    name: card.dataset.existing ? card.dataset.name : card.querySelector('.pet-name-input')?.value.trim() || 'Pet',
+                    serviceName,
                     duration: t?.default_duration_minutes || 60,
                     resourceType: t?.resource_type || null,
                     requiresStaffTime: !!t?.requires_staff_time,
-                    staffResourceType: t?.staff_time_resource_type || null,
-                    serviceName: p.serviceName
+                    staffResourceType: t?.staff_time_resource_type || null
                 };
             });
 
-            const uniqueServices = Array.from(new Set(petNeeds.map(n => n.serviceName).filter(Boolean)));
+            const uniqueServices = Array.from(new Set(petInfo.map(p => p.serviceName).filter(Boolean)));
             const slotDataByService = {};
             for (const svc of uniqueServices) {
                 slotDataByService[svc] = await fetchSlotDataForService(svc, dateStr);
             }
 
-            const maxDuration = petNeeds.length ? Math.max(...petNeeds.map(n => n.duration)) : 60;
-
             const [openH, openM] = openTime.split(':').map(Number);
             const [closeH, closeM] = closeTime.split(':').map(Number);
-            let cursor = openH * 60 + openM;
+            const openMinutes = openH * 60 + openM;
             const closeMinutes = closeH * 60 + closeM;
 
-            const candidateSlots = [];
-            while (cursor + maxDuration <= closeMinutes) {
-                candidateSlots.push(cursor);
-                cursor += increment;
-            }
-
-            const availableSlots = candidateSlots.filter(slotStart => {
-                // How much demand THIS request would add per resource type, if booked at this slot
-                const demandByResource = {};
-                petNeeds.forEach(n => {
-                    if (n.resourceType) demandByResource[n.resourceType] = (demandByResource[n.resourceType] || 0) + 1;
-                    if (n.requiresStaffTime && n.staffResourceType) demandByResource[n.staffResourceType] = (demandByResource[n.staffResourceType] || 0) + 1;
-                });
-
-                for (const [resType, neededCount] of Object.entries(demandByResource)) {
-                    let capacity = 0, existingBookings = [];
-                    for (const svc of uniqueServices) {
-                        const sd = slotDataByService[svc];
-                        if (!sd) continue;
-                        if (sd.resource_type === resType) { capacity = Math.max(capacity, sd.resource_capacity || 0); existingBookings = sd.resource_bookings || []; }
-                        if (sd.staff_resource_type === resType) { capacity = Math.max(capacity, sd.staff_capacity || 0); existingBookings = sd.staff_bookings || []; }
-                    }
-                    if (capacity === 0 && !existingBookings.length) continue; // no capacity data for this type — nothing to check against
-
-                    const relevantDurations = petNeeds.filter(n => n.resourceType === resType || n.staffResourceType === resType).map(n => n.duration);
-                    const windowDuration = relevantDurations.length ? Math.max(...relevantDurations) : 30;
-                    const slotEnd = slotStart + windowDuration;
-
-                    const existingUsage = countOverlaps(existingBookings, slotStart, slotEnd, dateStr);
-                    if (existingUsage + neededCount > capacity) return false;
-                }
-                return true;
-            });
-
-            // If the previously-picked time no longer has room (e.g. another
-            // pet/service was just added), don't leave a stale, now-invalid
-            // selection sitting in the form.
-            if (selectedServiceTime) {
-                const [selH, selM] = selectedServiceTime.split(':').map(Number);
-                if (!availableSlots.includes(selH * 60 + selM)) {
-                    selectedServiceTime = null;
-                    document.getElementById('service-time').value = '';
-                }
-            }
-
-            if (!availableSlots.length) {
-                grid.innerHTML = '';
-                emptyMsg.textContent = 'No available times on this date — please choose another day.';
-                emptyMsg.classList.remove('hidden');
-                return;
-            }
-            emptyMsg.classList.add('hidden');
-
-            grid.innerHTML = availableSlots.map(mins => {
+            const fmtLabel = mins => {
                 const h = Math.floor(mins / 60), m = mins % 60;
-                const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
                 const period = h >= 12 ? 'PM' : 'AM';
                 const h12 = h % 12 === 0 ? 12 : h % 12;
-                const label = `${h12}:${String(m).padStart(2, '0')} ${period}`;
-                return `<button type="button" class="slot-btn ${t === selectedServiceTime ? 'slot-selected' : ''}" onclick="selectSlotTime('${t}')">${label}</button>`;
-            }).join('');
+                return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+            };
+            const toHHMM = mins => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+
+            // Demand already committed by earlier pets in this same group —
+            // grows as we move down the list, so each subsequent pet's
+            // picker reflects everyone booked ahead of them.
+            const committedByType = {}; // { type: [{ start, end }] } in minutes-since-midnight
+
+            let html = '';
+            petInfo.forEach((p, idx) => {
+                const candidateSlots = [];
+                let cursor = openMinutes;
+                while (cursor + p.duration <= closeMinutes) {
+                    candidateSlots.push(cursor);
+                    cursor += increment;
+                }
+
+                const demandTypes = [];
+                if (p.resourceType) demandTypes.push(p.resourceType);
+                if (p.requiresStaffTime && p.staffResourceType) demandTypes.push(p.staffResourceType);
+
+                const availableSlots = candidateSlots.filter(slotStart => {
+                    const slotEnd = slotStart + p.duration;
+                    for (const resType of demandTypes) {
+                        let capacity = 0, existingBookings = [];
+                        for (const svc of uniqueServices) {
+                            const sd = slotDataByService[svc];
+                            if (!sd) continue;
+                            if (sd.resource_type === resType) { capacity = Math.max(capacity, sd.resource_capacity || 0); existingBookings = sd.resource_bookings || []; }
+                            if (sd.staff_resource_type === resType) { capacity = Math.max(capacity, sd.staff_capacity || 0); existingBookings = sd.staff_bookings || []; }
+                        }
+                        const dbUsage = capacity || existingBookings.length ? countOverlaps(existingBookings, slotStart, slotEnd, dateStr) : 0;
+                        const committed = (committedByType[resType] || []).filter(iv => slotStart < iv.end && slotEnd > iv.start).length;
+                        if (capacity > 0 && dbUsage + committed + 1 > capacity) return false;
+                    }
+                    return true;
+                });
+
+                // Keep this pet's previous pick only if it's still valid —
+                // an earlier pet's change may have invalidated it.
+                const prevTime = p.card.dataset.selectedTime;
+                let selectedMin = null;
+                if (prevTime) {
+                    const [h, m] = prevTime.split(':').map(Number);
+                    if (availableSlots.includes(h * 60 + m)) selectedMin = h * 60 + m;
+                    else p.card.dataset.selectedTime = '';
+                }
+
+                html += `
+                    <div style="margin-bottom:1rem;">
+                        <p style="font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">${p.name}${p.serviceName ? ' — ' + p.serviceName : ''}</p>
+                        ${availableSlots.length ? `
+                            <div class="slot-grid" id="pet-slot-grid-${idx}">
+                                ${availableSlots.map(mins => `<button type="button" class="slot-btn ${mins === selectedMin ? 'slot-selected' : ''}" onclick="selectPetSlotTime(${idx}, '${toHHMM(mins)}')">${fmtLabel(mins)}</button>`).join('')}
+                            </div>
+                        ` : `<p class="field-hint" style="margin:0;">No available times left for ${p.name} on this date.</p>`}
+                    </div>
+                `;
+
+                // Commit this pet's own pick (if made) as demand for the NEXT pet's check
+                if (selectedMin !== null) {
+                    demandTypes.forEach(resType => {
+                        (committedByType[resType] = committedByType[resType] || []).push({ start: selectedMin, end: selectedMin + p.duration });
+                    });
+                }
+            });
+
+            rowsEl.innerHTML = html;
+            window._petSlotIndex = petInfo; // stash for selectPetSlotTime's card lookup
         }
 
-        function selectSlotTime(t) {
-            selectedServiceTime = t;
-            document.getElementById('service-time').value = t;
-            renderSlotPicker(selectedServiceDate); // re-render to move the highlight
+        function selectPetSlotTime(idx, time) {
+            const petInfo = window._petSlotIndex;
+            if (!petInfo || !petInfo[idx]) return;
+            petInfo[idx].card.dataset.selectedTime = time;
+            renderPerPetSlotPickers(selectedServiceDate); // re-render so later pets react to this pick
         }
 
         function finishServiceGroup() {
             const pets = getSelectedPetsWithServices('service-pet-rows');
             const date = document.getElementById('service-date').value;
-            const time = document.getElementById('service-time').value;
 
             if (!pets.length) return alert('Please select or add at least one pet.');
             if (pets.some(p => !p.serviceName)) return alert('Please select a service for every pet.');
-            if (!date || !time) return alert('Please choose a date and time.');
+            if (!date) return alert('Please choose a date.');
+            if (pets.some(p => !p.time)) return alert('Please choose a time for every pet.');
 
-            bookingGroups.push({ category: currentServiceCategory, pets, date, time });
+            bookingGroups.push({ category: currentServiceCategory, pets, date });
 
             document.getElementById('service-date').value = '';
-            document.getElementById('service-time').value = '';
+            document.getElementById('per-pet-slot-rows').innerHTML = '';
 
             goToStep('review');
         }
