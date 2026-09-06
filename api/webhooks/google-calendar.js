@@ -7,21 +7,27 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
+  // Acknowledge Google immediately so it doesn't retry or drop the channel
   res.status(200).send('OK');
 
   const channelId = req.headers['x-goog-channel-id'];
   const resourceState = req.headers['x-goog-resource-state'];
 
+  // Ignore initial ping upon watch channel creation
   if (resourceState === 'sync') return;
 
   try {
-    const { data: channel } = await supabase
+    // 1. Retrieve watch channel and linked OAuth credentials
+    const { data: channel, error: chErr } = await supabase
       .from('calendar_watch_channels')
       .select('*, staff_oauth_tokens(*)')
       .eq('channel_id', channelId)
       .single();
 
-    if (!channel || !channel.staff_oauth_tokens) return;
+    if (chErr || !channel || !channel.staff_oauth_tokens) {
+      console.warn(`[Webhook] No active channel found for ID: ${channelId}`);
+      return;
+    }
 
     const tokenData = channel.staff_oauth_tokens;
     const oauth2Client = new google.auth.OAuth2(
@@ -35,46 +41,86 @@ export default async function handler(req, res) {
       refresh_token: tokenData.refresh_token
     });
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    const listParams = { calendarId: tokenData.calendar_id || 'primary' };
+    // Handle token auto-refresh events
+    oauth2Client.on('tokens', async (updatedTokens) => {
+      const updatePayload = {
+        access_token: updatedTokens.access_token,
+        expires_at: updatedTokens.expiry_date ? new Date(updatedTokens.expiry_date).toISOString() : null
+      };
+      if (updatedTokens.refresh_token) updatePayload.refresh_token = updatedTokens.refresh_token;
 
+      await supabase.from('staff_oauth_tokens').update(updatePayload).eq('id', tokenData.id);
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    const calendarId = tokenData.calendar_id || 'primary';
+    
+    let listParams = { calendarId };
     if (tokenData.sync_token) {
       listParams.syncToken = tokenData.sync_token;
     } else {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       listParams.timeMin = thirtyDaysAgo.toISOString();
+      listParams.singleEvents = true;
     }
 
-    const { data: eventsData } = await calendar.events.list(listParams);
+    // 2. Fetch changed events (with 410 syncToken invalidation fallback)
+    let eventsData;
+    try {
+      const response = await calendar.events.list(listParams);
+      eventsData = response.data;
+    } catch (listError) {
+      if (listError.code === 410) {
+        // Sync token expired/invalidated — fallback to timeMin fetch
+        delete listParams.syncToken;
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        listParams.timeMin = thirtyDaysAgo.toISOString();
+        listParams.singleEvents = true;
 
+        const response = await calendar.events.list(listParams);
+        eventsData = response.data;
+      } else {
+        throw listError;
+      }
+    }
+
+    // 3. Save new syncToken for incremental updates
     if (eventsData.nextSyncToken) {
       await supabase.from('staff_oauth_tokens')
         .update({ sync_token: eventsData.nextSyncToken })
         .eq('id', tokenData.id);
     }
 
+    // 4. Ingest events into Supabase
     for (const event of eventsData.items || []) {
       if (event.status === 'cancelled') {
         await supabase.from('bookings')
           .update({ status: 'cancelled' })
           .eq('google_event_id', event.id);
       } else {
-        const startIso = event.start.dateTime || `${event.start.date}T00:00:00Z`;
-        const endIso = event.end.dateTime || `${event.end.date}T23:59:59Z`;
+        const startIso = event.start?.dateTime || `${event.start?.date}T00:00:00Z`;
+        const endIso = event.end?.dateTime || `${event.end?.date}T23:59:59Z`;
 
-        await supabase.from('bookings').upsert({
+        const { error: upsertErr } = await supabase.from('bookings').upsert({
           google_event_id: event.id,
           service_name: event.summary || 'External Appointment',
           check_in: startIso,
           check_out: endIso,
           assigned_staff_id: channel.staff_id,
+          flexible_time: false, // Explicitly set to satisfy NOT NULL constraint
+          household_id: null,   // Handles non-client external events
           notes: event.description || '',
           status: 'confirmed'
         }, { onConflict: 'google_event_id' });
+
+        if (upsertErr) {
+          console.error(`[Webhook] Failed to save Google event ${event.id}:`, upsertErr.message);
+        }
       }
     }
   } catch (error) {
-    console.error('Webhook Handler Error:', error);
+    console.error('Webhook Handler Error:', error.message || error);
   }
 }
