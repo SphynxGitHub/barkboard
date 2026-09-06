@@ -2753,18 +2753,24 @@ let bkEventResources = []; // [{ resourceId, name, type, defaultMode, allDay, st
 // event (e.g. two dogs sharing a training session) applies the same resource list to every
 // booking row generated for that event. See saveBooking()'s resource-save loop.
 
-/* Adds a resource to this event's resource list (not tied to any specific pet) */
+/* Adds a resource to this event's resource list (not tied to any specific pet).
+   Defaults to the event's own start/end time rather than "all day" — a
+   resource used for a 3-4pm grooming slot should default to occupying it for
+   that hour, not the whole day, while still being editable afterward. */
 function addResourceToBooking(resourceId, name, type, defaultMode) {
     if (bkEventResources.some(r => r.resourceId === resourceId)) return;
+
+    const eventStartTime = document.getElementById('bk-start-time')?.value || '';
+    const eventEndTime = document.getElementById('bk-end-time')?.value || eventStartTime;
 
     bkEventResources.push({
         resourceId,
         name,
         type,
         defaultMode,
-        allDay: defaultMode !== 'time_based',
-        startTime: '',
-        endTime: ''
+        allDay: false,
+        startTime: eventStartTime,
+        endTime: eventEndTime
     });
     renderBkResourcesList();
 
