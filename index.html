@@ -1511,6 +1511,30 @@
 
         <!-- NEW MULTI-PET BOOKING (one page — household, category, pets+services,
              shared date/time, review, all visible/scrollable at once, no wizard) -->
+        <!-- View-only appointment card — the default when opening an existing
+             booking anywhere in the app. Notes can be edited inline; anything
+             else requires hitting Edit, which opens the full booking modal. -->
+        <div id="appointment-view-modal" class="modal hidden">
+            <div class="modal-content" style="max-width:440px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <h3 id="av-title" style="margin:0;">Appointment</h3>
+                    <button class="btn-icon" onclick="closeAppointmentViewModal()" style="background:none;border:none;cursor:pointer;"><i data-lucide="x"></i></button>
+                </div>
+                <div id="av-body" style="display:flex; flex-direction:column; gap:0.55rem; font-size:0.9rem;"></div>
+                <div class="form-group" style="margin-top:1.1rem; padding-top:1rem; border-top:1px solid var(--border);">
+                    <label>Notes</label>
+                    <textarea id="av-notes" rows="3"></textarea>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                    <button type="button" class="btn" onclick="closeAppointmentViewModal()">Close</button>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button type="button" class="btn" onclick="saveAppointmentViewNotes()">Save Notes</button>
+                        <button type="button" class="btn-primary" onclick="editFromAppointmentView()">Edit</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="quick-booking-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:999; background:var(--bg-card, #ffffff); overflow-y:auto; padding:2rem;">
             <div class="modal-content" style="max-width:720px; margin:0 auto; width:100%; box-shadow:none; background:none; padding:0; overflow:visible;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:1rem; margin-bottom:1.5rem;">

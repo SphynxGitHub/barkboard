@@ -1254,7 +1254,7 @@ async function renderStaffGuests() {
         const isActiveNow = bk.check_in <= (now.toISOString()) && bk.check_out >= (now.toISOString());
         const invoiceStatus = bk.invoice_id ? invoiceStatusById[bk.invoice_id] : null;
         return `
-        <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="switchView('crm-view'); openFullWidthProfile('pet', '${bk.pet_id}')">
+        <div style="padding:0.85rem; border:1px solid var(--border); border-radius:0.5rem; background:var(--bg-card); cursor:pointer;" onclick="openAppointmentView('${bk.id}')">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem; flex-wrap:wrap;">
                 <strong><i data-lucide="${bk.pets?.species === 'cat' ? 'cat' : bk.pets?.species === 'other' ? 'rabbit' : 'dog'}" style="width:14px;height:14px;"></i> ${bk.pets?.name || 'Pet'}</strong>
                 <div style="display:flex; align-items:center; gap:0.35rem;" onclick="event.stopPropagation();">
@@ -1637,6 +1637,67 @@ async function openQuickBookingForHousehold(householdId) {
     const client = getSupabase();
     const { data: household } = client ? await client.from('households').select('name').eq('id', householdId).single() : { data: null };
     if (household) await selectQbHousehold(householdId, household.name);
+}
+
+/* ==========================================================================
+   VIEW-ONLY APPOINTMENT CARD — the default when opening an existing booking
+   anywhere in the app (staff feed, calendar, etc). Notes are editable inline
+   without leaving this card; everything else requires Edit, which hands off
+   to the full booking modal.
+   ========================================================================== */
+let avCurrentBookingId = null;
+let avCurrentHouseholdId = null;
+
+async function openAppointmentView(bookingId) {
+    const client = getSupabase();
+    if (!client) return;
+    const { data: bk, error } = await client.from('bookings')
+        .select('*, pets(name, species), households(name), staff:assigned_staff_id(name)')
+        .eq('id', bookingId).single();
+    if (error || !bk) return alert('Could not load that appointment.');
+
+    avCurrentBookingId = bookingId;
+    avCurrentHouseholdId = bk.household_id;
+
+    document.getElementById('av-title').textContent = bk.service_name || 'Appointment';
+    const when = bk.check_out && bk.check_out.slice(0, 10) !== bk.check_in.slice(0, 10)
+        ? `${bk.check_in.slice(0, 10)} → ${bk.check_out.slice(0, 10)}`
+        : `${bk.check_in.slice(0, 10)} at ${bk.check_in.slice(11, 16)}`;
+
+    document.getElementById('av-body').innerHTML = `
+        <div><strong>Pet:</strong> ${bk.pets?.name || '—'}${bk.pets?.species ? ' (' + bk.pets.species + ')' : ''}</div>
+        <div><strong>Household:</strong> ${bk.households?.name || '—'}</div>
+        <div><strong>When:</strong> ${when}</div>
+        <div><strong>Status:</strong> ${bk.status || 'pending'}</div>
+        <div><strong>Staff:</strong> ${bk.staff?.name || 'Unassigned'}</div>
+        ${bk.amount ? `<div><strong>Amount:</strong> $${Number(bk.amount).toFixed(2)}</div>` : ''}
+    `;
+    document.getElementById('av-notes').value = bk.notes || '';
+    document.getElementById('appointment-view-modal')?.classList.remove('hidden');
+}
+
+function closeAppointmentViewModal() {
+    document.getElementById('appointment-view-modal')?.classList.add('hidden');
+    avCurrentBookingId = null;
+    avCurrentHouseholdId = null;
+}
+
+async function saveAppointmentViewNotes() {
+    const client = getSupabase();
+    if (!client || !avCurrentBookingId) return;
+    const notes = document.getElementById('av-notes')?.value.trim() || null;
+    const { error } = await client.from('bookings').update({ notes }).eq('id', avCurrentBookingId);
+    if (error) return alert('Failed to save notes: ' + error.message);
+    closeAppointmentViewModal();
+    if (typeof renderStaffGuests === 'function') renderStaffGuests();
+    if (typeof renderActivities === 'function') renderActivities();
+}
+
+function editFromAppointmentView() {
+    const bookingId = avCurrentBookingId;
+    const householdId = avCurrentHouseholdId;
+    closeAppointmentViewModal();
+    openBookingModal(householdId, bookingId);
 }
 
 async function openQuickBookingModal() {
@@ -4421,7 +4482,7 @@ async function renderCalendar() {
         const dayBookings = byDay[key].slice().sort((a, b) => (a.check_in || '').localeCompare(b.check_in || ''));
         const s = dayStatus[key];
         const bg = s?.level ? statusBg[s.level] : '';
-        const title = s?.level === 'closed' ? 'Business closed' : s?.level === 'staff-full' ? 'All staff booked' : s?.level === 'resource-full' ? `Closed to: ${s.fullTypes.join(', ')}` : '';
+        const title = s?.level === 'closed' ? (s.closureLabel ? `Closed: ${s.closureLabel}` : 'Business closed') : s?.level === 'staff-full' ? 'All staff booked' : s?.level === 'resource-full' ? `Closed to: ${s.fullTypes.join(', ')}` : '';
         const todayOutline = key === todayKey ? 'box-shadow: inset 0 0 0 2px #2563eb;' : '';
         
         return `
@@ -4431,7 +4492,7 @@ async function renderCalendar() {
                     const petName = bk.pets?.name || 'Pet';
                     
                     return `
-                        <div style="padding:0.35rem 0.45rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer; border:1px solid var(--border);" onclick="openBookingModal('${bk.household_id}', '${bk.id}')">
+                        <div style="padding:0.35rem 0.45rem; margin-bottom:0.3rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:0.75rem; cursor:pointer; border:1px solid var(--border);" onclick="openAppointmentView('${bk.id}')">
                             <div style="display:flex; align-items:center; gap:0.35rem; font-weight:600;">
                                 <i data-lucide="${icon}" style="width:13px; height:13px; color:var(--primary,#2563eb);"></i>
                                 <span>${petName}</span>
@@ -7115,6 +7176,8 @@ async function fetchActivityItems() {
             subtitle: [bk.pets?.name, bk.households?.name, bk.resources?.name].filter(Boolean).join(' · '),
             date: (bk.check_in || '').slice(0, 10),
             endDate: (bk.check_out || bk.check_in || '').slice(0, 10),
+            checkIn: bk.check_in,
+            checkOut: bk.check_out,
             status: bk.status || 'pending',
             staffName: bk.staff?.name || '',
             staffId: bk.assigned_staff_id || '',
@@ -7317,9 +7380,9 @@ function filterActivityItems(items, f) {
 
 function openActivityItem(kind, id, householdId) {
     if (kind === 'appointment') {
-        // Open event edit modal
-        if (typeof openBookingModal === 'function') {
-            openBookingModal(householdId || null, id);
+        // View-only card by default now — Edit inside it opens the full modal
+        if (typeof openAppointmentView === 'function') {
+            openAppointmentView(id);
         }
     } else if (kind === 'task') {
         // Open staff task modal
@@ -7536,7 +7599,7 @@ async function computeCalendarDayStatuses(dates) {
     const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }, { data: resourceUsage }] = await Promise.all([
         client.from('resources').select('id, type, seats'),
         client.from('staff').select('id'),
-        client.from('business_closures').select('start_date, end_date'),
+        client.from('business_closures').select('start_date, end_date, label'),
         client.from('bookings').select('id, check_in, check_out, assigned_staff_id, requires_staff_time, status')
             .neq('status', 'cancelled')
             .lte('check_in', rangeEnd + 'T23:59:59')
@@ -7560,7 +7623,8 @@ async function computeCalendarDayStatuses(dates) {
         const key = fmt(d);
 
         // 1. Business Closed check
-        const closed = (closures || []).some(c => key >= c.start_date && key <= (c.end_date || c.start_date));
+        const matchedClosure = (closures || []).find(c => key >= c.start_date && key <= (c.end_date || c.start_date));
+        const closed = !!matchedClosure;
 
         // 2. Staff Fully Booked check
         const dayBookings = (bookings || []).filter(bk => {
@@ -7596,7 +7660,7 @@ async function computeCalendarDayStatuses(dates) {
         else if (staffFull) level = 'staff-full';
         else if (fullTypes.length) level = 'resource-full';
 
-        result[key] = { level, fullTypes };
+        result[key] = { level, fullTypes, closureLabel: matchedClosure?.label || null };
     });
 
     return result;
@@ -7664,7 +7728,9 @@ async function renderActivitiesCalendar() {
     const f = activitiesFilters();
     items = filterActivityItems(items, f);
 
-    // 4. Bucket filtered items into the calendar dates
+    // 4. Bucket filtered items into the calendar dates. Multi-day items sort
+    // to the top of each day's list — easier to track a multi-day booking's
+    // continuity across the week when it isn't buried under single-day items.
     const byDay = {};
     dates.forEach(d => { byDay[fmt(d)] = []; });
     items.forEach(it => {
@@ -7672,6 +7738,13 @@ async function renderActivitiesCalendar() {
         const end = it.endDate || it.date;
         Object.keys(byDay).forEach(key => {
             if (key >= start && key <= end) byDay[key].push(it);
+        });
+    });
+    Object.keys(byDay).forEach(key => {
+        byDay[key].sort((a, b) => {
+            const aMulti = (a.endDate || a.date) !== a.date ? 1 : 0;
+            const bMulti = (b.endDate || b.date) !== b.date ? 1 : 0;
+            return bMulti - aMulti;
         });
     });
 
@@ -7698,11 +7771,33 @@ async function renderActivitiesCalendar() {
             .map(icon => `<i data-lucide="${icon}" style="width:13px; height:13px; color:var(--primary,#2563eb); flex-shrink:0;"></i>`)
             .join('');
 
+        // Hover tooltip: real time + service type for appointments. Multi-day
+        // items get a visual "connector" — flattened edges on whichever
+        // side(s) touch an adjoining day, so the bar reads as one continuous
+        // booking instead of separate disconnected blocks per day.
+        const isMultiDay = it.kind === 'appointment' && (it.endDate || it.date) !== it.date;
+        const isStartDay = key === it.date;
+        const isEndDay = key === (it.endDate || it.date);
+        let radiusStyle = '';
+        if (isMultiDay) {
+            const leftRadius = isStartDay ? '0.25rem' : '0';
+            const rightRadius = isEndDay ? '0.25rem' : '0';
+            radiusStyle = `border-radius:${leftRadius} ${rightRadius} ${rightRadius} ${leftRadius}; ${!isStartDay ? 'border-left:none; margin-left:-1px;' : ''} ${!isEndDay ? 'border-right:none;' : ''}`;
+        }
+
+        let tooltip = it.title || '';
+        if (it.kind === 'appointment' && it.checkIn) {
+            const timeLabel = it.checkOut && it.checkOut !== it.checkIn
+                ? `${it.checkIn.slice(0, 10)} → ${it.checkOut.slice(0, 10)}`
+                : `${it.checkIn.slice(0, 10)} at ${it.checkIn.slice(11, 16)}`;
+            tooltip = `${it.title} — ${timeLabel}`;
+        }
+
         return `
-            <div style="padding:${compact ? '0.2rem 0.3rem' : '0.35rem 0.45rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer; border:1px solid var(--border);" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
+            <div title="${tooltip.replace(/"/g, '&quot;')}" style="padding:${compact ? '0.2rem 0.3rem' : '0.35rem 0.45rem'}; margin-bottom:0.25rem; border-radius:0.25rem; background:var(--bg-hover,#f1f5f9); font-size:${compact ? '0.68rem' : '0.75rem'}; cursor:pointer; border:1px solid var(--border); ${radiusStyle}" onclick="event.stopPropagation(); openActivityItem('${it.kind}', '${it.id}', '${it.householdId || ''}')">
                 <div style="display:flex; align-items:center; gap:0.35rem; font-weight:600; color:var(--text-main,#0f172a);">
                     <span style="display:inline-flex; gap:0.15rem; align-items:center;">${iconHtml}</span>
-                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${displayLabel}</span>
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${displayLabel}${isMultiDay && !isEndDay ? ' →' : ''}</span>
                 </div>
                 ${!compact ? `
                     <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.15rem; display:flex; align-items:center; gap:0.25rem; flex-wrap:wrap;">
@@ -7720,7 +7815,7 @@ async function renderActivitiesCalendar() {
     const cellStyle = (key, extra) => {
         const s = dayStatus[key];
         const bg = s ? statusBg[s.level] : '';
-        const statusLabel = s ? (s.level === 'closed' ? 'Business closed' : s.level === 'staff-full' ? 'All staff booked' : `Closed to: ${s.fullTypes.join(', ')}`) : '';
+        const statusLabel = s ? (s.level === 'closed' ? (s.closureLabel ? `Closed: ${s.closureLabel}` : 'Business closed') : s.level === 'staff-full' ? 'All staff booked' : `Closed to: ${s.fullTypes.join(', ')}`) : '';
         const todayOutline = key === todayKey ? 'box-shadow: inset 0 0 0 2px #2563eb;' : '';
         return `style="cursor:pointer; ${bg ? 'background:' + bg + ';' : ''} ${todayOutline} ${extra || ''}" title="${key === todayKey ? 'Today. ' : ''}${statusLabel}"`;
     };
