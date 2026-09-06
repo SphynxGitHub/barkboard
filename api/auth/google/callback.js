@@ -60,6 +60,12 @@ export default async function handler(req, res) {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Bounded window — without a timeMax, a recurring event with no end
+      // date gets expanded by Google into one instance per future
+      // occurrence (potentially decades' worth), since singleEvents:true
+      // expands recurrences across whatever window is given.
+      const ninetyDaysOut = new Date();
+      ninetyDaysOut.setDate(ninetyDaysOut.getDate() + 90);
 
       // Needed so imported events are actually visible to staff — every
       // booking read in the app is RLS-scoped to business_id = current
@@ -75,6 +81,7 @@ export default async function handler(req, res) {
       const { data: initialEvents } = await calendar.events.list({
         calendarId: primaryCal.id,
         timeMin: thirtyDaysAgo.toISOString(),
+        timeMax: ninetyDaysOut.toISOString(),
         singleEvents: true,
         orderBy: 'startTime'
       });

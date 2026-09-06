@@ -90,7 +90,15 @@ export default async function handler(req, res) {
     } else {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Without an upper bound, a recurring event with no end date gets
+      // expanded by Google into one instance per future occurrence —
+      // potentially decades' worth — since singleEvents:true expands
+      // recurrences within whatever window is given. 90 days out is plenty
+      // for a booking calendar; nothing needs syncing that far ahead.
+      const ninetyDaysOut = new Date();
+      ninetyDaysOut.setDate(ninetyDaysOut.getDate() + 90);
       listParams.timeMin = thirtyDaysAgo.toISOString();
+      listParams.timeMax = ninetyDaysOut.toISOString();
       listParams.singleEvents = true;
     }
 
@@ -101,11 +109,14 @@ export default async function handler(req, res) {
       eventsData = response.data;
     } catch (listError) {
       if (listError.code === 410) {
-        // Sync token expired/invalidated — fallback to timeMin fetch
+        // Sync token expired/invalidated — fallback to timeMin/timeMax fetch
         delete listParams.syncToken;
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const ninetyDaysOut = new Date();
+        ninetyDaysOut.setDate(ninetyDaysOut.getDate() + 90);
         listParams.timeMin = thirtyDaysAgo.toISOString();
+        listParams.timeMax = ninetyDaysOut.toISOString();
         listParams.singleEvents = true;
 
         const response = await calendar.events.list(listParams);
