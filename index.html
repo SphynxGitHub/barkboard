@@ -242,6 +242,51 @@
         </div>
     </div>
 
+    <!-- Notice Template modal -->
+    <div id="email-template-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:1950; background:rgba(15,23,42,0.5); display:flex; align-items:center; justify-content:center; padding:1.5rem;">
+        <div style="background:var(--bg-card,#fff); border-radius:0.5rem; padding:1.5rem; width:100%; max-width:480px; max-height:90vh; overflow-y:auto;">
+            <h3 id="et-modal-title" style="margin:0 0 1rem;">Add Notice Template</h3>
+            <div class="form-group"><label>Category</label>
+                <select id="et-category" onchange="updateTemplateTriggerOptions()">
+                    <option value="scheduling">Scheduling Notice</option>
+                    <option value="invoice">Invoice Notice</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Name</label>
+                <input type="text" id="et-name" placeholder="e.g. Confirmation Email, Reminder 1">
+            </div>
+            <div class="form-group"><label>When should this send?</label>
+                <select id="et-trigger" onchange="updateTemplateTriggerOptions()">
+                    <option value="immediate">Immediately</option>
+                    <option value="before">Before the date</option>
+                    <option value="after">After the date</option>
+                </select>
+            </div>
+            <div class="form-group" id="et-immediate-event-group">
+                <label>Triggering event</label>
+                <select id="et-immediate-event"></select>
+            </div>
+            <div class="form-group hidden" id="et-offset-group">
+                <label>How many days?</label>
+                <input type="number" id="et-offset-days" min="1" placeholder="2">
+            </div>
+            <div class="form-group"><label>Subject</label>
+                <input type="text" id="et-subject" placeholder="Your appointment is confirmed!">
+            </div>
+            <div class="form-group"><label>Body</label>
+                <textarea id="et-body" rows="6" placeholder="Hi {{owner_name}}, this confirms {{pet_name}}'s {{service_name}} on {{date}}..."></textarea>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Available merge fields: {{business_name}}, {{owner_name}}, {{pet_name}}, {{service_name}}, {{date}}, {{amount}}, {{due_date}}, {{payment_options}}</p>
+            </div>
+            <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600; margin-bottom:1rem;">
+                <input type="checkbox" id="et-active" checked> Active
+            </label>
+            <div style="display:flex; justify-content:space-between; gap:0.75rem;">
+                <button type="button" class="btn" onclick="closeEmailTemplateModal()">Cancel</button>
+                <button type="button" class="btn-primary" onclick="saveEmailTemplate()">Save Template</button>
+            </div>
+        </div>
+    </div>
+
     <div id="owner-banner" class="owner-banner hidden">
         <div>👁️ Admin preview — viewing portal as: <strong id="owner-banner-name">—</strong></div>
         <button class="exit-owner-btn" onclick="exitOwnerView()">✕ Exit Owner View</button>
@@ -690,6 +735,19 @@
                         </div>
                     </div>
 
+                    <!-- Notice Templates -->
+                    <div style="padding-top:0.5rem; border-top:1px solid var(--border);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+                            <h3 style="margin:0;">Notice Templates</h3>
+                            <button class="btn-primary" style="font-size:0.78rem; padding:0.4rem 0.75rem;" onclick="openEmailTemplateModal(null)">+ Add Template</button>
+                        </div>
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0.25rem 0 1rem;">Reusable notices with your own wording and timing (e.g. "Confirmation Email" sent immediately, "Reminder 1" sent 2 days before). Apply them to specific services under Templates &rarr; Services.</p>
+                        <div class="group-heading" style="margin-top:0;">Scheduling Notices</div>
+                        <div id="scheduling-templates-list" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
+                        <div class="group-heading">Invoice Notices</div>
+                        <div id="invoice-templates-list" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
+                    </div>
+
                 </div>
             </div>
 
@@ -1118,6 +1176,16 @@
                     </div>
                 </div>
                 <div class="form-group"><label>Notes</label><textarea id="att-notes" rows="2"></textarea></div>
+                <div class="form-group">
+                    <label>Scheduling Notices</label>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.35rem;">Which appointment-related notices should customers get for this service?</p>
+                    <div id="att-scheduling-notices" style="display:flex; flex-direction:column; gap:0.3rem;"></div>
+                </div>
+                <div class="form-group">
+                    <label>Invoice Notices</label>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.35rem;">Which invoice-related notices should customers get for this service?</p>
+                    <div id="att-invoice-notices" style="display:flex; flex-direction:column; gap:0.3rem;"></div>
+                </div>
                 <div class="modal-actions">
                     <button class="btn" onclick="closeApptTypeModal()">Cancel</button>
                     <button class="btn-primary" onclick="saveApptType()">Save</button>

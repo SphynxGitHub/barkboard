@@ -3848,6 +3848,7 @@ function switchBizTab(tab) {
         if (typeof loadPublicBookingSettings === 'function') loadPublicBookingSettings();
         if (typeof loadBusinessPaymentSettings === 'function') loadBusinessPaymentSettings();
         if (typeof loadEmailSettings === 'function') loadEmailSettings();
+        if (typeof loadEmailTemplates === 'function') loadEmailTemplates();
     }
 }
 
@@ -7059,6 +7060,28 @@ async function openApptTypeModal(id) {
     });
     if (document.getElementById('att-prompt-times')) document.getElementById('att-prompt-times').checked = !!t?.prompt_dropoff_pickup_time;
 
+    // Render notice checkboxes from the business's active templates, checked
+    // against whichever ones are already applied to this service (junction
+    // table — empty/none if this is a new service).
+    if (client) {
+        const { data: allTemplates } = await client.from('email_templates').select('id, name, category').eq('business_id', currentBusinessId).eq('is_active', true).order('sort_order');
+        let appliedIds = new Set();
+        if (id) {
+            const { data: applied } = await client.from('appointment_template_notices').select('email_template_id').eq('appointment_type_template_id', id);
+            appliedIds = new Set((applied || []).map(a => a.email_template_id));
+        }
+        const renderChecks = (elId, category) => {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const list = (allTemplates || []).filter(tpl => tpl.category === category);
+            el.innerHTML = list.length
+                ? list.map(tpl => `<label style="display:flex; align-items:center; gap:0.4rem; font-weight:400; font-size:0.85rem;"><input type="checkbox" class="att-notice-chk" data-template-id="${tpl.id}" ${appliedIds.has(tpl.id) ? 'checked' : ''}> ${tpl.name}</label>`).join('')
+                : `<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">No ${category} notices set up yet — add some under Business Settings → Notice Templates.</p>`;
+        };
+        renderChecks('att-scheduling-notices', 'scheduling');
+        renderChecks('att-invoice-notices', 'invoice');
+    }
+
     document.getElementById('appt-type-modal')?.classList.remove('hidden');
 }
 
@@ -7113,6 +7136,20 @@ async function saveApptType() {
     // explicitly check the affected row count came back non-empty.
     if (editingApptTypeId && (!response.data || !response.data.length)) {
         return alert('Nothing was saved — this usually means your session has expired or changed. Please refresh the page and sign in again, then retry.');
+    }
+
+    // Re-sync which notice templates are applied to this service — simplest
+    // correct approach is delete-then-reinsert rather than diffing, since
+    // this is a small checkbox list, not a large dataset.
+    const savedId = editingApptTypeId || response.data?.[0]?.id;
+    if (savedId) {
+        const checkedTemplateIds = Array.from(document.querySelectorAll('.att-notice-chk:checked')).map(chk => chk.dataset.templateId);
+        await client.from('appointment_template_notices').delete().eq('appointment_type_template_id', savedId);
+        if (checkedTemplateIds.length) {
+            await client.from('appointment_template_notices').insert(
+                checkedTemplateIds.map(templateId => ({ appointment_type_template_id: savedId, email_template_id: templateId, business_id: currentBusinessId }))
+            );
+        }
     }
 
     editingApptTypeId = null;
@@ -7323,6 +7360,159 @@ async function deleteAssessmentTemplate(id) {
 /* Shared "Saved ✓" flash used by the auto-save fields in Business Settings —
    replaces a blocking alert() with a quiet inline confirmation next to the
    section that was just saved. */
+/* ==========================================================================
+   NOTICE TEMPLATES (editable, timed email notices)
+   ========================================================================== */
+
+let editingEmailTemplateId = null;
+
+async function loadEmailTemplates() {
+    const client = getSupabase();
+    if (!client) return;
+    const { data } = await client.from('email_templates').select('*').eq('business_id', currentBusinessId).order('sort_order').order('created_at');
+    const templates = data || [];
+    renderEmailTemplateGroup('scheduling-templates-list', templates.filter(t => t.category === 'scheduling'));
+    renderEmailTemplateGroup('invoice-templates-list', templates.filter(t => t.category === 'invoice'));
+}
+
+const NOTICE_EVENT_LABELS = {
+    booking_confirmed: 'Booking Confirmed',
+    booking_declined: 'Booking Declined',
+    invoice_created: 'Invoice Created',
+    payment_received: 'Payment Received'
+};
+
+function timingLabel(t) {
+    if (t.trigger_type === 'immediate') {
+        return `Immediately — on ${NOTICE_EVENT_LABELS[t.immediate_event] || t.immediate_event}`;
+    }
+    return `${t.offset_days} day${t.offset_days === 1 ? '' : 's'} ${t.trigger_type} the date`;
+}
+
+function renderEmailTemplateGroup(elId, templates) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!templates.length) {
+        el.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">No templates yet.</p>';
+        return;
+    }
+    el.innerHTML = templates.map(t => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.65rem 0.85rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); ${t.is_active ? '' : 'opacity:0.55;'}">
+            <div>
+                <strong>${t.name}</strong>
+                <span style="font-size:0.78rem; color:var(--text-muted); margin-left:0.5rem;">${timingLabel(t)}</span>
+                ${!t.is_active ? '<span style="font-size:0.7rem; color:var(--text-muted); margin-left:0.5rem;">(inactive)</span>' : ''}
+            </div>
+            <div style="display:flex; gap:0.35rem;">
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;" onclick="openEmailTemplateModal('${t.id}')" title="Edit"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+                <button class="btn-icon" style="background:none;border:none;cursor:pointer;color:var(--danger-text);" onclick="deleteEmailTemplate('${t.id}')" title="Delete"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+            </div>
+        </div>
+    `).join('');
+    refreshIcons();
+}
+
+function updateTemplateTriggerOptions() {
+    const category = document.getElementById('et-category')?.value;
+    const trigger = document.getElementById('et-trigger')?.value;
+    document.getElementById('et-offset-group')?.classList.toggle('hidden', trigger === 'immediate');
+    document.getElementById('et-immediate-event-group')?.classList.toggle('hidden', trigger !== 'immediate');
+
+    const eventSelect = document.getElementById('et-immediate-event');
+    if (!eventSelect) return;
+    const prev = eventSelect.value;
+    const options = category === 'scheduling'
+        ? [['booking_confirmed', 'Booking Confirmed'], ['booking_declined', 'Booking Declined']]
+        : [['invoice_created', 'Invoice Created'], ['payment_received', 'Payment Received']];
+    eventSelect.innerHTML = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    if (options.some(([v]) => v === prev)) eventSelect.value = prev;
+}
+
+async function openEmailTemplateModal(id) {
+    editingEmailTemplateId = id;
+    document.getElementById('et-modal-title').textContent = id ? 'Edit Notice Template' : 'Add Notice Template';
+
+    if (id) {
+        const client = getSupabase();
+        const { data: t } = client ? await client.from('email_templates').select('*').eq('id', id).single() : { data: null };
+        if (t) {
+            document.getElementById('et-category').value = t.category;
+            document.getElementById('et-name').value = t.name;
+            document.getElementById('et-trigger').value = t.trigger_type;
+            updateTemplateTriggerOptions();
+            if (t.trigger_type === 'immediate') document.getElementById('et-immediate-event').value = t.immediate_event || '';
+            document.getElementById('et-offset-days').value = t.offset_days || '';
+            document.getElementById('et-subject').value = t.subject;
+            document.getElementById('et-body').value = t.body;
+            document.getElementById('et-active').checked = t.is_active;
+        }
+    } else {
+        document.getElementById('et-category').value = 'scheduling';
+        document.getElementById('et-name').value = '';
+        document.getElementById('et-trigger').value = 'immediate';
+        updateTemplateTriggerOptions();
+        document.getElementById('et-offset-days').value = '';
+        document.getElementById('et-subject').value = '';
+        document.getElementById('et-body').value = '';
+        document.getElementById('et-active').checked = true;
+    }
+
+    document.getElementById('email-template-modal')?.classList.remove('hidden');
+}
+
+function closeEmailTemplateModal() {
+    document.getElementById('email-template-modal')?.classList.add('hidden');
+}
+
+async function saveEmailTemplate() {
+    const category = document.getElementById('et-category').value;
+    const name = document.getElementById('et-name').value.trim();
+    const triggerType = document.getElementById('et-trigger').value;
+    const subject = document.getElementById('et-subject').value.trim();
+    const body = document.getElementById('et-body').value.trim();
+    const isActive = document.getElementById('et-active').checked;
+
+    if (!name) return alert('Please name this template.');
+    if (!subject || !body) return alert('Please fill in both the subject and body.');
+
+    const payload = {
+        business_id: currentBusinessId,
+        category,
+        name,
+        trigger_type: triggerType,
+        immediate_event: triggerType === 'immediate' ? document.getElementById('et-immediate-event').value : null,
+        offset_days: triggerType !== 'immediate' ? (parseInt(document.getElementById('et-offset-days').value, 10) || null) : null,
+        subject,
+        body,
+        is_active: isActive
+    };
+
+    if (triggerType !== 'immediate' && !payload.offset_days) {
+        return alert('Please enter how many days before/after.');
+    }
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const response = editingEmailTemplateId
+        ? await client.from('email_templates').update(payload).eq('id', editingEmailTemplateId)
+        : await client.from('email_templates').insert([payload]);
+
+    if (response.error) return alert('Failed to save: ' + response.error.message);
+
+    closeEmailTemplateModal();
+    loadEmailTemplates();
+}
+
+async function deleteEmailTemplate(id) {
+    if (!confirm('Delete this notice template? It will also be removed from any services it\'s applied to.')) return;
+    const client = getSupabase();
+    if (!client) return;
+    const { error } = await client.from('email_templates').delete().eq('id', id);
+    if (error) return alert('Failed to delete: ' + error.message);
+    loadEmailTemplates();
+}
+
 function flashSaveIndicator(elId) {
     const el = document.getElementById(elId);
     if (!el) return;

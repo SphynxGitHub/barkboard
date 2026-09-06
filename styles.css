@@ -1703,3 +1703,13 @@ input.biz-select {
   margin-left: 0.5rem;
   transition: opacity 0.3s ease;
 }
+
+.group-heading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin: 1rem 0 0.5rem;
+}
+.group-heading:first-child { margin-top: 0; }
