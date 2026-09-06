@@ -77,17 +77,27 @@ export default async function handler(req, res) {
         .single();
       const businessId = staffRow?.business_id || null;
 
-      // 1. Fetch existing events from the staff member's Google Calendar
-      const { data: initialEvents } = await calendar.events.list({
-        calendarId: primaryCal.id,
-        timeMin: thirtyDaysAgo.toISOString(),
-        timeMax: ninetyDaysOut.toISOString(),
-        singleEvents: true,
-        orderBy: 'startTime'
-      });
+      // 1. Fetch existing events from the staff member's Google Calendar.
+      // Paginated — Google caps a single page at 250 results by default, and
+      // this calendar can easily exceed that, so a single unpaginated call
+      // would silently drop everything past the first page.
+      let initialEventItems = [];
+      let pageToken;
+      do {
+        const { data: page } = await calendar.events.list({
+          calendarId: primaryCal.id,
+          timeMin: thirtyDaysAgo.toISOString(),
+          timeMax: ninetyDaysOut.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          pageToken
+        });
+        initialEventItems = initialEventItems.concat(page.items || []);
+        pageToken = page.nextPageToken;
+      } while (pageToken);
 
       // 2. Insert or update each event into BarkBoard (Supabase)
-      for (const event of initialEvents.items || []) {
+      for (const event of initialEventItems) {
         if (event.status !== 'cancelled') {
           // Bare local-time strings (no trailing Z) — matches how every other
           // timestamp in this app is stored (floating local time, not UTC).

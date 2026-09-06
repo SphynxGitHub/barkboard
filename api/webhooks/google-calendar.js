@@ -83,7 +83,25 @@ export default async function handler(req, res) {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     const calendarId = tokenData.calendar_id || 'primary';
-    
+
+    // Google Calendar API pages results at 250 by default — every one of our
+    // test runs logged exactly "processed 250 event(s)", which is that page
+    // size, not a real count. Without paginating through nextPageToken,
+    // anything past the first page (including nextSyncToken itself, which
+    // only appears on the LAST page) was silently dropped.
+    async function listAllEvents(params) {
+      let items = [];
+      let nextSyncToken = null;
+      let pageToken = undefined;
+      do {
+        const response = await calendar.events.list({ ...params, pageToken });
+        items = items.concat(response.data.items || []);
+        pageToken = response.data.nextPageToken;
+        if (response.data.nextSyncToken) nextSyncToken = response.data.nextSyncToken;
+      } while (pageToken);
+      return { items, nextSyncToken };
+    }
+
     let listParams = { calendarId };
     if (tokenData.sync_token) {
       listParams.syncToken = tokenData.sync_token;
@@ -105,8 +123,7 @@ export default async function handler(req, res) {
     // 2. Fetch changed events (with 410 syncToken invalidation fallback)
     let eventsData;
     try {
-      const response = await calendar.events.list(listParams);
-      eventsData = response.data;
+      eventsData = await listAllEvents(listParams);
     } catch (listError) {
       if (listError.code === 410) {
         // Sync token expired/invalidated — fallback to timeMin/timeMax fetch
@@ -119,8 +136,7 @@ export default async function handler(req, res) {
         listParams.timeMax = ninetyDaysOut.toISOString();
         listParams.singleEvents = true;
 
-        const response = await calendar.events.list(listParams);
-        eventsData = response.data;
+        eventsData = await listAllEvents(listParams);
       } else {
         throw listError;
       }
