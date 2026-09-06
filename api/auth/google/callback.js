@@ -57,6 +57,39 @@ export default async function handler(req, res) {
       expiration: new Date(parseInt(watchResponse.expiration, 10)).toISOString()
     });
 
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+      // 1. Fetch existing events from the staff member's Google Calendar
+      const { data: initialEvents } = await calendar.events.list({
+        calendarId: primaryCal.id,
+        timeMin: thirtyDaysAgo.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime'
+      });
+    
+      // 2. Insert or update each event into BarkBoard (Supabase)
+      for (const event of initialEvents.items || []) {
+        if (event.status !== 'cancelled') {
+          const startIso = event.start.dateTime || `${event.start.date}T00:00:00Z`;
+          const endIso = event.end.dateTime || `${event.end.date}T23:59:59Z`;
+    
+          await supabase.from('bookings').upsert({
+            google_event_id: event.id,
+            service_name: event.summary || 'External Appointment',
+            check_in: startIso,
+            check_out: endIso,
+            assigned_staff_id: staffId,
+            notes: event.description || '',
+            status: 'confirmed'
+          }, { onConflict: 'google_event_id' });
+        }
+      }
+    } catch (importErr) {
+      console.error('Initial Google event import error:', importErr);
+    }
+    
     res.send(`
       <html>
         <body style="font-family:sans-serif; text-align:center; padding:2rem;">
