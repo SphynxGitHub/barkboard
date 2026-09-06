@@ -12,9 +12,17 @@ export default async function handler(req, res) {
 
   const channelId = req.headers['x-goog-channel-id'];
   const resourceState = req.headers['x-goog-resource-state'];
+  const resourceId = req.headers['x-goog-resource-id'];
+
+  // Printed directly into the function log — easier to check here than
+  // digging through Vercel's request-inspector UI for individual headers.
+  console.log(`[Webhook] Received: resourceState=${resourceState}, channelId=${channelId}, resourceId=${resourceId}`);
 
   // Ignore initial ping upon watch channel creation
-  if (resourceState === 'sync') return;
+  if (resourceState === 'sync') {
+    console.log('[Webhook] Ignoring "sync" handshake ping — not a real change notification.');
+    return;
+  }
 
   try {
     // 1. Retrieve the watch channel. This used to be a single query embedding
