@@ -95,6 +95,9 @@
         .mini-cal-day.mini-cal-disabled { color: #d1d5db; cursor: not-allowed; text-decoration: line-through; }
         .mini-cal-day.mini-cal-empty { visibility: hidden; cursor: default; }
         .mini-cal-day.mini-cal-today:not(.mini-cal-selected) { border-color: var(--accent); }
+        .mini-cal-day.mini-cal-in-range { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 0; }
+        .mini-cal-day.mini-cal-range-start { border-radius: 8px 0 0 8px; }
+        .mini-cal-day.mini-cal-range-end { border-radius: 0 8px 8px 0; }
 
         .slot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
         .slot-btn { padding: 0.55rem 0.4rem; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 0.85rem; cursor: pointer; text-align: center; }
@@ -181,16 +184,20 @@
 
                 <div id="board-total-fee" class="total-fee-box">Estimated Total: $0.00</div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Start Date *</label>
-                        <input type="date" id="board-start-date" required onchange="updateBoardingTotal()">
+                <label>Dates *</label>
+                <p class="field-hint" style="margin-top:-0.4rem;">Tap your drop-off date, then your pickup date.</p>
+                <div class="mini-cal">
+                    <div class="mini-cal-header">
+                        <button type="button" class="mini-cal-nav" onclick="shiftBoardCalMonth(-1)">‹</button>
+                        <span id="board-cal-label"></span>
+                        <button type="button" class="mini-cal-nav" onclick="shiftBoardCalMonth(1)">›</button>
                     </div>
-                    <div class="form-group">
-                        <label>End Date *</label>
-                        <input type="date" id="board-end-date" required onchange="updateBoardingTotal()">
-                    </div>
+                    <div class="mini-cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+                    <div class="mini-cal-grid" id="board-cal-grid"></div>
                 </div>
+                <p id="board-cal-range-label" class="field-hint hidden"></p>
+                <input type="hidden" id="board-start-date" required>
+                <input type="hidden" id="board-end-date" required>
 
                 <div id="board-times-row" class="form-row hidden">
                     <div class="form-group">
@@ -677,11 +684,98 @@
             document.getElementById('board-total-fee').textContent = `Estimated Total: $${total.toFixed(2)}`;
         }
 
+        let boardCalYear, boardCalMonth;
+        let selectedBoardStart = null;
+        let selectedBoardEnd = null;
+
         function openBoardingStep() {
             renderPetCards('boarding-pet-rows', 'boarding');
             updateBoardingTimeVisibility();
             updateBoardingTotal();
+            selectedBoardStart = null;
+            selectedBoardEnd = null;
+            document.getElementById('board-start-date').value = '';
+            document.getElementById('board-end-date').value = '';
+            const today = new Date();
+            boardCalYear = today.getFullYear();
+            boardCalMonth = today.getMonth();
+            renderBoardCal();
             goToStep('boarding');
+        }
+
+        function shiftBoardCalMonth(delta) {
+            boardCalMonth += delta;
+            if (boardCalMonth < 0) { boardCalMonth = 11; boardCalYear--; }
+            if (boardCalMonth > 11) { boardCalMonth = 0; boardCalYear++; }
+            renderBoardCal();
+        }
+
+        function renderBoardCal() {
+            const label = document.getElementById('board-cal-label');
+            const grid = document.getElementById('board-cal-grid');
+            const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            label.textContent = `${monthNames[boardCalMonth]} ${boardCalYear}`;
+
+            const firstDay = new Date(boardCalYear, boardCalMonth, 1);
+            const daysInMonth = new Date(boardCalYear, boardCalMonth + 1, 0).getDate();
+            const startWeekday = firstDay.getDay();
+            const todayStr = new Date().toISOString().slice(0, 10);
+
+            let html = '';
+            for (let i = 0; i < startWeekday; i++) html += `<div class="mini-cal-day mini-cal-empty"></div>`;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(boardCalYear, boardCalMonth, d);
+                const dateStr = `${boardCalYear}-${String(boardCalMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const isPast = dateStr < todayStr;
+                const closureLabel = closureLabelForDate(dateStr);
+                const closed = isDayClosed(dateObj.getDay()) || !!closureLabel;
+                const disabled = isPast || closed;
+                const classes = ['mini-cal-day'];
+                if (disabled) classes.push('mini-cal-disabled');
+                if (dateStr === todayStr) classes.push('mini-cal-today');
+                if (dateStr === selectedBoardStart || dateStr === selectedBoardEnd) classes.push('mini-cal-selected');
+                if (dateStr === selectedBoardStart) classes.push('mini-cal-range-start');
+                if (dateStr === selectedBoardEnd) classes.push('mini-cal-range-end');
+                if (selectedBoardStart && selectedBoardEnd && dateStr > selectedBoardStart && dateStr < selectedBoardEnd) classes.push('mini-cal-in-range');
+                const title = closureLabel ? closureLabel : (closed ? 'Closed' : '');
+                html += `<div class="${classes.join(' ')}" ${disabled ? '' : `onclick="selectBoardCalDay('${dateStr}')"`} title="${title}">${d}</div>`;
+            }
+            grid.innerHTML = html;
+        }
+
+        function selectBoardCalDay(dateStr) {
+            if (!selectedBoardStart || (selectedBoardStart && selectedBoardEnd)) {
+                // Starting a fresh selection (first click, or re-picking after a
+                // complete range was already chosen)
+                selectedBoardStart = dateStr;
+                selectedBoardEnd = null;
+            } else if (dateStr < selectedBoardStart) {
+                // Clicked before the current start — treat as the new start
+                selectedBoardStart = dateStr;
+                selectedBoardEnd = null;
+            } else if (dateStr === selectedBoardStart) {
+                // Same-day boarding — start and end are the same date
+                selectedBoardEnd = dateStr;
+            } else {
+                selectedBoardEnd = dateStr;
+            }
+
+            document.getElementById('board-start-date').value = selectedBoardStart || '';
+            document.getElementById('board-end-date').value = selectedBoardEnd || '';
+            const rangeLabel = document.getElementById('board-cal-range-label');
+            if (selectedBoardStart && selectedBoardEnd) {
+                rangeLabel.textContent = `${selectedBoardStart} → ${selectedBoardEnd}`;
+                rangeLabel.classList.remove('hidden');
+            } else if (selectedBoardStart) {
+                rangeLabel.textContent = `Drop-off: ${selectedBoardStart} — now tap your pickup date`;
+                rangeLabel.classList.remove('hidden');
+            } else {
+                rangeLabel.classList.add('hidden');
+            }
+
+            renderBoardCal();
+            updateBoardingTotal();
         }
 
         function finishBoardingGroup() {
@@ -1073,8 +1167,21 @@
                 const chk = card && Array.from(card.querySelectorAll('.pet-addon-chk')).find(c => c.dataset.name === a.serviceName);
                 if (chk) chk.checked = true;
             });
-            document.getElementById('board-start-date').value = group.startDate || '';
-            document.getElementById('board-end-date').value = group.endDate || '';
+            if (group.startDate) {
+                const [y, m] = group.startDate.split('-').map(Number);
+                boardCalYear = y;
+                boardCalMonth = m - 1;
+                selectedBoardStart = group.startDate;
+                selectedBoardEnd = group.endDate || null;
+                document.getElementById('board-start-date').value = group.startDate;
+                document.getElementById('board-end-date').value = group.endDate || '';
+                renderBoardCal();
+                const rangeLabel = document.getElementById('board-cal-range-label');
+                if (selectedBoardStart && selectedBoardEnd) {
+                    rangeLabel.textContent = `${selectedBoardStart} → ${selectedBoardEnd}`;
+                    rangeLabel.classList.remove('hidden');
+                }
+            }
             document.getElementById('board-dropoff-time').value = group.dropoffTime || '';
             document.getElementById('board-pickup-time').value = group.pickupTime || '';
             updateBoardingTotal();

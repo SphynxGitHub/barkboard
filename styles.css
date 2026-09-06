@@ -1770,3 +1770,24 @@ input.biz-select {
   margin: 1rem 0 0.5rem;
 }
 .group-heading:first-child { margin-top: 0; }
+
+/* Calendar + time-slot picker — shared by the public booking page and the
+   staff app's booking modal so both look and behave the same way. */
+.mini-cal { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; margin-bottom: 1rem; }
+.mini-cal-header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; font-size: 0.88rem; margin-bottom: 0.5rem; }
+.mini-cal-nav { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--text-muted); padding: 0.2rem 0.5rem; border-radius: 6px; }
+.mini-cal-nav:hover { background: var(--bg-hover, #f3f4f6); color: var(--primary); }
+.mini-cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 0.7rem; color: var(--text-muted); text-align: center; margin-bottom: 0.25rem; }
+.mini-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.mini-cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; border-radius: 8px; cursor: pointer; border: 1.5px solid transparent; }
+.mini-cal-day:hover:not(.mini-cal-disabled):not(.mini-cal-empty) { background: var(--bg-hover, #f3f4f6); }
+.mini-cal-day.mini-cal-selected { background: var(--primary); color: #fff; font-weight: 700; }
+.mini-cal-day.mini-cal-disabled { color: #d1d5db; cursor: not-allowed; text-decoration: line-through; }
+.mini-cal-day.mini-cal-empty { visibility: hidden; cursor: default; }
+.mini-cal-day.mini-cal-today:not(.mini-cal-selected) { border-color: var(--primary); }
+
+.slot-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+.slot-btn { padding: 0.5rem 0.35rem; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface, #fff); font-size: 0.82rem; cursor: pointer; text-align: center; }
+.slot-btn:hover { border-color: var(--primary); color: var(--primary); }
+.slot-btn.slot-selected { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.slot-loading { grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem 0; }

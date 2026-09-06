@@ -1546,7 +1546,7 @@
                         </div>
         
                         <!-- 6. Start Date & 7. Drop off Time (Row) -->
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                        <div id="bk-plain-date-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
                             <div>
                                 <label id="bk-start-label" style="display:block; font-weight:600; margin-bottom:0.35rem;">Start Date *</label>
                                 <input type="date" id="bk-start-date" class="biz-select" style="width:100%; padding:0.5rem;" required onchange="calculateBookingTotalAmount();">
@@ -1556,7 +1556,28 @@
                                 <input type="time" id="bk-start-time" class="biz-select" style="width:100%; padding:0.5rem;" required>
                             </div>
                         </div>
-        
+
+                        <!-- Calendar + slot picker — shown instead of the plain date/time
+                             row above for single-day appointments, where picking a real
+                             time slot beats scrolling a native time wheel. Multi-day stays
+                             still use the plain row (drop-off/pickup dates + optional times). -->
+                        <div id="bk-cal-picker" class="hidden">
+                            <label style="display:block; font-weight:600; margin-bottom:0.35rem;">Date & Time *</label>
+                            <div class="mini-cal">
+                                <div class="mini-cal-header">
+                                    <button type="button" class="mini-cal-nav" onclick="shiftBkCalMonth(-1)">‹</button>
+                                    <span id="bk-cal-label"></span>
+                                    <button type="button" class="mini-cal-nav" onclick="shiftBkCalMonth(1)">›</button>
+                                </div>
+                                <div class="mini-cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+                                <div class="mini-cal-grid" id="bk-cal-grid"></div>
+                            </div>
+                            <div id="bk-slot-picker-section" class="hidden">
+                                <div id="bk-slot-picker-grid" class="slot-grid"></div>
+                                <p id="bk-slot-picker-empty" class="hidden" style="font-size:0.82rem; color:var(--text-muted);">No available times on this date for the selected resource — pick another day, or double-check via Override below.</p>
+                            </div>
+                        </div>
+
                         <!-- 8. End Date & 9. Pickup Time (Row) -->
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
                             <div id="bk-end-date-field">

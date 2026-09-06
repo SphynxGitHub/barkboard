@@ -1383,6 +1383,8 @@ function toggleBookingTypeFields() {
     const timeField = document.getElementById('bk-time-field');
     const endDateField = document.getElementById('bk-end-date-field');
     const endTimeField = document.getElementById('bk-end-time-field');
+    const plainRow = document.getElementById('bk-plain-date-row');
+    const calPicker = document.getElementById('bk-cal-picker');
 
     if (type === 'stay') {
         if (startLabel) startLabel.textContent = 'Start Date *';
@@ -1390,13 +1392,214 @@ function toggleBookingTypeFields() {
         if (timeField) timeField.classList.remove('hidden');
         if (endDateField) endDateField.classList.remove('hidden');
         if (endTimeField) endTimeField.classList.remove('hidden');
+        // Multi-day stays still use the plain date/time row — the calendar +
+        // slot picker below is for single-day appointments specifically,
+        // where picking a real time slot beats a native time-scroll wheel.
+        plainRow?.classList.remove('hidden');
+        calPicker?.classList.add('hidden');
     } else {
         if (startLabel) startLabel.textContent = 'Date *';
         if (startTimeLabel) startTimeLabel.textContent = 'Time';
         if (timeField) timeField.classList.remove('hidden');
         if (endDateField) endDateField.classList.add('hidden');
         if (endTimeField) endTimeField.classList.add('hidden');
+        plainRow?.classList.add('hidden');
+        calPicker?.classList.remove('hidden');
+        initBkCalendar();
     }
+}
+
+// --- Booking modal calendar + slot picker (single-day appointments) -------
+let bkCalYear, bkCalMonth, selectedBkDate = null, selectedBkTime = null;
+let bkBusinessHours = null, bkBusinessClosures = null;
+let bkSlotDataCache = {};
+
+async function initBkCalendar() {
+    const client = getSupabase();
+    if (!client) return;
+    if (bkBusinessHours === null) {
+        const { data: hours } = await client.from('business_hours').select('day_of_week, is_closed, open_time, close_time').eq('business_id', currentBusinessId);
+        bkBusinessHours = hours || [];
+    }
+    if (bkBusinessClosures === null) {
+        const { data: closures } = await client.from('business_closures').select('start_date, end_date, label').eq('business_id', currentBusinessId);
+        bkBusinessClosures = closures || [];
+    }
+    // Prefill from any existing plain-field values (editing a booking, or a
+    // value already set before switching to "appointment" type)
+    const existingDate = document.getElementById('bk-start-date')?.value;
+    const existingTime = document.getElementById('bk-start-time')?.value;
+    if (existingDate) {
+        const [y, m] = existingDate.split('-').map(Number);
+        bkCalYear = y; bkCalMonth = m - 1;
+        selectedBkDate = existingDate;
+        selectedBkTime = existingTime || null;
+    } else {
+        const today = new Date();
+        bkCalYear = today.getFullYear();
+        bkCalMonth = today.getMonth();
+        selectedBkDate = null;
+        selectedBkTime = null;
+    }
+    renderBkCal();
+    if (selectedBkDate) renderBkSlotPicker(selectedBkDate);
+}
+
+function bkIsDayClosed(dayOfWeek) {
+    const h = (bkBusinessHours || []).find(bh => bh.day_of_week === dayOfWeek);
+    return !!h?.is_closed;
+}
+
+function bkClosureLabelForDate(dateStr) {
+    const hit = (bkBusinessClosures || []).find(c => dateStr >= c.start_date && dateStr <= (c.end_date || c.start_date));
+    return hit?.label || null;
+}
+
+function shiftBkCalMonth(delta) {
+    bkCalMonth += delta;
+    if (bkCalMonth < 0) { bkCalMonth = 11; bkCalYear--; }
+    if (bkCalMonth > 11) { bkCalMonth = 0; bkCalYear++; }
+    renderBkCal();
+}
+
+function renderBkCal() {
+    const label = document.getElementById('bk-cal-label');
+    const grid = document.getElementById('bk-cal-grid');
+    if (!label || !grid) return;
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    label.textContent = `${monthNames[bkCalMonth]} ${bkCalYear}`;
+
+    const firstDay = new Date(bkCalYear, bkCalMonth, 1);
+    const daysInMonth = new Date(bkCalYear, bkCalMonth + 1, 0).getDate();
+    const startWeekday = firstDay.getDay();
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    let html = '';
+    for (let i = 0; i < startWeekday; i++) html += `<div class="mini-cal-day mini-cal-empty"></div>`;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(bkCalYear, bkCalMonth, d);
+        const dateStr = `${bkCalYear}-${String(bkCalMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const closureLabel = bkClosureLabelForDate(dateStr);
+        const closed = bkIsDayClosed(dateObj.getDay()) || !!closureLabel;
+        // Unlike the public page, staff CAN still click a "closed" day —
+        // internal appointments sometimes legitimately happen outside normal
+        // hours. It's flagged visually, not blocked.
+        const classes = ['mini-cal-day'];
+        if (closed) classes.push('mini-cal-disabled');
+        if (dateStr === todayStr) classes.push('mini-cal-today');
+        if (dateStr === selectedBkDate) classes.push('mini-cal-selected');
+        const title = closureLabel || (closed ? 'Closed (you can still book here if needed)' : '');
+        html += `<div class="${classes.join(' ')}" style="${closed ? 'text-decoration:none;' : ''}" onclick="selectBkCalDay('${dateStr}')" title="${title}">${d}</div>`;
+    }
+    grid.innerHTML = html;
+}
+
+function selectBkCalDay(dateStr) {
+    selectedBkDate = dateStr;
+    selectedBkTime = null;
+    document.getElementById('bk-start-date').value = dateStr;
+    document.getElementById('bk-start-time').value = '';
+    renderBkCal();
+    renderBkSlotPicker(dateStr);
+}
+
+async function fetchBkServiceSlotData(serviceName, dateStr) {
+    const key = `${serviceName}|${dateStr}`;
+    if (bkSlotDataCache[key] !== undefined) return bkSlotDataCache[key];
+    const client = getSupabase();
+    if (!client) return null;
+    const { data, error } = await client.rpc('get_service_slot_data_for_staff', {
+        p_business_id: currentBusinessId, p_service_name: serviceName, target_date: dateStr
+    });
+    bkSlotDataCache[key] = error ? null : data;
+    return bkSlotDataCache[key];
+}
+
+function bkCountOverlaps(bookingsForDay, slotStartMin, slotEndMin, dateStr) {
+    let count = 0;
+    const dayStart = new Date(dateStr + 'T00:00:00').getTime();
+    const dayEnd = new Date(dateStr + 'T23:59:59').getTime();
+    for (const b of bookingsForDay) {
+        const bStart = Math.max(new Date(b.check_in).getTime(), dayStart);
+        const bEnd = Math.min(new Date(b.occupied_until || b.check_out).getTime(), dayEnd);
+        if (bStart >= bEnd) continue;
+        const bStartMin = (bStart - dayStart) / 60000;
+        const bEndMin = (bEnd - dayStart) / 60000;
+        if (slotStartMin < bEndMin && slotEndMin > bStartMin) count++;
+    }
+    return count;
+}
+
+async function renderBkSlotPicker(dateStr) {
+    const section = document.getElementById('bk-slot-picker-section');
+    const grid = document.getElementById('bk-slot-picker-grid');
+    const emptyMsg = document.getElementById('bk-slot-picker-empty');
+    const serviceName = document.getElementById('bk-service-type')?.value?.trim();
+    if (!section || !grid) return;
+    section.classList.remove('hidden');
+    grid.innerHTML = '<div class="slot-loading">Checking availability...</div>';
+    emptyMsg?.classList.add('hidden');
+
+    const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
+    const hoursRow = (bkBusinessHours || []).find(bh => bh.day_of_week === dayOfWeek);
+    const openTime = hoursRow?.open_time?.slice(0, 5) || '09:00';
+    const closeTime = hoursRow?.close_time?.slice(0, 5) || '17:00';
+    const increment = 30; // staff app isn't tied to the public-page slot_increment_minutes setting; 30 min is a reasonable default here
+
+    let duration = 60;
+    if (serviceName) {
+        const client = getSupabase();
+        const { data: template } = client ? await client.from('appointment_type_templates').select('default_duration_minutes').eq('business_id', currentBusinessId).eq('name', serviceName).maybeSingle() : { data: null };
+        duration = template?.default_duration_minutes || 60;
+    }
+
+    const slotData = serviceName ? await fetchBkServiceSlotData(serviceName, dateStr) : null;
+
+    const [openH, openM] = openTime.split(':').map(Number);
+    const [closeH, closeM] = closeTime.split(':').map(Number);
+    let cursor = openH * 60 + openM;
+    const closeMinutes = closeH * 60 + closeM;
+
+    const candidateSlots = [];
+    while (cursor + duration <= closeMinutes) {
+        candidateSlots.push(cursor);
+        cursor += increment;
+    }
+
+    const availableSlots = candidateSlots.filter(slotStart => {
+        if (!slotData) return true; // no resource tied to this service — nothing to check
+        const slotEnd = slotStart + duration;
+        if (slotData.resource_type) {
+            const used = bkCountOverlaps(slotData.resource_bookings || [], slotStart, slotEnd, dateStr);
+            if (used + 1 > (slotData.resource_capacity || 0)) return false;
+        }
+        if (slotData.staff_resource_type) {
+            const used = bkCountOverlaps(slotData.staff_bookings || [], slotStart, slotEnd, dateStr);
+            if (used + 1 > (slotData.staff_capacity || 0)) return false;
+        }
+        return true;
+    });
+
+    grid.innerHTML = availableSlots.map(mins => {
+        const h = Math.floor(mins / 60), m = mins % 60;
+        const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const period = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 === 0 ? 12 : h % 12;
+        const label = `${h12}:${String(m).padStart(2, '0')} ${period}`;
+        return `<button type="button" class="slot-btn ${t === selectedBkTime ? 'slot-selected' : ''}" onclick="selectBkSlot('${t}')">${label}</button>`;
+    }).join('');
+
+    if (!availableSlots.length) {
+        emptyMsg?.classList.remove('hidden');
+    }
+}
+
+function selectBkSlot(t) {
+    selectedBkTime = t;
+    document.getElementById('bk-start-time').value = t;
+    renderBkSlotPicker(selectedBkDate);
+    calculateBookingTotalAmount();
 }
 
 async function openBookingModal(householdId = null, bookingId = null) {
@@ -1897,6 +2100,10 @@ function selectServiceTypeTemplate(name, resourceType, price, requiresStaffTime,
     const rateInput = document.getElementById('bk-rate-per-day');
     if (rateInput) rateInput.value = price != null ? price : '';
     calculateBookingTotalAmount();
+
+    // Refresh the slot picker so it reflects this service's actual duration
+    // and resource requirements, if a date's already been picked
+    if (selectedBkDate) renderBkSlotPicker(selectedBkDate);
 
     // If a resource type is declared, prefill the event resource search to nudge toward it.
     if (resourceType && !bkEventResources.length) {
