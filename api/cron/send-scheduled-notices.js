@@ -73,6 +73,15 @@ async function getTransporter(businessId) {
   return result;
 }
 
+// Primary contact for the household if one's marked, otherwise whichever
+// person was added to the household first — used for {{owner_name}} only.
+async function getOwnerName(householdId) {
+  const { data: primary } = await supabase.from('people').select('name').eq('household_id', householdId).eq('role', 'Primary').limit(1).maybeSingle();
+  if (primary?.name) return primary.name;
+  const { data: earliest } = await supabase.from('people').select('name').eq('household_id', householdId).order('created_at', { ascending: true }).limit(1).maybeSingle();
+  return earliest?.name || '';
+}
+
 async function alreadySent(templateId, bookingId, invoiceId) {
   let query = supabase.from('notice_send_log').select('id').eq('email_template_id', templateId).eq('status', 'sent').limit(1);
   query = bookingId ? query.eq('booking_id', bookingId) : query.eq('invoice_id', invoiceId);
@@ -142,7 +151,8 @@ export default async function handler(req, res) {
         const when = booking.check_out && booking.check_out.slice(0, 10) !== booking.check_in.slice(0, 10)
           ? `${booking.check_in.slice(0, 10)} → ${booking.check_out.slice(0, 10)}`
           : `${booking.check_in.slice(0, 10)} at ${booking.check_in.slice(11, 16)}`;
-        const vars = { business_name: business.name, pet_name: booking.pets?.name || 'your pet', service_name: booking.service_name, date: when, amount: booking.amount ? `$${Number(booking.amount).toFixed(2)}` : '' };
+        const ownerName = await getOwnerName(booking.household_id);
+        const vars = { business_name: business.name, owner_name: ownerName, pet_name: booking.pets?.name || 'your pet', service_name: booking.service_name, date: when, amount: booking.amount ? `$${Number(booking.amount).toFixed(2)}` : '' };
 
         try {
           await mail.transporter.sendMail({
@@ -182,7 +192,8 @@ export default async function handler(req, res) {
           continue;
         }
 
-        const vars = { business_name: business.name, service_name: invoice.description || 'Invoice', amount: `$${Number(invoice.amount || 0).toFixed(2)}`, due_date: invoice.due_date || '', payment_options: paymentOptions.join(' · ') };
+        const ownerName = await getOwnerName(invoice.household_id);
+        const vars = { business_name: business.name, owner_name: ownerName, service_name: invoice.description || 'Invoice', amount: `$${Number(invoice.amount || 0).toFixed(2)}`, due_date: invoice.due_date || '', payment_options: paymentOptions.join(' · ') };
 
         try {
           await mail.transporter.sendMail({

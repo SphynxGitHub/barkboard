@@ -195,6 +195,17 @@ async function getTransporter(businessId) {
   return { transporter, fromEmail: emailSettings.from_email, fromName: emailSettings.from_name };
 }
 
+// Primary contact for the household if one's marked, otherwise whichever
+// person was added to the household first — used for {{owner_name}} only,
+// kept separate from recipient-email selection so a primary contact with no
+// email on file doesn't accidentally suppress delivery to someone who does.
+async function getOwnerName(householdId) {
+  const { data: primary } = await supabase.from('people').select('name').eq('household_id', householdId).eq('role', 'Primary').limit(1).maybeSingle();
+  if (primary?.name) return primary.name;
+  const { data: earliest } = await supabase.from('people').select('name').eq('household_id', householdId).order('created_at', { ascending: true }).limit(1).maybeSingle();
+  return earliest?.name || '';
+}
+
 async function logSend(businessId, { emailTemplateId = null, bookingId = null, invoiceId = null, recipientEmail = null, status, errorMessage = null }) {
   await supabase.from('notice_send_log').insert([{
     business_id: businessId, email_template_id: emailTemplateId, booking_id: bookingId, invoice_id: invoiceId,
@@ -239,7 +250,8 @@ export default async function handler(req, res) {
         const when = booking.check_out && booking.check_out.slice(0, 10) !== booking.check_in.slice(0, 10)
           ? `${booking.check_in.slice(0, 10)} → ${booking.check_out.slice(0, 10)}`
           : `${booking.check_in.slice(0, 10)} at ${booking.check_in.slice(11, 16)}`;
-        const vars = { business_name: business.name, owner_name: '', pet_name: petName || 'your pet', service_name: booking.service_name, date: when, amount: booking.amount ? `$${Number(booking.amount).toFixed(2)}` : '' };
+        const ownerName = await getOwnerName(booking.household_id);
+        const vars = { business_name: business.name, owner_name: ownerName, pet_name: petName || 'your pet', service_name: booking.service_name, date: when, amount: booking.amount ? `$${Number(booking.amount).toFixed(2)}` : '' };
         emailsToSend = custom.map(t => ({ subject: renderMergeFields(t.subject, vars), html: wrapEmail(headerHtml(business, settings) + `<div>${renderMergeFields(t.body, vars).replace(/\n/g, '<br>')}</div>`), emailTemplateId: t.id }));
       } else {
         emailsToSend = [{ ...(type === 'booking-confirmed' ? templateBookingConfirmed({ business, settings, booking, petName }) : templateBookingDeclined({ business, settings, booking, petName })), emailTemplateId: null }];
@@ -262,8 +274,9 @@ export default async function handler(req, res) {
       // business-wide rather than service-scoped.
       const custom = await findCustomTemplates(businessId, 'invoice', immediateEvent, null);
       if (custom.length) {
+        const ownerName = await getOwnerName(invoice.household_id);
         const vars = {
-          business_name: business.name, owner_name: '', service_name: invoice.description || 'Invoice',
+          business_name: business.name, owner_name: ownerName, service_name: invoice.description || 'Invoice',
           amount: `$${Number(invoice.amount || 0).toFixed(2)}`, due_date: invoice.due_date || '',
           payment_options: paymentOptions.join(' · ')
         };
