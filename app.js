@@ -1602,6 +1602,17 @@ function selectBkSlot(t) {
     calculateBookingTotalAmount();
 }
 
+// Wrappers for the "New" dropdown in Activities — these were referenced by
+// onclick attributes in index.html but never actually defined anywhere,
+// throwing a ReferenceError the moment either button was clicked.
+function quickNewAppointment() {
+    openBookingModal(null, null);
+}
+
+function quickNewTask() {
+    if (typeof openStaffTaskModal === 'function') openStaffTaskModal(null);
+}
+
 async function openBookingModal(householdId = null, bookingId = null) {
     editingBookingId = bookingId;
     bookingHouseholdId = householdId;

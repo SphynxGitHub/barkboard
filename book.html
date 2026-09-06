@@ -199,16 +199,18 @@
                 <input type="hidden" id="board-start-date" required>
                 <input type="hidden" id="board-end-date" required>
 
-                <div id="board-times-row" class="form-row hidden">
-                    <div class="form-group">
+                <div id="board-times-row" class="hidden">
+                    <div style="margin-bottom:1rem;">
                         <label>Drop-off Time</label>
-                        <input type="time" id="board-dropoff-time">
+                        <div id="board-dropoff-slot-grid" class="slot-grid"></div>
                     </div>
-                    <div class="form-group">
+                    <div>
                         <label>Pickup Time</label>
-                        <input type="time" id="board-pickup-time">
+                        <div id="board-pickup-slot-grid" class="slot-grid"></div>
                     </div>
                 </div>
+                <input type="hidden" id="board-dropoff-time">
+                <input type="hidden" id="board-pickup-time">
 
                 <div style="margin-top:1.25rem;">
                     <button type="button" class="submit-btn" onclick="finishBoardingGroup()">Add to My Requests</button>
@@ -359,12 +361,6 @@
 
             currentBusiness = business;
             applyBranding(business);
-            // Snap native time pickers to the business's configured increment
-            // (15 or 30 min) instead of the browser default of 1 minute.
-            const stepSeconds = (business.slot_increment_minutes || 30) * 60;
-            ['board-dropoff-time', 'board-pickup-time'].forEach(id => {
-                document.getElementById(id)?.setAttribute('step', stepSeconds);
-            });
 
             const { data: templates } = await supabaseClient
                 .from('appointment_type_templates')
@@ -638,6 +634,51 @@
             const boardingTemplates = allTemplates.filter(t => Array.isArray(t.category) && t.category.includes('boarding'));
             const showTimes = boardingTemplates.some(t => t.prompt_dropoff_pickup_time);
             document.getElementById('board-times-row').classList.toggle('hidden', !showTimes);
+            if (showTimes) {
+                renderBoardTimeSlots('board-dropoff-slot-grid', 'board-dropoff-time');
+                renderBoardTimeSlots('board-pickup-slot-grid', 'board-pickup-time');
+            }
+        }
+
+        // Business-hours-bounded slot buttons for drop-off/pickup — these are
+        // informational only (not resource/capacity-checked the way service
+        // appointment times are), so no availability lookup, just a nicer way
+        // to pick a time than a native time-scroll wheel.
+        function renderBoardTimeSlots(gridId, hiddenInputId) {
+            const grid = document.getElementById(gridId);
+            if (!grid) return;
+            const increment = currentBusiness?.slot_increment_minutes || 30;
+
+            // Use the widest hours across the week as the selectable range,
+            // since drop-off/pickup isn't tied to one specific day yet at the
+            // point this renders (dates are chosen separately above).
+            const openTimes = businessHours.filter(h => !h.is_closed).map(h => h.open_time?.slice(0, 5)).filter(Boolean).sort();
+            const closeTimes = businessHours.filter(h => !h.is_closed).map(h => h.close_time?.slice(0, 5)).filter(Boolean).sort();
+            const openTime = openTimes[0] || '07:00';
+            const closeTime = closeTimes[closeTimes.length - 1] || '19:00';
+
+            const [openH, openM] = openTime.split(':').map(Number);
+            const [closeH, closeM] = closeTime.split(':').map(Number);
+            let cursor = openH * 60 + openM;
+            const closeMinutes = closeH * 60 + closeM;
+
+            const currentVal = document.getElementById(hiddenInputId)?.value;
+            let html = '';
+            while (cursor <= closeMinutes) {
+                const h = Math.floor(cursor / 60), m = cursor % 60;
+                const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                const period = h >= 12 ? 'PM' : 'AM';
+                const h12 = h % 12 === 0 ? 12 : h % 12;
+                const label = `${h12}:${String(m).padStart(2, '0')} ${period}`;
+                html += `<button type="button" class="slot-btn ${t === currentVal ? 'slot-selected' : ''}" onclick="selectBoardTimeSlot('${gridId}', '${hiddenInputId}', '${t}')">${label}</button>`;
+                cursor += increment;
+            }
+            grid.innerHTML = html;
+        }
+
+        function selectBoardTimeSlot(gridId, hiddenInputId, t) {
+            document.getElementById(hiddenInputId).value = t;
+            renderBoardTimeSlots(gridId, hiddenInputId);
         }
 
         // Looks up a template's price for a given date range — multiplies
@@ -1184,6 +1225,7 @@
             }
             document.getElementById('board-dropoff-time').value = group.dropoffTime || '';
             document.getElementById('board-pickup-time').value = group.pickupTime || '';
+            updateBoardingTimeVisibility(); // also re-renders the slot grids with the prefilled selection highlighted
             updateBoardingTotal();
         }
 
