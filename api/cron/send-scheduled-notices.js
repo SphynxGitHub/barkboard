@@ -23,6 +23,22 @@ function wrapEmail(bodyHtml) {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif; max-width:480px; margin:0 auto; padding:24px; color:#111827;">${bodyHtml}</div>`;
 }
 
+function invoiceDetailsHtml(invoice, paymentOptions) {
+  return `
+    <div style="margin-top:20px; padding-top:16px; border-top:2px solid #e5e7eb;">
+      <div style="font-size:22px; font-weight:700; margin-bottom:8px;">$${Number(invoice.amount || 0).toFixed(2)}</div>
+      <p style="font-size:14px; margin:0 0 4px;"><strong>${invoice.description || 'Invoice'}</strong></p>
+      ${invoice.due_date ? `<p style="color:#6b7280; font-size:13px; margin:0;">Due ${invoice.due_date}</p>` : ''}
+      ${paymentOptions.length ? `
+        <div style="margin-top:12px;">
+          <div style="font-weight:600; font-size:13px; margin-bottom:4px;">Ways to Pay</div>
+          ${paymentOptions.map(p => `<div style="font-size:13px; color:#6b7280;">${p}</div>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
 function renderMergeFields(text, vars) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key) => (vars[key] != null ? String(vars[key]) : ''));
 }
@@ -173,7 +189,11 @@ export default async function handler(req, res) {
             from: `"${mail.fromName || business.name}" <${mail.fromEmail}>`,
             to: person.email,
             subject: renderMergeFields(template.subject, vars),
-            html: wrapEmail(headerHtml(business, settings) + `<div>${renderMergeFields(template.body, vars).replace(/\n/g, '<br>')}</div>`)
+            html: wrapEmail(
+              headerHtml(business, settings) +
+              `<div>${renderMergeFields(template.body, vars).replace(/\n/g, '<br>')}</div>` +
+              (template.attach_invoice ? invoiceDetailsHtml(invoice, paymentOptions) : '')
+            )
           });
           await logSend(template.business_id, { emailTemplateId: template.id, invoiceId: invoice.id, recipientEmail: person.email, status: 'sent' });
           results.push({ template: template.name, invoiceId: invoice.id, status: 'sent' });

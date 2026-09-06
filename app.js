@@ -7412,11 +7412,44 @@ function renderEmailTemplateGroup(elId, templates) {
     refreshIcons();
 }
 
+const MERGE_TAGS = [
+    ['{{business_name}}', 'Business Name'],
+    ['{{owner_name}}', "Owner's Name"],
+    ['{{pet_name}}', "Pet's Name"],
+    ['{{service_name}}', 'Service Name'],
+    ['{{date}}', 'Appointment Date'],
+    ['{{amount}}', 'Amount'],
+    ['{{due_date}}', 'Due Date'],
+    ['{{payment_options}}', 'Ways to Pay']
+];
+
+function populateMergeTagPicker() {
+    const sel = document.getElementById('et-merge-tag-picker');
+    if (!sel) return;
+    sel.innerHTML = MERGE_TAGS.map(([tag, label]) => `<option value="${tag}">${label}</option>`).join('');
+}
+
+function insertMergeTag() {
+    const sel = document.getElementById('et-merge-tag-picker');
+    const textarea = document.getElementById('et-body');
+    if (!sel || !textarea) return;
+    const tag = sel.value;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    textarea.value = textarea.value.slice(0, start) + tag + textarea.value.slice(end);
+    const newPos = start + tag.length;
+    textarea.focus();
+    textarea.setSelectionRange(newPos, newPos);
+}
+
 function updateTemplateTriggerOptions() {
     const category = document.getElementById('et-category')?.value;
     const trigger = document.getElementById('et-trigger')?.value;
     document.getElementById('et-offset-group')?.classList.toggle('hidden', trigger === 'immediate');
     document.getElementById('et-immediate-event-group')?.classList.toggle('hidden', trigger !== 'immediate');
+    // "Attach invoice/receipt" only makes sense for invoice notices — a
+    // scheduling notice (confirmation, reminder) has no invoice to attach.
+    document.getElementById('et-attach-group')?.classList.toggle('hidden', category !== 'invoice');
 
     const eventSelect = document.getElementById('et-immediate-event');
     if (!eventSelect) return;
@@ -7431,6 +7464,7 @@ function updateTemplateTriggerOptions() {
 async function openEmailTemplateModal(id) {
     editingEmailTemplateId = id;
     document.getElementById('et-modal-title').textContent = id ? 'Edit Notice Template' : 'Add Notice Template';
+    populateMergeTagPicker();
 
     if (id) {
         const client = getSupabase();
@@ -7445,6 +7479,7 @@ async function openEmailTemplateModal(id) {
             document.getElementById('et-subject').value = t.subject;
             document.getElementById('et-body').value = t.body;
             document.getElementById('et-active').checked = t.is_active;
+            document.getElementById('et-attach-invoice').checked = !!t.attach_invoice;
         }
     } else {
         document.getElementById('et-category').value = 'scheduling';
@@ -7455,6 +7490,7 @@ async function openEmailTemplateModal(id) {
         document.getElementById('et-subject').value = '';
         document.getElementById('et-body').value = '';
         document.getElementById('et-active').checked = true;
+        document.getElementById('et-attach-invoice').checked = false;
     }
 
     document.getElementById('email-template-modal')?.classList.remove('hidden');
@@ -7471,6 +7507,7 @@ async function saveEmailTemplate() {
     const subject = document.getElementById('et-subject').value.trim();
     const body = document.getElementById('et-body').value.trim();
     const isActive = document.getElementById('et-active').checked;
+    const attachInvoice = category === 'invoice' && document.getElementById('et-attach-invoice').checked;
 
     if (!name) return alert('Please name this template.');
     if (!subject || !body) return alert('Please fill in both the subject and body.');
@@ -7484,7 +7521,8 @@ async function saveEmailTemplate() {
         offset_days: triggerType !== 'immediate' ? (parseInt(document.getElementById('et-offset-days').value, 10) || null) : null,
         subject,
         body,
-        is_active: isActive
+        is_active: isActive,
+        attach_invoice: attachInvoice
     };
 
     if (triggerType !== 'immediate' && !payload.offset_days) {

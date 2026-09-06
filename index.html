@@ -243,46 +243,68 @@
     </div>
 
     <!-- Notice Template modal -->
-    <div id="email-template-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:1950; background:rgba(15,23,42,0.5); display:flex; align-items:center; justify-content:center; padding:1.5rem;">
-        <div class="modal-content" style="max-width:480px;">
-            <h3 id="et-modal-title" style="margin:0 0 1rem;">Add Notice Template</h3>
-            <div class="form-group"><label>Category</label>
-                <select id="et-category" onchange="updateTemplateTriggerOptions()">
-                    <option value="scheduling">Scheduling Notice</option>
-                    <option value="invoice">Invoice Notice</option>
-                </select>
+    <div id="email-template-modal" class="modal hidden">
+        <div class="fullscreen-content" style="max-width:900px;">
+            <div class="fullscreen-header">
+                <h2 id="et-modal-title" style="margin:0;">Add Notice Template</h2>
+                <div class="fullscreen-header-actions">
+                    <button type="button" class="btn" onclick="closeEmailTemplateModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="saveEmailTemplate()">Save Template</button>
+                    <button class="close-fs-btn" onclick="closeEmailTemplateModal()"><i data-lucide="x"></i></button>
+                </div>
             </div>
-            <div class="form-group"><label>Name</label>
-                <input type="text" id="et-name" placeholder="e.g. Confirmation Email, Reminder 1">
-            </div>
-            <div class="form-group"><label>When should this send?</label>
-                <select id="et-trigger" onchange="updateTemplateTriggerOptions()">
-                    <option value="immediate">Immediately</option>
-                    <option value="before">Before the date</option>
-                    <option value="after">After the date</option>
-                </select>
-            </div>
-            <div class="form-group" id="et-immediate-event-group">
-                <label>Triggering event</label>
-                <select id="et-immediate-event"></select>
-            </div>
-            <div class="form-group hidden" id="et-offset-group">
-                <label>How many days?</label>
-                <input type="number" id="et-offset-days" min="1" placeholder="2">
-            </div>
-            <div class="form-group"><label>Subject</label>
-                <input type="text" id="et-subject" placeholder="Your appointment is confirmed!">
-            </div>
-            <div class="form-group"><label>Body</label>
-                <textarea id="et-body" rows="6" placeholder="Hi {{owner_name}}, this confirms {{pet_name}}'s {{service_name}} on {{date}}..."></textarea>
-                <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Available merge fields: {{business_name}}, {{owner_name}}, {{pet_name}}, {{service_name}}, {{date}}, {{amount}}, {{due_date}}, {{payment_options}}</p>
-            </div>
-            <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600; margin-bottom:1rem;">
-                <input type="checkbox" id="et-active" checked> Active
-            </label>
-            <div style="display:flex; justify-content:space-between; gap:0.75rem;">
-                <button type="button" class="btn" onclick="closeEmailTemplateModal()">Cancel</button>
-                <button type="button" class="btn-primary" onclick="saveEmailTemplate()">Save Template</button>
+            <div style="flex:1; overflow-y:auto; padding:1.75rem;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                    <div class="form-group"><label>Category</label>
+                        <select id="et-category" onchange="updateTemplateTriggerOptions()">
+                            <option value="scheduling">Scheduling Notice</option>
+                            <option value="invoice">Invoice Notice</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Name</label>
+                        <input type="text" id="et-name" placeholder="e.g. Confirmation Email, Reminder 1">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:1rem;">
+                    <div class="form-group"><label>When should this send?</label>
+                        <select id="et-trigger" onchange="updateTemplateTriggerOptions()">
+                            <option value="immediate">Immediately</option>
+                            <option value="before">Before the date</option>
+                            <option value="after">After the date</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="et-immediate-event-group">
+                        <label>Triggering event</label>
+                        <select id="et-immediate-event"></select>
+                    </div>
+                    <div class="form-group hidden" id="et-offset-group">
+                        <label>How many days?</label>
+                        <input type="number" id="et-offset-days" min="1" placeholder="2">
+                    </div>
+                </div>
+                <div class="form-group"><label>Subject</label>
+                    <input type="text" id="et-subject" placeholder="Your appointment is confirmed!">
+                </div>
+                <div class="form-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+                        <label style="margin:0;">Body</label>
+                        <div style="display:flex; align-items:center; gap:0.4rem;">
+                            <select id="et-merge-tag-picker" style="font-size:0.8rem; padding:0.3rem 0.5rem; width:auto;"></select>
+                            <button type="button" class="btn" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="insertMergeTag()">Insert</button>
+                        </div>
+                    </div>
+                    <textarea id="et-body" rows="12" placeholder="Hi {{owner_name}}, this confirms {{pet_name}}'s {{service_name}} on {{date}}..."></textarea>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Pick a field above and click Insert to drop it in at your cursor, or type it directly: {{business_name}}, {{owner_name}}, {{pet_name}}, {{service_name}}, {{date}}, {{amount}}, {{due_date}}, {{payment_options}}</p>
+                </div>
+                <div class="form-group" id="et-attach-group">
+                    <label style="display:flex; align-items:center; gap:0.5rem; font-weight:400;">
+                        <input type="checkbox" id="et-attach-invoice"> Attach invoice/receipt details to this email
+                    </label>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0 1.6rem;">Appends the invoice summary (amount, description, Ways to Pay) or, for a paid receipt, the PAID confirmation — added to the bottom of this email, not a separate file attachment.</p>
+                </div>
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
+                    <input type="checkbox" id="et-active" checked> Active
+                </label>
             </div>
         </div>
     </div>

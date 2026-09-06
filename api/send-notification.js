@@ -25,6 +25,26 @@ function wrapEmail(bodyHtml) {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif; max-width:480px; margin:0 auto; padding:24px; color:#111827;">${bodyHtml}</div>`;
 }
 
+// Appended to a custom template's body when "Attach invoice/receipt details"
+// is checked — not a real file attachment, just the invoice summary (or PAID
+// confirmation) tacked onto the bottom of the email itself.
+function invoiceDetailsHtml(invoice, paymentOptions, isPaid) {
+  return `
+    <div style="margin-top:20px; padding-top:16px; border-top:2px solid #e5e7eb;">
+      ${isPaid ? `<div style="display:inline-block; background:#16a34a; color:#fff; font-weight:700; font-size:12px; padding:4px 12px; border-radius:999px; margin-bottom:10px;">PAID</div>` : ''}
+      <div style="font-size:22px; font-weight:700; margin-bottom:8px;">$${Number(invoice.amount || 0).toFixed(2)}</div>
+      <p style="font-size:14px; margin:0 0 4px;"><strong>${invoice.description || 'Invoice'}</strong></p>
+      ${invoice.due_date ? `<p style="color:#6b7280; font-size:13px; margin:0;">Due ${invoice.due_date}</p>` : ''}
+      ${!isPaid && paymentOptions.length ? `
+        <div style="margin-top:12px;">
+          <div style="font-weight:600; font-size:13px; margin-bottom:4px;">Ways to Pay</div>
+          ${paymentOptions.map(p => `<div style="font-size:13px; color:#6b7280;">${p}</div>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
 // --- Templates ---------------------------------------------------------
 
 function templateBookingConfirmed({ business, settings, booking, petName }) {
@@ -247,7 +267,15 @@ export default async function handler(req, res) {
           amount: `$${Number(invoice.amount || 0).toFixed(2)}`, due_date: invoice.due_date || '',
           payment_options: paymentOptions.join(' · ')
         };
-        emailsToSend = custom.map(t => ({ subject: renderMergeFields(t.subject, vars), html: wrapEmail(headerHtml(business, settings) + `<div>${renderMergeFields(t.body, vars).replace(/\n/g, '<br>')}</div>`), emailTemplateId: t.id }));
+        emailsToSend = custom.map(t => ({
+          subject: renderMergeFields(t.subject, vars),
+          html: wrapEmail(
+            headerHtml(business, settings) +
+            `<div>${renderMergeFields(t.body, vars).replace(/\n/g, '<br>')}</div>` +
+            (t.attach_invoice ? invoiceDetailsHtml(invoice, paymentOptions, type === 'payment-received') : '')
+          ),
+          emailTemplateId: t.id
+        }));
       } else {
         emailsToSend = [{ ...(type === 'payment-received' ? templatePaymentReceived({ business, settings, invoice }) : templateInvoiceCreated({ business, settings, invoice, paymentOptions })), emailTemplateId: null }];
       }
