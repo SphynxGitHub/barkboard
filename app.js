@@ -1690,7 +1690,7 @@ function searchQbHousehold(query) {
         if (!data || !data.length) {
             container.innerHTML = `<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching households.</div>`;
         } else {
-            container.innerHTML = data.map(h => `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem;" onmousedown="selectQbHousehold('${h.id}', ${JSON.stringify(h.name)})">${h.name}</div>`).join('');
+            container.innerHTML = data.map(h => `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem;" onmousedown='selectQbHousehold(${JSON.stringify(h.id)}, ${JSON.stringify(h.name)})'>${h.name}</div>`).join('');
         }
         container.classList.remove('hidden');
     }, 200);
