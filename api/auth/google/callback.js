@@ -60,7 +60,17 @@ export default async function handler(req, res) {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
+      // Needed so imported events are actually visible to staff — every
+      // booking read in the app is RLS-scoped to business_id = current
+      // business, so a row without one is invisible even though it exists.
+      const { data: staffRow } = await supabase
+        .from('staff')
+        .select('business_id')
+        .eq('id', staffId)
+        .single();
+      const businessId = staffRow?.business_id || null;
+
       // 1. Fetch existing events from the staff member's Google Calendar
       const { data: initialEvents } = await calendar.events.list({
         calendarId: primaryCal.id,
@@ -68,19 +78,31 @@ export default async function handler(req, res) {
         singleEvents: true,
         orderBy: 'startTime'
       });
-    
+
       // 2. Insert or update each event into BarkBoard (Supabase)
       for (const event of initialEvents.items || []) {
         if (event.status !== 'cancelled') {
-          const startIso = event.start.dateTime || `${event.start.date}T00:00:00Z`;
-          const endIso = event.end.dateTime || `${event.end.date}T23:59:59Z`;
-    
+          // Bare local-time strings (no trailing Z) — matches how every other
+          // timestamp in this app is stored (floating local time, not UTC).
+          // An all-day Google event has no specific time, so it's given a
+          // reasonable business-hours placeholder rather than midnight-to-
+          // midnight, which read as an odd 24-hour block on the calendar.
+          const startIso = event.start.dateTime
+            ? event.start.dateTime.split('.')[0].replace('Z', '')
+            : `${event.start.date}T09:00:00`;
+          const endIso = event.end.dateTime
+            ? event.end.dateTime.split('.')[0].replace('Z', '')
+            : `${event.end.date}T17:00:00`;
+
           await supabase.from('bookings').upsert({
             google_event_id: event.id,
             service_name: event.summary || 'External Appointment',
             check_in: startIso,
             check_out: endIso,
             assigned_staff_id: staffId,
+            business_id: businessId,
+            flexible_time: false,
+            household_id: null,
             notes: event.description || '',
             status: 'confirmed'
           }, { onConflict: 'google_event_id' });

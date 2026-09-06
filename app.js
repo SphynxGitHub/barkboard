@@ -7381,7 +7381,7 @@ async function loadPublicBookingSettings() {
     if (!client) return;
 
     const { data: business, error } = await client.from('businesses')
-        .select('name, slug, public_booking_enabled, logo_url, accent_color, welcome_message, notification_email, contact_phone, contact_email, address')
+        .select('name, slug, public_booking_enabled, logo_url, accent_color, welcome_message, notification_email, contact_phone, contact_email, address, timezone')
         .eq('id', currentBusinessId)
         .single();
 
@@ -7395,6 +7395,8 @@ async function loadPublicBookingSettings() {
     document.getElementById('pb-contact-phone').value = business.contact_phone || '';
     document.getElementById('pb-contact-email').value = business.contact_email || '';
     document.getElementById('pb-address').value = business.address || '';
+    const tzSelect = document.getElementById('staff-timezone');
+    if (tzSelect) tzSelect.value = business.timezone || 'America/New_York';
     const enabledChk = document.getElementById('pb-enabled');
     if (enabledChk) enabledChk.checked = !!business.public_booking_enabled;
     document.getElementById('pb-welcome').value = business.welcome_message || '';
@@ -7468,7 +7470,8 @@ async function savePublicBookingSettings() {
         notification_email: document.getElementById('pb-notify-email')?.value.trim() || null,
         contact_phone: document.getElementById('pb-contact-phone')?.value.trim() || null,
         contact_email: document.getElementById('pb-contact-email')?.value.trim() || null,
-        address: document.getElementById('pb-address')?.value.trim() || null
+        address: document.getElementById('pb-address')?.value.trim() || null,
+        timezone: document.getElementById('staff-timezone')?.value || 'America/New_York'
     };
     // slug is NOT NULL in the schema — only include it in the update if there's
     // actually a value, so an empty field never tries to null it out (which

@@ -102,9 +102,18 @@ export default async function handler(req, res) {
           .update({ status: 'cancelled' })
           .eq('google_event_id', event.id);
       } else {
-        // Standardize timestamps (handle dateTime vs all-day date strings)
-        const startIso = event.start?.dateTime || `${event.start?.date}T09:00:00`;
-        const endIso = event.end?.dateTime || `${event.end?.date}T17:00:00`;
+        // Standardize timestamps (handle dateTime vs all-day date strings).
+        // Google returns dateTime WITH a timezone offset attached (e.g.
+        // "...09:00:00-04:00") — stripped here to a bare local-time string,
+        // matching how every other timestamp in this app is stored (floating
+        // local time, no offset), so downstream date/time parsing elsewhere
+        // in the app doesn't get a value in a different shape than it expects.
+        const startIso = event.start?.dateTime
+          ? event.start.dateTime.replace(/\.\d+/, '').replace(/(Z|[+-]\d{2}:\d{2})$/, '')
+          : `${event.start?.date}T09:00:00`;
+        const endIso = event.end?.dateTime
+          ? event.end.dateTime.replace(/\.\d+/, '').replace(/(Z|[+-]\d{2}:\d{2})$/, '')
+          : `${event.end?.date}T17:00:00`;
 
         const { error: upsertErr } = await supabase.from('bookings').upsert({
           google_event_id: event.id,
