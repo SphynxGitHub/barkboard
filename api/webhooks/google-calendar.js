@@ -17,20 +17,42 @@ export default async function handler(req, res) {
   if (resourceState === 'sync') return;
 
   try {
-    // 1. Retrieve watch channel, OAuth credentials, and staff's business ID
+    // 1. Retrieve the watch channel. This used to be a single query embedding
+    // staff_oauth_tokens and staff directly — but calendar_watch_channels has
+    // no foreign key TO staff_oauth_tokens (they're siblings that separately
+    // reference staff.id), so PostgREST couldn't resolve that embed and the
+    // whole query errored out — which looked identical to "channel not
+    // found" in the logs, even though the channel row existed the whole time.
     const { data: channel, error: chErr } = await supabase
       .from('calendar_watch_channels')
-      .select('*, staff_oauth_tokens(*), staff(business_id)')
+      .select('*')
       .eq('channel_id', channelId)
       .single();
 
-    if (chErr || !channel || !channel.staff_oauth_tokens) {
+    if (chErr || !channel) {
       console.warn(`[Webhook] No active channel found for ID: ${channelId}`);
       return;
     }
 
-    const tokenData = channel.staff_oauth_tokens;
-    const businessId = channel.staff?.business_id || null;
+    const { data: tokenData, error: tokenErr } = await supabase
+      .from('staff_oauth_tokens')
+      .select('*')
+      .eq('staff_id', channel.staff_id)
+      .eq('provider', 'google')
+      .single();
+
+    if (tokenErr || !tokenData) {
+      console.warn(`[Webhook] No Google OAuth tokens found for staff: ${channel.staff_id}`);
+      return;
+    }
+
+    const { data: staffRow } = await supabase
+      .from('staff')
+      .select('business_id')
+      .eq('id', channel.staff_id)
+      .single();
+
+    const businessId = staffRow?.business_id || null;
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
