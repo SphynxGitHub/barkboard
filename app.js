@@ -8454,6 +8454,21 @@ async function saveApptType() {
     const name = document.getElementById('att-name')?.value.trim();
     if (!name) return alert('Please enter a name.');
 
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    // Catches exactly what caused three duplicate "Dog Grooming" rows to pile
+    // up — clicking "+ Add Service" (or renaming one into) a name that
+    // already exists silently created a second row instead of editing the
+    // real one, and the availability system had no reliable way to know
+    // which row was the "true" one.
+    let dupeQuery = client.from('appointment_type_templates').select('id').eq('business_id', currentBusinessId).eq('name', name);
+    if (editingApptTypeId) dupeQuery = dupeQuery.neq('id', editingApptTypeId);
+    const { data: existingWithName } = await dupeQuery;
+    if (existingWithName && existingWithName.length) {
+        return alert(`A service named "${name}" already exists. Please edit that one instead, or choose a different name.`);
+    }
+
     const price = document.getElementById('att-price')?.value;
     const pricingUnit = document.getElementById('att-pricing-per-day')?.checked ? 'per_day' : 'flat';
     const duration = document.getElementById('att-duration')?.value;
@@ -8465,9 +8480,6 @@ async function saveApptType() {
     const species = Array.from(document.querySelectorAll('.att-species-chk:checked')).map(chk => chk.value);
     const category = Array.from(document.querySelectorAll('.att-category-chk:checked')).map(chk => chk.value);
     const promptTimes = document.getElementById('att-prompt-times')?.checked || false;
-
-    const client = getSupabase();
-    if (!client) return alert('Database connection unavailable.');
 
     const payload = {
         name,
