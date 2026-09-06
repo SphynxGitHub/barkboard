@@ -3848,7 +3848,6 @@ function switchBizTab(tab) {
         if (typeof loadPublicBookingSettings === 'function') loadPublicBookingSettings();
         if (typeof loadBusinessPaymentSettings === 'function') loadBusinessPaymentSettings();
         if (typeof loadEmailSettings === 'function') loadEmailSettings();
-        if (typeof loadEmailTemplates === 'function') loadEmailTemplates();
     }
 }
 
@@ -6916,6 +6915,7 @@ function switchTemplatesTab(tab) {
     if (tab === 'task') renderTaskTemplateList();
     if (tab === 'assess') renderAssessmentTemplateList();
     if (tab === 'resources' && typeof renderResourceList === 'function') renderResourceList();
+    if (tab === 'notices' && typeof loadEmailTemplates === 'function') loadEmailTemplates();
 }
 
 // ---- Appointment Type Templates ----

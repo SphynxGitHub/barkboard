@@ -229,11 +229,11 @@
          it's a real dropdown of the business's own configured methods
          (plus generic fallbacks) instead of a plain text prompt. -->
     <div id="mark-paid-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:1950; background:rgba(15,23,42,0.5); display:flex; align-items:center; justify-content:center;">
-        <div style="background:var(--bg-card,#fff); border-radius:0.5rem; padding:1.5rem; width:100%; max-width:340px;">
+        <div class="modal-content" style="max-width:340px;">
             <h3 style="margin:0 0 1rem;">How was this paid?</h3>
             <div class="form-group">
                 <label>Payment Method</label>
-                <select id="mark-paid-method-select" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;"></select>
+                <select id="mark-paid-method-select"></select>
             </div>
             <div style="display:flex; justify-content:space-between; gap:0.75rem; margin-top:1.25rem;">
                 <button type="button" class="btn" onclick="cancelPaymentMethod()">Skip</button>
@@ -244,7 +244,7 @@
 
     <!-- Notice Template modal -->
     <div id="email-template-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:1950; background:rgba(15,23,42,0.5); display:flex; align-items:center; justify-content:center; padding:1.5rem;">
-        <div style="background:var(--bg-card,#fff); border-radius:0.5rem; padding:1.5rem; width:100%; max-width:480px; max-height:90vh; overflow-y:auto;">
+        <div class="modal-content" style="max-width:480px;">
             <h3 id="et-modal-title" style="margin:0 0 1rem;">Add Notice Template</h3>
             <div class="form-group"><label>Category</label>
                 <select id="et-category" onchange="updateTemplateTriggerOptions()">
@@ -735,19 +735,6 @@
                         </div>
                     </div>
 
-                    <!-- Notice Templates -->
-                    <div style="padding-top:0.5rem; border-top:1px solid var(--border);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
-                            <h3 style="margin:0;">Notice Templates</h3>
-                            <button class="btn-primary" style="font-size:0.78rem; padding:0.4rem 0.75rem;" onclick="openEmailTemplateModal(null)">+ Add Template</button>
-                        </div>
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0.25rem 0 1rem;">Reusable notices with your own wording and timing (e.g. "Confirmation Email" sent immediately, "Reminder 1" sent 2 days before). Apply them to specific services under Templates &rarr; Services.</p>
-                        <div class="group-heading" style="margin-top:0;">Scheduling Notices</div>
-                        <div id="scheduling-templates-list" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
-                        <div class="group-heading">Invoice Notices</div>
-                        <div id="invoice-templates-list" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
-                    </div>
-
                 </div>
             </div>
 
@@ -1083,6 +1070,7 @@
                 <button class="biz-tab" id="tmpltab-task" onclick="switchTemplatesTab('task')"><i data-lucide="list-checks"></i> Task Templates</button>
                 <button class="biz-tab" id="tmpltab-assess" onclick="switchTemplatesTab('assess')"><i data-lucide="clipboard-check"></i> Assessment Templates</button>
                 <button class="biz-tab" id="tmpltab-resources" onclick="switchTemplatesTab('resources')"><i data-lucide="bed-double"></i> Resources</button>
+                <button class="biz-tab" id="tmpltab-notices" onclick="switchTemplatesTab('notices')"><i data-lucide="mail"></i> Notice Templates</button>
             </div>
 
             <div id="tmplsec-appt" class="biz-section active">
@@ -1125,6 +1113,18 @@
                     <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openResourceModal(null)">+ Add resource</button>
                 </div>
                 <div id="resource-list" style="display:flex;flex-direction:column;gap:0.75rem;"></div>
+            </div>
+
+            <div id="tmplsec-notices" class="biz-section">
+                <div class="section-header-row" style="margin-bottom:1rem;">
+                    <h3 style="margin:0;">Notice Templates</h3>
+                    <button class="btn-primary" style="font-size:0.85rem;padding:0.5rem 1rem;" onclick="openEmailTemplateModal(null)">+ Add Template</button>
+                </div>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin:0 0 1rem;">Reusable notices with your own wording and timing (e.g. "Confirmation Email" sent immediately, "Reminder 1" sent 2 days before). Apply them to specific services under Services.</p>
+                <div class="group-heading" style="margin-top:0;">Scheduling Notices</div>
+                <div id="scheduling-templates-list" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
+                <div class="group-heading">Invoice Notices</div>
+                <div id="invoice-templates-list" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
             </div>
         </section>
 
