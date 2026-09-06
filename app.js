@@ -899,6 +899,9 @@ async function setBookingStatusFromDetail(bookingId, newStatus, key) {
     const { error } = await client.from('bookings').update({ status: newStatus }).eq('id', bookingId);
     if (error) return alert('Failed to update: ' + error.message);
     if (newStatus === 'confirmed') await ensureInvoiceForConfirmedBooking(client, bookingId);
+    if (newStatus === 'confirmed' || newStatus === 'cancelled') {
+        notifyEmail(newStatus === 'confirmed' ? 'booking-confirmed' : 'booking-declined', { bookingId });
+    }
     refreshMetricDetail(key);
     if (typeof renderActivities === 'function') renderActivities();
 }
@@ -931,6 +934,7 @@ async function setInvoiceStatusFromDetail(invoiceId, newStatus, key) {
     }
     const { error } = await client.from('invoices').update(payload).eq('id', invoiceId);
     if (error) return alert('Failed to update: ' + error.message);
+    if (newStatus === 'paid') notifyEmail('payment-received', { invoiceId });
     refreshMetricDetail(key);
 }
 
@@ -1140,6 +1144,9 @@ async function respondToPendingRequest(bookingId, newStatus) {
         return;
     }
     if (newStatus === 'confirmed') await ensureInvoiceForConfirmedBooking(client, bookingId);
+    if (newStatus === 'confirmed' || newStatus === 'cancelled') {
+        notifyEmail(newStatus === 'confirmed' ? 'booking-confirmed' : 'booking-declined', { bookingId });
+    }
     openPendingRequestsModal(); // refresh the list in place
     renderTodaysOverview();
     if (typeof renderActivities === 'function') renderActivities();
@@ -2558,6 +2565,16 @@ async function saveInvoice() {
         }
         pendingLinkBookingId = null;
 
+        // Only notify when this created a NEW invoice — an edit to an existing
+        // one already had its "invoice created" moment, and re-sending here
+        // would just be noise. Auto-generated invoices (linked at booking
+        // confirmation) already get covered by the booking-confirmed email
+        // instead of a separate invoice-created one, to avoid two emails
+        // landing back to back for the same thing.
+        if (!editingInvoiceId && response.data && response.data.length) {
+            notifyEmail('invoice-created', { invoiceId: response.data[0].id });
+        }
+
         const refreshId = invoiceHouseholdId;
         closeInvoiceModal();
         openFullWidthProfile('household', refreshId);
@@ -2669,6 +2686,7 @@ async function markInvoicePaid(id, householdId) {
     if (!client) return;
     const paymentMethod = await promptForPaymentMethod();
     await client.from('invoices').update({ status: 'paid', paid_date: new Date().toISOString().slice(0, 10), payment_method: paymentMethod }).eq('id', id);
+    notifyEmail('payment-received', { invoiceId: id });
     if (typeof showReceipt === 'function') showReceipt(id);
     openFullWidthProfile('household', householdId);
 }
@@ -4085,7 +4103,10 @@ async function setBizInvoiceStatus(kind, id, newStatus) {
         payload.payment_method = await promptForPaymentMethod();
     }
     await client.from('invoices').update(payload).eq('id', id);
-    if (newStatus === 'paid') showReceipt(id);
+    if (newStatus === 'paid') {
+        showReceipt(id);
+        notifyEmail('payment-received', { invoiceId: id });
+    }
     renderInvoicesList();
 }
 
@@ -5021,6 +5042,20 @@ async function openFullWidthProfile(type, id) {
     refreshIcons();
 }
 
+/* Fires an email notification via /api/send-notification — fire-and-forget,
+   never awaited by the caller and never blocks/breaks the UI action that
+   triggered it (confirming a booking, marking an invoice paid, etc. already
+   succeeded in the database by the time this is called; the email is a
+   bonus on top, not a dependency). Silently no-ops if SMTP isn't configured
+   for this business — that's handled server-side, not here. */
+function notifyEmail(type, extra) {
+    fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: currentBusinessId, type, ...extra })
+    }).catch(err => console.error('[notifyEmail] Failed to reach send-notification:', err));
+}
+
 function detailField(label, value) {
     return `<div><span style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em;">${label}</span><div style="font-size:0.9rem; margin-top:0.1rem;">${value || '—'}</div></div>`;
 }
@@ -5726,6 +5761,9 @@ async function setBookingStatusInProfile(kind, id, newStatus) {
 
     if (kind === 'appointment') {
         await client.from('bookings').update({ status: newStatus }).eq('id', id);
+        if (newStatus === 'confirmed' || newStatus === 'cancelled') {
+            notifyEmail(newStatus === 'confirmed' ? 'booking-confirmed' : 'booking-declined', { bookingId: id });
+        }
     } else if (kind === 'invoice') {
         const payload = { status: newStatus };
         if (newStatus === 'paid') {
@@ -5733,7 +5771,10 @@ async function setBookingStatusInProfile(kind, id, newStatus) {
             payload.payment_method = await promptForPaymentMethod();
         }
         await client.from('invoices').update(payload).eq('id', id);
-        if (newStatus === 'paid') showReceipt(id);
+        if (newStatus === 'paid') {
+            showReceipt(id);
+            notifyEmail('payment-received', { invoiceId: id });
+        }
     }
 
     try {
@@ -5750,6 +5791,9 @@ async function setStaffFeedAppointmentStatus(kind, id, newStatus) {
     const client = getSupabase();
     if (!client) return;
     await client.from('bookings').update({ status: newStatus }).eq('id', id);
+    if (newStatus === 'confirmed' || newStatus === 'cancelled') {
+        notifyEmail(newStatus === 'confirmed' ? 'booking-confirmed' : 'booking-declined', { bookingId: id });
+    }
     renderStaffGuests();
     if (typeof renderTodaysOverview === 'function') renderTodaysOverview();
 }
@@ -5763,7 +5807,10 @@ async function setStaffFeedInvoiceStatus(kind, id, newStatus) {
         payload.payment_method = await promptForPaymentMethod();
     }
     await client.from('invoices').update(payload).eq('id', id);
-    if (newStatus === 'paid') showReceipt(id);
+    if (newStatus === 'paid') {
+        showReceipt(id);
+        notifyEmail('payment-received', { invoiceId: id });
+    }
     renderStaffGuests();
     if (typeof renderTodaysOverview === 'function') renderTodaysOverview();
 }

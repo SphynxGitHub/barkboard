@@ -526,6 +526,14 @@
             }
             closeRescheduleOverlay();
             await loadPortalData();
+            // Fire-and-forget — the change request itself already succeeded via
+            // the RPC above; the email is a bonus notification for staff, not
+            // something the customer needs to wait on or that should block them.
+            fetch('/api/send-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ businessId: currentBiz.id, type: 'change-request', bookingId: rescheduleBookingId })
+            }).catch(err => console.error('[notify] Failed to reach send-notification:', err));
             alert("Your request has been sent — we'll be in touch!");
         }
 
