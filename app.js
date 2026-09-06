@@ -364,6 +364,12 @@ async function openOnboardingWizard(businessName, reopen = false) {
         document.getElementById('ob-address').value = biz?.address || '';
         document.getElementById('ob-enable-public-booking').checked = !!biz?.public_booking_enabled;
 
+        // 2. Prefill the onboarding timezone selector (defaults to America/New_York)
+        const tzSelect = document.getElementById('ob-timezone');
+        if (tzSelect) {
+            tzSelect.value = biz?.timezone || 'America/New_York';
+        }
+
         const settings = typeof getBusinessSettings === 'function' ? await getBusinessSettings() : null;
         document.getElementById('ob-pay-venmo').value = settings?.venmo_handle || '';
         document.getElementById('ob-pay-zelle').value = settings?.zelle_info || '';
@@ -516,7 +522,12 @@ async function obFinish(skip = false) {
         })).filter(r => r.name);
 
         try {
-            // Business info (logo, accent color, notify email, contact info, public booking toggle)
+            // Read timezone from either onboarding step 2 or staff settings dropdown
+            const selectedTimezone = document.getElementById('ob-timezone')?.value 
+                || document.getElementById('staff-timezone')?.value 
+                || 'America/New_York';
+
+            // Business info (logo, accent color, notify email, contact info, public booking toggle, timezone)
             await client.from('businesses').update({
                 logo_url: document.getElementById('ob-logo-url')?.value.trim() || null,
                 accent_color: document.getElementById('ob-accent-color')?.value || '#4f46e5',
@@ -525,6 +536,7 @@ async function obFinish(skip = false) {
                 contact_email: document.getElementById('ob-contact-email')?.value.trim() || null,
                 address: document.getElementById('ob-address')?.value.trim() || null,
                 public_booking_enabled: document.getElementById('ob-enable-public-booking')?.checked || false,
+                timezone: selectedTimezone // <--- PERSISTS TIMEZONE TO SUPABASE
             }).eq('id', currentBusinessId);
 
             // Hours of operation — one row per day, upserted by (business_id, day_of_week)
@@ -557,9 +569,6 @@ async function obFinish(skip = false) {
                 await client.from('staff').insert(staffRows.map(r => ({ name: r.name, role: r.role, business_id: currentBusinessId })));
             }
             if (resourceRows.length) {
-                // One row per resource TYPE, with `seats` as the count — matches the
-                // seat-based capacity model the rest of the app already uses for
-                // availability checks (see the booking form's resource search).
                 await client.from('resources').insert(resourceRows.map(r => ({
                     name: r.type, type: r.type, seats: r.count, default_mode: 'all_day', business_id: currentBusinessId
                 })));
@@ -590,8 +599,6 @@ async function obFinish(skip = false) {
     if (finishBtn) { finishBtn.disabled = false; finishBtn.textContent = 'Finish Setup'; }
 
     if (obIsReopen) {
-        // Reopened from settings after the app was already loaded — just refresh
-        // the relevant views instead of re-running the whole app bootstrap.
         if (typeof initStaffView === 'function') initStaffView();
         alert('Setup saved.');
     } else {
