@@ -7718,9 +7718,8 @@ async function computeCalendarDayStatuses(dates) {
     const rangeStart = fmt(dates[0]);
     const rangeEnd = fmt(dates[dates.length - 1]);
 
-    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }, { data: resourceUsage }, { data: templates }] = await Promise.all([
+    const [{ data: resources }, { data: closures }, { data: bookings }, { data: resourceUsage }, { data: templates }, { data: businessHoursRows }, { data: business }] = await Promise.all([
         client.from('resources').select('id, type, seats'),
-        client.from('staff').select('id'),
         client.from('business_closures').select('start_date, end_date, label'),
         client.from('bookings').select('id, service_name, check_in, check_out, assigned_staff_id, requires_staff_time, status')
             .neq('status', 'cancelled')
@@ -7730,7 +7729,9 @@ async function computeCalendarDayStatuses(dates) {
             .neq('bookings.status', 'cancelled')
             .lte('bookings.check_in', rangeEnd + 'T23:59:59')
             .gte('bookings.check_out', rangeStart + 'T00:00:00'),
-        client.from('appointment_type_templates').select('name, resource_type, default_duration_minutes')
+        client.from('appointment_type_templates').select('name, resource_type, staff_time_resource_type, requires_staff_time, default_duration_minutes, buffer_before_minutes, buffer_after_minutes'),
+        client.from('business_hours').select('day_of_week, is_closed, open_time, close_time'),
+        client.from('businesses').select('slot_increment_minutes').eq('id', currentBusinessId).maybeSingle()
     ]);
 
     const resourceTypeCapacity = {};
@@ -7739,7 +7740,6 @@ async function computeCalendarDayStatuses(dates) {
         resourceTypeById[r.id] = r.type;
         resourceTypeCapacity[r.type] = (resourceTypeCapacity[r.type] || 0) + (r.seats || 1);
     });
-    const totalStaff = (staffList || []).length;
 
     const templateByName = {};
     (templates || []).forEach(t => { templateByName[t.name] = t; });
@@ -7748,34 +7748,25 @@ async function computeCalendarDayStatuses(dates) {
     // counted via its template's resource_type — that would double-count
     // the same booking against capacity.
     const bookingIdsWithExplicitResource = new Set((resourceUsage || []).map(row => row.booking_id));
+    const increment = business?.slot_increment_minutes || 30;
 
     const result = {};
     dates.forEach(d => {
         const key = fmt(d);
         const dayStart = new Date(key + 'T00:00:00').getTime();
         const dayEnd = new Date(key + 'T23:59:59').getTime();
+        const dayOfWeek = d.getDay();
 
         // 1. Business Closed check
         const matchedClosure = (closures || []).find(c => key >= c.start_date && key <= (c.end_date || c.start_date));
         const closed = !!matchedClosure;
+        const hoursRow = (businessHoursRows || []).find(h => h.day_of_week === dayOfWeek);
+        const businessClosedToday = closed || !!hoursRow?.is_closed;
 
-        // 2. Staff Fully Booked check (still day-level for now — staff-time
-        // bookings are evaluated as occupying the whole day, same as before)
-        const dayBookings = (bookings || []).filter(bk => {
-            const start = (bk.check_in || '').slice(0, 10);
-            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
-            return key >= start && (start === end ? key <= end : key < end);
-        });
-        const staffBusy = new Set(dayBookings.filter(bk => bk.requires_staff_time && bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
-        const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
-
-        // 3. Resource capacity — real time-based overlap via max-concurrent
-        // usage, merging BOTH ways a booking can be tied to a resource type:
-        // an explicit booking_resources assignment, or the service template
-        // simply declaring a resource_type. A resource type only counts as
-        // "full" if usage actually peaks at or above capacity at some point
-        // in the day — two separate, non-overlapping 1-hour appointments no
-        // longer wrongly block the whole day just because both land on it.
+        // 2. Build occupied intervals per capacity pool — both a service's
+        // main resource_type AND its staff_time_resource_type are treated as
+        // capacity pools the same way (staff time is just another resource
+        // type with its own seat count, same model the availability RPCs use).
         const intervalsByType = {};
         const addInterval = (type, start, end) => {
             const overlapStart = Math.max(start, dayStart);
@@ -7803,25 +7794,58 @@ async function computeCalendarDayStatuses(dates) {
         });
 
         (bookings || []).forEach(bk => {
-            if (bookingIdsWithExplicitResource.has(bk.id)) return;
             const t = templateByName[bk.service_name];
-            const type = t?.resource_type;
-            if (!type) return;
+            if (!t) return;
             const checkInMs = new Date(bk.check_in).getTime();
             const checkOutMs = bk.check_out ? new Date(bk.check_out).getTime() : checkInMs;
+            const bufferBeforeMs = (t.buffer_before_minutes || 0) * 60000;
+            const bufferAfterMs = (t.buffer_after_minutes || 0) * 60000;
             const durationMs = (t.default_duration_minutes || 60) * 60000;
-            const occupiedUntilMs = Math.max(checkOutMs, checkInMs + durationMs);
-            addInterval(type, checkInMs, occupiedUntilMs);
+            const occupiedStart = checkInMs - bufferBeforeMs;
+            const occupiedUntil = Math.max(checkOutMs, checkInMs + durationMs) + bufferAfterMs;
+
+            // Main resource type — skip if this booking already has an
+            // explicit assignment counted above, to avoid double-counting.
+            if (t.resource_type && !bookingIdsWithExplicitResource.has(bk.id)) {
+                addInterval(t.resource_type, occupiedStart, occupiedUntil);
+            }
+            // Staff-time capacity pool — independent of the main resource,
+            // a service can need both simultaneously.
+            if (t.requires_staff_time && t.staff_time_resource_type) {
+                addInterval(t.staff_time_resource_type, occupiedStart, occupiedUntil);
+            }
         });
 
-        const fullTypes = Object.keys(resourceTypeCapacity).filter(type => {
-            const intervals = intervalsByType[type];
-            return intervals && intervals.length && maxConcurrentOverlap(intervals) >= resourceTypeCapacity[type];
-        });
+        // 3. A capacity pool is only "full" if EVERY slot across business
+        // hours has usage at or above capacity — one occupied slot (or even
+        // several) no longer marks the whole day full if other times remain
+        // genuinely bookable.
+        let fullTypes = [];
+        if (!businessClosedToday && hoursRow) {
+            const openTime = hoursRow.open_time?.slice(0, 5) || '09:00';
+            const closeTime = hoursRow.close_time?.slice(0, 5) || '17:00';
+            const [openH, openM] = openTime.split(':').map(Number);
+            const [closeH, closeM] = closeTime.split(':').map(Number);
+            const openMinutes = openH * 60 + openM;
+            const closeMinutes = closeH * 60 + closeM;
+
+            fullTypes = Object.keys(resourceTypeCapacity).filter(type => {
+                const capacity = resourceTypeCapacity[type];
+                const intervals = intervalsByType[type];
+                if (!intervals || !intervals.length) return false;
+                let cursor = openMinutes;
+                while (cursor < closeMinutes) {
+                    const slotMs = dayStart + cursor * 60000;
+                    const usage = intervals.filter(iv => slotMs >= iv.start && slotMs < iv.end).length;
+                    if (usage < capacity) return false; // an open slot exists — not full
+                    cursor += increment;
+                }
+                return true; // every slot checked was at/above capacity
+            });
+        }
 
         let level = null;
-        if (closed) level = 'closed';
-        else if (staffFull) level = 'staff-full';
+        if (businessClosedToday) level = 'closed';
         else if (fullTypes.length) level = 'resource-full';
 
         result[key] = { level, fullTypes, closureLabel: matchedClosure?.label || null };
@@ -7843,7 +7867,7 @@ async function renderAvailabilityAudit() {
     const client = getSupabase();
     if (!client) return;
 
-    const [{ data: resources }, { data: bookings }, { data: resourceUsage }, { data: templates }] = await Promise.all([
+    const [{ data: resources }, { data: bookings }, { data: resourceUsage }, { data: templates }, { data: businessHoursRows }, { data: business }] = await Promise.all([
         client.from('resources').select('id, name, type, seats').eq('business_id', currentBusinessId),
         client.from('bookings').select('id, service_name, check_in, check_out, status, pets(name), households(name)')
             .eq('business_id', currentBusinessId)
@@ -7855,7 +7879,9 @@ async function renderAvailabilityAudit() {
             .neq('bookings.status', 'cancelled')
             .lte('bookings.check_in', dateStr + 'T23:59:59')
             .gte('bookings.check_out', dateStr + 'T00:00:00'),
-        client.from('appointment_type_templates').select('name, resource_type, default_duration_minutes').eq('business_id', currentBusinessId)
+        client.from('appointment_type_templates').select('name, resource_type, staff_time_resource_type, requires_staff_time, default_duration_minutes, buffer_before_minutes, buffer_after_minutes').eq('business_id', currentBusinessId),
+        client.from('business_hours').select('day_of_week, is_closed, open_time, close_time').eq('business_id', currentBusinessId),
+        client.from('businesses').select('slot_increment_minutes').eq('id', currentBusinessId).maybeSingle()
     ]);
 
     const resourceTypeCapacity = {};
@@ -7870,6 +7896,9 @@ async function renderAvailabilityAudit() {
 
     const dayStart = new Date(dateStr + 'T00:00:00').getTime();
     const dayEnd = new Date(dateStr + 'T23:59:59').getTime();
+    const increment = business?.slot_increment_minutes || 30;
+    const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
+    const hoursRow = (businessHoursRows || []).find(h => h.day_of_week === dayOfWeek);
 
     // entriesByType: { type: [{ start, end, label, source }] }
     const entriesByType = {};
@@ -7900,19 +7929,48 @@ async function renderAvailabilityAudit() {
     });
 
     (bookings || []).forEach(bk => {
-        if (bookingIdsWithExplicitResource.has(bk.id)) return;
         const t = templateByName[bk.service_name];
-        const type = t?.resource_type;
-        if (!type) return;
+        if (!t) return;
         const checkInMs = new Date(bk.check_in).getTime();
         const checkOutMs = bk.check_out ? new Date(bk.check_out).getTime() : checkInMs;
+        const bufferBeforeMs = (t.buffer_before_minutes || 0) * 60000;
+        const bufferAfterMs = (t.buffer_after_minutes || 0) * 60000;
         const durationMs = (t.default_duration_minutes || 60) * 60000;
-        const occupiedUntilMs = Math.max(checkOutMs, checkInMs + durationMs);
+        const occupiedStart = checkInMs - bufferBeforeMs;
+        const occupiedUntil = Math.max(checkOutMs, checkInMs + durationMs) + bufferAfterMs;
         const petName = bk.pets?.name || bk.households?.name || 'Unknown';
-        addEntry(type, checkInMs, occupiedUntilMs, `${bk.service_name || 'Booking'} — ${petName}`, 'service default');
+
+        if (t.resource_type && !bookingIdsWithExplicitResource.has(bk.id)) {
+            addEntry(t.resource_type, occupiedStart, occupiedUntil, `${bk.service_name || 'Booking'} — ${petName}`, 'service default');
+        }
+        if (t.requires_staff_time && t.staff_time_resource_type) {
+            addEntry(t.staff_time_resource_type, occupiedStart, occupiedUntil, `${bk.service_name || 'Booking'} — ${petName} (staff time)`, 'staff time');
+        }
     });
 
     const fmtTime = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+    // A type is only "full all day" if EVERY slot across business hours has
+    // usage at or above capacity — matches the same definition now used by
+    // the calendar's day-status flag, not just a single peak-overlap moment.
+    const isFullAllDay = (type, capacity) => {
+        if (!hoursRow || hoursRow.is_closed) return false;
+        const openTime = hoursRow.open_time?.slice(0, 5) || '09:00';
+        const closeTime = hoursRow.close_time?.slice(0, 5) || '17:00';
+        const [openH, openM] = openTime.split(':').map(Number);
+        const [closeH, closeM] = closeTime.split(':').map(Number);
+        const openMinutes = openH * 60 + openM;
+        const closeMinutes = closeH * 60 + closeM;
+        const intervals = entriesByType[type] || [];
+        let cursor = openMinutes;
+        while (cursor < closeMinutes) {
+            const slotMs = dayStart + cursor * 60000;
+            const usage = intervals.filter(iv => slotMs >= iv.start && slotMs < iv.end).length;
+            if (usage < capacity) return false;
+            cursor += increment;
+        }
+        return true;
+    };
 
     const types = Object.keys(resourceTypeCapacity).sort();
     if (!types.length) {
@@ -7924,12 +7982,12 @@ async function renderAvailabilityAudit() {
         const entries = (entriesByType[type] || []).slice().sort((a, b) => a.start - b.start);
         const peak = entries.length ? maxConcurrentOverlap(entries) : 0;
         const capacity = resourceTypeCapacity[type];
-        const isFull = peak >= capacity;
+        const isFull = isFullAllDay(type, capacity);
         return `
             <div style="margin-bottom:1rem; padding:0.85rem 1rem; border:1px solid var(--border); border-radius:0.5rem; background:${isFull ? '#fef2f2' : 'var(--bg-card)'};">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                     <strong>${type}</strong>
-                    <span style="font-size:0.82rem; color:${isFull ? '#dc2626' : 'var(--text-muted)'}; font-weight:${isFull ? '600' : '400'};">Peak usage: ${peak} / ${capacity} ${isFull ? '— FULL at peak' : ''}</span>
+                    <span style="font-size:0.82rem; color:${isFull ? '#dc2626' : 'var(--text-muted)'}; font-weight:${isFull ? '600' : '400'};">Peak concurrent: ${peak} / ${capacity} ${isFull ? '— FULL all day (no open slots)' : ''}</span>
                 </div>
                 ${entries.length ? entries.map(e => `
                     <div style="display:flex; justify-content:space-between; font-size:0.85rem; padding:0.3rem 0; border-top:1px solid var(--border);">
