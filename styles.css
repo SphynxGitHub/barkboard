@@ -1791,3 +1791,13 @@ input.biz-select {
 .slot-btn:hover { border-color: var(--primary); color: var(--primary); }
 .slot-btn.slot-selected { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
 .slot-loading { grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem 0; }
+
+/* Checkbox-list containers (staff, resource types, notices) styled to match
+   the bordered box look of text inputs/selects, so they read as one
+   consistent field type rather than bare stacked labels. */
+.checkbox-list-box {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfbfe;
+}
