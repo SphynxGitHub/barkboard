@@ -2224,23 +2224,45 @@ async function deleteBookingFromModal() {
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    const { data: bk } = await client.from('bookings').select('invoice_id').eq('id', id).single();
+    // 1. Fetch booking to check for linked invoices and Google Calendar event IDs
+    const { data: bk } = await client
+        .from('bookings')
+        .select('invoice_id, google_event_id, assigned_staff_id')
+        .eq('id', id)
+        .single();
+
     const linkedInvoiceId = bk?.invoice_id || null;
 
+    // 2. Remove from Google Calendar if synced
+    if (bk?.google_event_id && bk?.assigned_staff_id) {
+        fetch('/api/sync-to-google', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId: id })
+        }).catch(err => console.warn('Google Calendar delete background sync failed:', err));
+    }
+
+    // 3. Remove linked booking_resources first (to prevent foreign key errors)
+    await client.from('booking_resources').delete().eq('booking_id', id);
+
+    // 4. Delete booking row
     const { error } = await client.from('bookings').delete().eq('id', id);
     if (error) {
         alert('Error deleting event: ' + error.message);
         return;
     }
+
+    // 5. Recalculate invoice totals if attached
     if (linkedInvoiceId) await syncInvoiceTotals(client, linkedInvoiceId);
 
     closeBookingModal();
-    if (householdId) openFullWidthProfile('household', householdId);
+    if (householdId && typeof openFullWidthProfile === 'function') {
+        openFullWidthProfile('household', householdId);
+    }
     if (typeof renderActivities === 'function') await renderActivities();
     if (typeof renderActivitiesCalendar === 'function') await renderActivitiesCalendar();
     if (typeof renderCalendar === 'function') await renderCalendar();
 }
-
 let editingInvoiceId = null;
 let invoiceHouseholdId = null;
 let pendingLinkBookingId = null; // booking to auto-link once a brand-new invoice is saved
@@ -2477,11 +2499,13 @@ async function removeAppointmentFromInvoice(bookingId, invoiceId) {
 }
 
 function closeInvoiceModal() {
+    const modal = document.getElementById('invoice-modal');
+    if (modal) modal.classList.add('hidden');
+    
+    // Clear global state
     editingInvoiceId = null;
     invoiceHouseholdId = null;
     pendingLinkBookingId = null;
-    const modal = document.getElementById('invoice-modal');
-    if (modal) modal.classList.add('hidden');
 }
 
 async function saveInvoice() {
@@ -2570,23 +2594,31 @@ async function deleteInvoice(id, householdId) {
 // Delete button inside the invoice edit modal itself (uses the currently-open invoice).
 async function deleteInvoiceFromModal() {
     if (!editingInvoiceId) return;
-    const id = editingInvoiceId;
+    const invoiceId = editingInvoiceId;
     const householdId = invoiceHouseholdId;
-    if (!confirm('Remove this invoice? This cannot be undone.')) return;
+
+    if (!confirm('Are you sure you want to permanently delete this invoice? Linked appointments will remain but become unbilled.')) return;
 
     const client = getSupabase();
     if (!client) return alert('Database connection unavailable.');
 
-    await client.from('bookings').update({ invoice_id: null }).eq('invoice_id', id);
+    // 1. Unlink any bookings associated with this invoice
+    await client.from('bookings').update({ invoice_id: null }).eq('invoice_id', invoiceId);
 
-    const { error } = await client.from('invoices').delete().eq('id', id);
+    // 2. Delete invoice row
+    const { error } = await client.from('invoices').delete().eq('id', invoiceId);
     if (error) {
         alert('Error deleting invoice: ' + error.message);
         return;
     }
 
     closeInvoiceModal();
-    if (householdId) openFullWidthProfile('household', householdId);
+
+    if (householdId && typeof openFullWidthProfile === 'function') {
+        openFullWidthProfile('household', householdId);
+    }
+    if (typeof renderInvoicesList === 'function') await renderInvoicesList();
+    if (typeof renderActivities === 'function') await renderActivities();
 }
 
 function renderHouseholdInvoiceStatusTag(invoiceId, currentStatus, householdId) {
@@ -7743,6 +7775,7 @@ async function exportFinancialSummaryCSV() {
 //=======================================
 // GOOGLE CALENDAR CONNECTION AUTH FLOW
 //=======================================
+
 function connectGoogleCalendar(staffId) {
   if (!staffId) return alert('Select a staff member or business account first.');
 
@@ -7762,3 +7795,32 @@ window.addEventListener('message', (event) => {
     if (typeof renderStaffRoster === 'function') renderStaffRoster();
   }
 });
+
+// Add this helper function at the bottom of app.js:
+async function pushBookingToGoogleCalendar(bookingId) {
+  try {
+    await fetch('/api/sync-to-google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId })
+    });
+  } catch (err) {
+    console.warn('Google Calendar sync background trigger failed:', err);
+  }
+}
+
+// Inside saveBooking() in app.js (after saveBookingResources completes):
+if (response.error) {
+    alert('Failed to save event: ' + response.error.message);
+} else {
+    // Save resource assignments
+    for (const pid of Object.keys(petIdToBookingId)) {
+        await saveBookingResources(client, petIdToBookingId[pid], bkResourcesByPet[pid] || []);
+        
+        // --- TRIGGER GOOGLE CALENDAR PUSH ---
+        pushBookingToGoogleCalendar(petIdToBookingId[pid]);
+    }
+
+    // Auto-generate invoice logic...
+    closeBookingModal();
+}
