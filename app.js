@@ -1606,11 +1606,544 @@ function selectBkSlot(t) {
 // onclick attributes in index.html but never actually defined anywhere,
 // throwing a ReferenceError the moment either button was clicked.
 function quickNewAppointment() {
-    openBookingModal(null, null);
+    openQuickBookingModal();
 }
 
 function quickNewTask() {
     if (typeof openStaffTaskModal === 'function') openStaffTaskModal(null);
+}
+
+/* ==========================================================================
+   QUICK BOOKING — multi-pet, category-based booking creation, one page.
+   Mirrors the public booking page's flow (category → pets/services → shared
+   date/time → review) but flattened onto a single scrollable page instead of
+   a step-by-step wizard, and against real households/staff instead of a
+   guest lookup. Separate from the existing openBookingModal(), which stays
+   as the single-record editor for viewing/editing one booking at a time.
+   ========================================================================== */
+
+let qbSelectedHouseholdId = null;
+let qbSelectedCategory = null;
+let qbCalYear, qbCalMonth, qbSelectedStart = null, qbSelectedEnd = null;
+let qbSingleCalYear, qbSingleCalMonth, qbSelectedDate = null, qbSelectedTime = null;
+let qbHouseholdPets = [];
+let qbTemplatesCache = null;
+
+async function openQuickBookingModal() {
+    qbSelectedHouseholdId = null;
+    qbSelectedCategory = null;
+    qbSelectedStart = null;
+    qbSelectedEnd = null;
+    qbSelectedDate = null;
+    qbSelectedTime = null;
+    qbHouseholdPets = [];
+    document.getElementById('qb-household-search').value = '';
+    document.getElementById('qb-household-selected').classList.add('hidden');
+    document.getElementById('qb-household-search').classList.remove('hidden');
+    document.getElementById('qb-household-results').classList.add('hidden');
+    document.getElementById('qb-pets-section').classList.add('hidden');
+    document.getElementById('qb-date-section').classList.add('hidden');
+    document.getElementById('qb-review-section').classList.add('hidden');
+    document.getElementById('qb-notes').value = '';
+    document.getElementById('qb-status').value = 'confirmed';
+
+    const client = getSupabase();
+    if (client) {
+        if (!qbTemplatesCache) {
+            const { data } = await client.from('appointment_type_templates').select('*').eq('business_id', currentBusinessId).order('name');
+            qbTemplatesCache = data || [];
+        }
+        if (bkBusinessHours === null) {
+            const { data: hours } = await client.from('business_hours').select('day_of_week, is_closed, open_time, close_time').eq('business_id', currentBusinessId);
+            bkBusinessHours = hours || [];
+        }
+        if (bkBusinessClosures === null) {
+            const { data: closures } = await client.from('business_closures').select('start_date, end_date, label').eq('business_id', currentBusinessId);
+            bkBusinessClosures = closures || [];
+        }
+        if (typeof populateStaffSelects === 'function') {
+            const staffSel = document.getElementById('qb-staff-id');
+            const { data: staffList } = await client.from('staff').select('id, name').eq('business_id', currentBusinessId).order('name');
+            if (staffSel) staffSel.innerHTML = '<option value="">Unassigned</option>' + (staffList || []).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        }
+    }
+
+    renderQbCategoryPicker();
+    document.getElementById('quick-booking-modal')?.classList.remove('hidden');
+}
+
+function closeQuickBookingModal() {
+    document.getElementById('quick-booking-modal')?.classList.add('hidden');
+}
+
+// --- Household search -------------------------------------------------
+let qbHouseholdSearchTimer = null;
+function searchQbHousehold(query) {
+    clearTimeout(qbHouseholdSearchTimer);
+    qbHouseholdSearchTimer = setTimeout(async () => {
+        const container = document.getElementById('qb-household-results');
+        const q = query.trim();
+        if (!q) { container.classList.add('hidden'); return; }
+        const client = getSupabase();
+        if (!client) return;
+        const { data } = await client.from('households').select('id, name').eq('business_id', currentBusinessId).ilike('name', `%${q}%`).order('name').limit(15);
+        if (!data || !data.length) {
+            container.innerHTML = `<div style="padding:0.5rem 0.65rem; font-size:0.82rem; color:var(--text-muted);">No matching households.</div>`;
+        } else {
+            container.innerHTML = data.map(h => `<div style="padding:0.5rem 0.65rem; cursor:pointer; font-size:0.85rem;" onmousedown="selectQbHousehold('${h.id}', ${JSON.stringify(h.name)})">${h.name}</div>`).join('');
+        }
+        container.classList.remove('hidden');
+    }, 200);
+}
+
+async function selectQbHousehold(id, name) {
+    qbSelectedHouseholdId = id;
+    document.getElementById('qb-household-search').classList.add('hidden');
+    document.getElementById('qb-household-results').classList.add('hidden');
+    document.getElementById('qb-household-selected-name').textContent = name;
+    document.getElementById('qb-household-selected').classList.remove('hidden');
+
+    const client = getSupabase();
+    const { data: pets } = client ? await client.from('pets').select('id, name, species').eq('household_id', id) : { data: [] };
+    qbHouseholdPets = pets || [];
+
+    if (qbSelectedCategory) renderQbPetRows();
+}
+
+function clearQbHousehold() {
+    qbSelectedHouseholdId = null;
+    qbHouseholdPets = [];
+    document.getElementById('qb-household-search').value = '';
+    document.getElementById('qb-household-search').classList.remove('hidden');
+    document.getElementById('qb-household-selected').classList.add('hidden');
+    document.getElementById('qb-pet-rows').innerHTML = '';
+    updateQbReview();
+}
+
+// --- Category picker ----------------------------------------------------
+const QB_CATEGORY_META = {
+    boarding: { icon: '🏠', label: 'Boarding' },
+    daycare: { icon: '☀️', label: 'Daycare' },
+    grooming: { icon: '✂️', label: 'Grooming' },
+    training: { icon: '🎾', label: 'Training' }
+};
+
+function renderQbCategoryPicker() {
+    const el = document.getElementById('qb-category-picker');
+    if (!el) return;
+    const activeCats = Object.keys(QB_CATEGORY_META).filter(cat => (qbTemplatesCache || []).some(t => Array.isArray(t.category) && t.category.includes(cat)));
+    el.innerHTML = activeCats.map(cat => `
+        <button type="button" class="btn ${cat === qbSelectedCategory ? 'btn-primary' : ''}" style="font-size:0.85rem;" onclick="selectQbCategory('${cat}')">${QB_CATEGORY_META[cat].icon} ${QB_CATEGORY_META[cat].label}</button>
+    `).join('');
+}
+
+function selectQbCategory(cat) {
+    qbSelectedCategory = cat;
+    renderQbCategoryPicker();
+    document.getElementById('qb-pets-section').classList.remove('hidden');
+    document.getElementById('qb-date-section').classList.remove('hidden');
+    document.getElementById('qb-boarding-cal-wrap').classList.toggle('hidden', cat !== 'boarding');
+    document.getElementById('qb-single-cal-wrap').classList.toggle('hidden', cat === 'boarding');
+
+    qbSelectedStart = null; qbSelectedEnd = null;
+    qbSelectedDate = null; qbSelectedTime = null;
+
+    if (qbSelectedHouseholdId) renderQbPetRows();
+
+    if (cat === 'boarding') {
+        const today = new Date();
+        qbCalYear = today.getFullYear(); qbCalMonth = today.getMonth();
+        renderQbCal();
+    } else {
+        const today = new Date();
+        qbSingleCalYear = today.getFullYear(); qbSingleCalMonth = today.getMonth();
+        renderQbSingleCal();
+    }
+    updateQbReview();
+}
+
+// --- Pet rows -------------------------------------------------------------
+function qbServiceOptionsForCategory(species) {
+    return (qbTemplatesCache || []).filter(t =>
+        Array.isArray(t.category) && t.category.includes(qbSelectedCategory) &&
+        (!Array.isArray(t.species) || !t.species.length || !species || t.species.includes(species))
+    );
+}
+
+function renderQbPetRows() {
+    const el = document.getElementById('qb-pet-rows');
+    if (!el) return;
+    const manualRows = Array.from(el.querySelectorAll('[data-manual="true"]')).map(row => row.outerHTML);
+    el.innerHTML = qbHouseholdPets.map(p => qbPetRowHtml(p.id, p.name, p.species, false)).join('') + manualRows.join('');
+    refreshIcons();
+}
+
+function qbPetRowHtml(id, name, species, manual) {
+    const options = qbServiceOptionsForCategory(species);
+    return `
+        <div class="qb-pet-row" data-pet-id="${id || ''}" data-manual="${manual}" data-name="${name || ''}" data-species="${species || ''}" style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid var(--border);">
+            <label style="display:flex; align-items:center; gap:0.5rem; flex:1; font-weight:400;">
+                <input type="checkbox" class="qb-pet-chk" onchange="onQbPetToggled()" checked>
+                ${manual ? `<input type="text" class="qb-manual-name biz-select" style="padding:0.3rem; width:120px;" placeholder="Pet name" value="${name || ''}">` : `<span>${name}</span>`}
+                ${manual ? `<select class="qb-manual-species biz-select" style="padding:0.3rem;"><option value="Dog" ${species==='Dog'?'selected':''}>Dog</option><option value="Cat" ${species==='Cat'?'selected':''}>Cat</option><option value="Other" ${species==='Other'?'selected':''}>Other</option></select>` : `<span style="font-size:0.78rem; color:var(--text-muted);">${species || ''}</span>`}
+            </label>
+            <select class="qb-pet-service-select biz-select" style="padding:0.35rem; min-width:160px;" onchange="onQbServiceChanged()">
+                <option value="">Choose service...</option>
+                ${options.map(t => `<option value="${t.name}">${t.name}${t.default_price != null ? ' — $' + Number(t.default_price).toFixed(2) : ''}</option>`).join('')}
+            </select>
+        </div>
+    `;
+}
+
+function addQbManualPet() {
+    const el = document.getElementById('qb-pet-rows');
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = qbPetRowHtml(null, '', 'Dog', true);
+    el.appendChild(wrapper.firstElementChild);
+    refreshIcons();
+}
+
+function getQbSelectedPets() {
+    return Array.from(document.querySelectorAll('.qb-pet-row')).filter(row => row.querySelector('.qb-pet-chk')?.checked).map(row => {
+        const manual = row.dataset.manual === 'true';
+        return {
+            petId: manual ? null : row.dataset.petId,
+            name: manual ? row.querySelector('.qb-manual-name')?.value.trim() : row.dataset.name,
+            species: manual ? row.querySelector('.qb-manual-species')?.value : row.dataset.species,
+            serviceName: row.querySelector('.qb-pet-service-select')?.value
+        };
+    });
+}
+
+function onQbPetToggled() {
+    if (qbSelectedDate) renderQbSlotPicker(qbSelectedDate);
+    updateQbReview();
+}
+
+function onQbServiceChanged() {
+    if (qbSelectedDate) renderQbSlotPicker(qbSelectedDate);
+    updateQbReview();
+}
+
+// --- Boarding range calendar (mirrors the public booking page's version) --
+function shiftQbCalMonth(delta) {
+    qbCalMonth += delta;
+    if (qbCalMonth < 0) { qbCalMonth = 11; qbCalYear--; }
+    if (qbCalMonth > 11) { qbCalMonth = 0; qbCalYear++; }
+    renderQbCal();
+}
+
+function renderQbCal() {
+    const label = document.getElementById('qb-cal-label');
+    const grid = document.getElementById('qb-cal-grid');
+    if (!label || !grid) return;
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    label.textContent = `${monthNames[qbCalMonth]} ${qbCalYear}`;
+    const firstDay = new Date(qbCalYear, qbCalMonth, 1);
+    const daysInMonth = new Date(qbCalYear, qbCalMonth + 1, 0).getDate();
+    const startWeekday = firstDay.getDay();
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    let html = '';
+    for (let i = 0; i < startWeekday; i++) html += `<div class="mini-cal-day mini-cal-empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(qbCalYear, qbCalMonth, d);
+        const dateStr = `${qbCalYear}-${String(qbCalMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const closureLabel = bkClosureLabelForDate(dateStr);
+        const closed = bkIsDayClosed(dateObj.getDay()) || !!closureLabel;
+        const classes = ['mini-cal-day'];
+        if (closed) classes.push('mini-cal-disabled'); // visual flag only — staff can still click
+        if (dateStr === todayStr) classes.push('mini-cal-today');
+        if (dateStr === qbSelectedStart || dateStr === qbSelectedEnd) classes.push('mini-cal-selected');
+        if (qbSelectedStart && qbSelectedEnd && dateStr > qbSelectedStart && dateStr < qbSelectedEnd) classes.push('mini-cal-in-range');
+        const title = closureLabel || (closed ? 'Closed (you can still book here if needed)' : '');
+        html += `<div class="${classes.join(' ')}" onclick="selectQbCalDay('${dateStr}')" title="${title}">${d}</div>`;
+    }
+    grid.innerHTML = html;
+}
+
+function selectQbCalDay(dateStr) {
+    if (!qbSelectedStart || (qbSelectedStart && qbSelectedEnd)) {
+        qbSelectedStart = dateStr; qbSelectedEnd = null;
+    } else if (dateStr < qbSelectedStart) {
+        qbSelectedStart = dateStr; qbSelectedEnd = null;
+    } else {
+        qbSelectedEnd = dateStr;
+    }
+
+    const rangeLabel = document.getElementById('qb-cal-range-label');
+    if (qbSelectedStart && qbSelectedEnd) {
+        rangeLabel.textContent = `${qbSelectedStart} → ${qbSelectedEnd}`;
+        rangeLabel.classList.remove('hidden');
+    } else if (qbSelectedStart) {
+        rangeLabel.textContent = `Drop-off: ${qbSelectedStart} — now pick pickup date`;
+        rangeLabel.classList.remove('hidden');
+    }
+    renderQbCal();
+
+    // Only show drop-off/pickup time pickers once any selected service
+    // actually prompts for them (matches the public page's behavior)
+    const pets = getQbSelectedPets();
+    const promptTimes = pets.some(p => (qbTemplatesCache || []).find(t => t.name === p.serviceName)?.prompt_dropoff_pickup_time);
+    const timesRow = document.getElementById('qb-board-times-row');
+    timesRow.classList.toggle('hidden', !promptTimes);
+    if (promptTimes) {
+        renderQbBoardTimeSlots('qb-dropoff-slot-grid', 'dropoff');
+        renderQbBoardTimeSlots('qb-pickup-slot-grid', 'pickup');
+    }
+    updateQbReview();
+}
+
+let qbDropoffTime = null, qbPickupTime = null;
+function renderQbBoardTimeSlots(gridId, which) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    const increment = 30;
+    const openTimes = (bkBusinessHours || []).filter(h => !h.is_closed).map(h => h.open_time?.slice(0, 5)).filter(Boolean).sort();
+    const closeTimes = (bkBusinessHours || []).filter(h => !h.is_closed).map(h => h.close_time?.slice(0, 5)).filter(Boolean).sort();
+    const openTime = openTimes[0] || '07:00';
+    const closeTime = closeTimes[closeTimes.length - 1] || '19:00';
+    const [openH, openM] = openTime.split(':').map(Number);
+    const [closeH, closeM] = closeTime.split(':').map(Number);
+    let cursor = openH * 60 + openM;
+    const closeMinutes = closeH * 60 + closeM;
+    const currentVal = which === 'dropoff' ? qbDropoffTime : qbPickupTime;
+
+    let html = '';
+    while (cursor <= closeMinutes) {
+        const h = Math.floor(cursor / 60), m = cursor % 60;
+        const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const period = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 === 0 ? 12 : h % 12;
+        html += `<button type="button" class="slot-btn ${t === currentVal ? 'slot-selected' : ''}" onclick="selectQbBoardTime('${which}', '${t}')">${h12}:${String(m).padStart(2,'0')} ${period}</button>`;
+        cursor += increment;
+    }
+    grid.innerHTML = html;
+}
+
+function selectQbBoardTime(which, t) {
+    if (which === 'dropoff') qbDropoffTime = t; else qbPickupTime = t;
+    renderQbBoardTimeSlots(which === 'dropoff' ? 'qb-dropoff-slot-grid' : 'qb-pickup-slot-grid', which);
+}
+
+// --- Single-day calendar + slot picker (grooming/training/daycare) --------
+function shiftQbSingleCalMonth(delta) {
+    qbSingleCalMonth += delta;
+    if (qbSingleCalMonth < 0) { qbSingleCalMonth = 11; qbSingleCalYear--; }
+    if (qbSingleCalMonth > 11) { qbSingleCalMonth = 0; qbSingleCalYear++; }
+    renderQbSingleCal();
+}
+
+function renderQbSingleCal() {
+    const label = document.getElementById('qb-single-cal-label');
+    const grid = document.getElementById('qb-single-cal-grid');
+    if (!label || !grid) return;
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    label.textContent = `${monthNames[qbSingleCalMonth]} ${qbSingleCalYear}`;
+    const firstDay = new Date(qbSingleCalYear, qbSingleCalMonth, 1);
+    const daysInMonth = new Date(qbSingleCalYear, qbSingleCalMonth + 1, 0).getDate();
+    const startWeekday = firstDay.getDay();
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    let html = '';
+    for (let i = 0; i < startWeekday; i++) html += `<div class="mini-cal-day mini-cal-empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(qbSingleCalYear, qbSingleCalMonth, d);
+        const dateStr = `${qbSingleCalYear}-${String(qbSingleCalMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const closureLabel = bkClosureLabelForDate(dateStr);
+        const closed = bkIsDayClosed(dateObj.getDay()) || !!closureLabel;
+        const classes = ['mini-cal-day'];
+        if (closed) classes.push('mini-cal-disabled');
+        if (dateStr === todayStr) classes.push('mini-cal-today');
+        if (dateStr === qbSelectedDate) classes.push('mini-cal-selected');
+        const title = closureLabel || (closed ? 'Closed (you can still book here if needed)' : '');
+        html += `<div class="${classes.join(' ')}" onclick="selectQbSingleDay('${dateStr}')" title="${title}">${d}</div>`;
+    }
+    grid.innerHTML = html;
+}
+
+function selectQbSingleDay(dateStr) {
+    qbSelectedDate = dateStr;
+    qbSelectedTime = null;
+    renderQbSingleCal();
+    renderQbSlotPicker(dateStr);
+}
+
+// Multi-pet-aware slot availability — aggregates demand across every
+// currently-checked pet's service, same principle as the public booking
+// page, but using the staff-authenticated RPC for real data.
+async function renderQbSlotPicker(dateStr) {
+    const section = document.getElementById('qb-slot-picker-section');
+    const grid = document.getElementById('qb-slot-picker-grid');
+    const emptyMsg = document.getElementById('qb-slot-picker-empty');
+    if (!section || !grid) return;
+    section.classList.remove('hidden');
+    grid.innerHTML = '<div class="slot-loading">Checking availability...</div>';
+    emptyMsg?.classList.add('hidden');
+
+    const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
+    const hoursRow = (bkBusinessHours || []).find(bh => bh.day_of_week === dayOfWeek);
+    const openTime = hoursRow?.open_time?.slice(0, 5) || '09:00';
+    const closeTime = hoursRow?.close_time?.slice(0, 5) || '17:00';
+    const increment = 30;
+
+    const pets = getQbSelectedPets().filter(p => p.serviceName);
+    const petNeeds = pets.map(p => {
+        const t = (qbTemplatesCache || []).find(tpl => tpl.name === p.serviceName);
+        return {
+            duration: t?.default_duration_minutes || 60,
+            resourceType: t?.resource_type || null,
+            requiresStaffTime: !!t?.requires_staff_time,
+            staffResourceType: t?.staff_time_resource_type || null,
+            serviceName: p.serviceName
+        };
+    });
+
+    const uniqueServices = Array.from(new Set(petNeeds.map(n => n.serviceName)));
+    const slotDataByService = {};
+    for (const svc of uniqueServices) {
+        slotDataByService[svc] = await fetchBkServiceSlotData(svc, dateStr);
+    }
+
+    const maxDuration = petNeeds.length ? Math.max(...petNeeds.map(n => n.duration)) : 60;
+    const [openH, openM] = openTime.split(':').map(Number);
+    const [closeH, closeM] = closeTime.split(':').map(Number);
+    let cursor = openH * 60 + openM;
+    const closeMinutes = closeH * 60 + closeM;
+
+    const candidateSlots = [];
+    while (cursor + maxDuration <= closeMinutes) {
+        candidateSlots.push(cursor);
+        cursor += increment;
+    }
+
+    const availableSlots = candidateSlots.filter(slotStart => {
+        const demandByResource = {};
+        petNeeds.forEach(n => {
+            if (n.resourceType) demandByResource[n.resourceType] = (demandByResource[n.resourceType] || 0) + 1;
+            if (n.requiresStaffTime && n.staffResourceType) demandByResource[n.staffResourceType] = (demandByResource[n.staffResourceType] || 0) + 1;
+        });
+        for (const [resType, neededCount] of Object.entries(demandByResource)) {
+            let capacity = 0, existingBookings = [];
+            for (const svc of uniqueServices) {
+                const sd = slotDataByService[svc];
+                if (!sd) continue;
+                if (sd.resource_type === resType) { capacity = Math.max(capacity, sd.resource_capacity || 0); existingBookings = sd.resource_bookings || []; }
+                if (sd.staff_resource_type === resType) { capacity = Math.max(capacity, sd.staff_capacity || 0); existingBookings = sd.staff_bookings || []; }
+            }
+            if (capacity === 0 && !existingBookings.length) continue;
+            const relevantDurations = petNeeds.filter(n => n.resourceType === resType || n.staffResourceType === resType).map(n => n.duration);
+            const windowDuration = relevantDurations.length ? Math.max(...relevantDurations) : 30;
+            const slotEnd = slotStart + windowDuration;
+            const existingUsage = bkCountOverlaps(existingBookings, slotStart, slotEnd, dateStr);
+            if (existingUsage + neededCount > capacity) return false;
+        }
+        return true;
+    });
+
+    if (qbSelectedTime) {
+        const [selH, selM] = qbSelectedTime.split(':').map(Number);
+        if (!availableSlots.includes(selH * 60 + selM)) qbSelectedTime = null;
+    }
+
+    grid.innerHTML = availableSlots.map(mins => {
+        const h = Math.floor(mins / 60), m = mins % 60;
+        const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const period = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 === 0 ? 12 : h % 12;
+        return `<button type="button" class="slot-btn ${t === qbSelectedTime ? 'slot-selected' : ''}" onclick="selectQbSlot('${t}')">${h12}:${String(m).padStart(2,'0')} ${period}</button>`;
+    }).join('');
+
+    if (!availableSlots.length) emptyMsg?.classList.remove('hidden');
+    updateQbReview();
+}
+
+function selectQbSlot(t) {
+    qbSelectedTime = t;
+    renderQbSlotPicker(qbSelectedDate);
+    updateQbReview();
+}
+
+// --- Live review summary ---------------------------------------------------
+function updateQbReview() {
+    const section = document.getElementById('qb-review-section');
+    const list = document.getElementById('qb-review-list');
+    if (!section || !list) return;
+
+    const pets = getQbSelectedPets().filter(p => p.name && p.serviceName);
+    if (!pets.length || !qbSelectedCategory) { section.classList.add('hidden'); return; }
+
+    let dateLine = '';
+    if (qbSelectedCategory === 'boarding') {
+        if (qbSelectedStart && qbSelectedEnd) dateLine = `${qbSelectedStart} → ${qbSelectedEnd}`;
+    } else {
+        if (qbSelectedDate && qbSelectedTime) dateLine = `${qbSelectedDate} at ${qbSelectedTime}`;
+    }
+    if (!dateLine) { section.classList.add('hidden'); return; }
+
+    section.classList.remove('hidden');
+    list.innerHTML = pets.map(p => `<div>• ${p.name} (${p.species || 'pet'}) — ${p.serviceName} — ${dateLine}</div>`).join('');
+}
+
+// --- Submit ------------------------------------------------------------
+async function submitQuickBooking() {
+    if (!qbSelectedHouseholdId) return alert('Please select a household.');
+    if (!qbSelectedCategory) return alert('Please choose a category.');
+    const pets = getQbSelectedPets().filter(p => p.name);
+    if (!pets.length) return alert('Please select at least one pet.');
+    if (pets.some(p => !p.serviceName)) return alert('Please choose a service for every selected pet.');
+
+    let checkIn, checkOut;
+    if (qbSelectedCategory === 'boarding') {
+        if (!qbSelectedStart || !qbSelectedEnd) return alert('Please choose drop-off and pickup dates.');
+        checkIn = `${qbSelectedStart}T${qbDropoffTime || '09:00'}:00`;
+        checkOut = `${qbSelectedEnd}T${qbPickupTime || '17:00'}:00`;
+    } else {
+        if (!qbSelectedDate || !qbSelectedTime) return alert('Please choose a date and time.');
+        checkIn = `${qbSelectedDate}T${qbSelectedTime}:00`;
+        checkOut = checkIn; // point-in-time appointment, matching how the rest of the app stores these
+    }
+
+    const client = getSupabase();
+    if (!client) return alert('Database connection unavailable.');
+
+    const staffId = document.getElementById('qb-staff-id')?.value || null;
+    const status = document.getElementById('qb-status')?.value || 'confirmed';
+    const notes = document.getElementById('qb-notes')?.value.trim() || null;
+
+    const rows = [];
+    for (const p of pets) {
+        let petId = p.petId;
+        if (!petId) {
+            // Manually-entered pet not on file yet — create it under this household first
+            const { data: newPet, error: petErr } = await client.from('pets').insert([{ household_id: qbSelectedHouseholdId, name: p.name, species: p.species || 'Dog' }]).select().single();
+            if (petErr) { alert(`Failed to create pet "${p.name}": ` + petErr.message); return; }
+            petId = newPet.id;
+        }
+        const template = (qbTemplatesCache || []).find(t => t.name === p.serviceName);
+        rows.push({
+            business_id: currentBusinessId,
+            household_id: qbSelectedHouseholdId,
+            pet_id: petId,
+            service_name: p.serviceName,
+            check_in: checkIn,
+            check_out: checkOut,
+            amount: template?.default_price || 0,
+            status,
+            assigned_staff_id: staffId,
+            notes,
+            source: 'staff',
+            requires_staff_time: !!template?.requires_staff_time,
+            staff_time_minutes: template?.staff_time_minutes || null
+        });
+    }
+
+    const { error } = await client.from('bookings').insert(rows);
+    if (error) return alert('Failed to create booking(s): ' + error.message);
+
+    closeQuickBookingModal();
+    if (typeof renderAllDashboards === 'function') renderAllDashboards();
+    if (typeof renderActivities === 'function') renderActivities();
 }
 
 async function openBookingModal(householdId = null, bookingId = null) {

@@ -1487,6 +1487,114 @@
             </div>
         </div>
 
+        <!-- NEW MULTI-PET BOOKING (one page — household, category, pets+services,
+             shared date/time, review, all visible/scrollable at once, no wizard) -->
+        <div id="quick-booking-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:999; background:var(--bg-card, #ffffff); overflow-y:auto; padding:2rem;">
+            <div class="modal-content" style="max-width:720px; margin:0 auto; width:100%; box-shadow:none; background:none; padding:0; overflow:visible;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:1rem; margin-bottom:1.5rem;">
+                    <h2 style="margin:0; font-size:1.5rem;">New Booking</h2>
+                    <button type="button" class="btn-icon" onclick="closeQuickBookingModal()" style="background:none; border:none; cursor:pointer;" title="Close">
+                        <i data-lucide="x" style="width:22px; height:22px;"></i>
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label>Household *</label>
+                    <input type="text" id="qb-household-search" placeholder="Search households..." autocomplete="off">
+                    <div id="qb-household-results" class="hidden" style="margin-top:0.35rem; border:1px solid var(--border); border-radius:0.375rem; background:var(--bg-card); max-height:180px; overflow-y:auto;"></div>
+                    <div id="qb-household-selected" class="hidden" style="margin-top:0.5rem; padding:0.6rem 0.85rem; border:1px solid var(--border); border-radius:0.375rem; display:flex; justify-content:space-between; align-items:center;">
+                        <strong id="qb-household-selected-name"></strong>
+                        <button type="button" class="btn" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="clearQbHousehold()">Change</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Category *</label>
+                    <div id="qb-category-picker" style="display:flex; gap:0.5rem; flex-wrap:wrap;"></div>
+                </div>
+
+                <div id="qb-pets-section" class="form-group hidden">
+                    <label>Pets & Services *</label>
+                    <div id="qb-pet-rows"></div>
+                    <button type="button" class="btn" style="font-size:0.8rem; padding:0.4rem 0.75rem;" onclick="addQbManualPet()">+ Add a pet not on file</button>
+                </div>
+
+                <div id="qb-date-section" class="form-group hidden">
+                    <label>Date<span id="qb-date-required-star">*</span></label>
+
+                    <!-- Boarding: date range -->
+                    <div id="qb-boarding-cal-wrap" class="hidden">
+                        <div class="mini-cal">
+                            <div class="mini-cal-header">
+                                <button type="button" class="mini-cal-nav" onclick="shiftQbCalMonth(-1)">‹</button>
+                                <span id="qb-cal-label"></span>
+                                <button type="button" class="mini-cal-nav" onclick="shiftQbCalMonth(1)">›</button>
+                            </div>
+                            <div class="mini-cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+                            <div class="mini-cal-grid" id="qb-cal-grid"></div>
+                        </div>
+                        <p id="qb-cal-range-label" class="field-hint hidden"></p>
+                        <div id="qb-board-times-row" class="hidden" style="margin-top:0.75rem;">
+                            <div style="margin-bottom:0.75rem;">
+                                <label style="font-size:0.85rem;">Drop-off Time</label>
+                                <div id="qb-dropoff-slot-grid" class="slot-grid"></div>
+                            </div>
+                            <div>
+                                <label style="font-size:0.85rem;">Pickup Time</label>
+                                <div id="qb-pickup-slot-grid" class="slot-grid"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grooming/Training/Daycare: single date + slot times -->
+                    <div id="qb-single-cal-wrap" class="hidden">
+                        <div class="mini-cal">
+                            <div class="mini-cal-header">
+                                <button type="button" class="mini-cal-nav" onclick="shiftQbSingleCalMonth(-1)">‹</button>
+                                <span id="qb-single-cal-label"></span>
+                                <button type="button" class="mini-cal-nav" onclick="shiftQbSingleCalMonth(1)">›</button>
+                            </div>
+                            <div class="mini-cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+                            <div class="mini-cal-grid" id="qb-single-cal-grid"></div>
+                        </div>
+                        <div id="qb-slot-picker-section" class="hidden">
+                            <div id="qb-slot-picker-grid" class="slot-grid"></div>
+                            <p id="qb-slot-picker-empty" class="hidden field-hint">No available times on this date — pick another day, or adjust after saving.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label>Assigned Staff</label>
+                        <select id="qb-staff-id"><option value="">Unassigned</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="qb-status">
+                            <option value="confirmed" selected>Confirmed</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="qb-notes" rows="2"></textarea>
+                </div>
+
+                <div id="qb-review-section" class="hidden" style="margin: 1.25rem 0; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-hover, #f9fafb);">
+                    <div style="font-weight:600; font-size:0.85rem; margin-bottom:0.4rem;">This will create:</div>
+                    <div id="qb-review-list" style="font-size:0.85rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;"></div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border);">
+                    <button type="button" class="btn" onclick="closeQuickBookingModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="submitQuickBooking()">Create Booking(s)</button>
+                </div>
+            </div>
+        </div>
+
         <!-- ADD / EDIT BOOKING MODAL -->
 
         <div id="booking-modal" class="modal-backdrop hidden" style="position:fixed; inset:0; z-index:999; background:var(--bg-card, #ffffff); overflow-y:auto; padding:2rem;">
