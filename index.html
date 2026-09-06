@@ -983,7 +983,19 @@
                     </div>
                     <button class="biz-tab active" id="acttab-list" onclick="switchActivitiesView('list')"><i data-lucide="layout-list"></i> List</button>
                     <button class="biz-tab" id="acttab-calendar" onclick="switchActivitiesView('calendar')"><i data-lucide="calendar"></i> Calendar</button>
+                    <button class="biz-tab" id="acttab-audit" onclick="switchActivitiesView('audit')"><i data-lucide="search-check"></i> Audit Availability</button>
                 </div>
+            </div>
+
+            <!-- Audit Availability: shows exactly which resources are used, by
+                 what, and when, for a chosen date — a direct way to check
+                 what the availability system itself is seeing. -->
+            <div id="activities-audit-section" class="hidden">
+                <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+                    <label style="font-size:0.85rem; font-weight:600;">Date:</label>
+                    <input type="date" id="audit-date-input" class="biz-select" style="padding:0.4rem;" onchange="renderAvailabilityAudit()">
+                </div>
+                <div id="audit-results"></div>
             </div>
         
             <!-- Controls Row: Grouping + All Filters -->

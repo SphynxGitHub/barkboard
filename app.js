@@ -7375,23 +7375,31 @@ async function populateResourceActivityFilter() {
 
 function switchActivitiesView(mode) {
     const isList = mode === 'list';
+    const isCalendar = mode === 'calendar';
+    const isAudit = mode === 'audit';
     
     // Save selection
     try { localStorage.setItem(ACT_VIEW_MODE_KEY, mode); } catch (e) {}
 
     // Toggle active tab buttons
     document.getElementById('acttab-list')?.classList.toggle('active', isList);
-    document.getElementById('acttab-calendar')?.classList.toggle('active', !isList);
+    document.getElementById('acttab-calendar')?.classList.toggle('active', isCalendar);
+    document.getElementById('acttab-audit')?.classList.toggle('active', isAudit);
     
     // Toggle view containers
     document.getElementById('activities-list-view')?.classList.toggle('hidden', !isList);
-    document.getElementById('activities-calendar-view')?.classList.toggle('hidden', isList);
+    document.getElementById('activities-calendar-view')?.classList.toggle('hidden', !isCalendar);
+    document.getElementById('activities-audit-section')?.classList.toggle('hidden', !isAudit);
     
     // Show/hide Group By dropdown
     const groupByContainer = document.getElementById('act-group-by-container');
     if (groupByContainer) groupByContainer.style.display = isList ? 'block' : 'none';
 
-    if (!isList) {
+    if (isAudit) {
+        const dateInput = document.getElementById('audit-date-input');
+        if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+        renderAvailabilityAudit();
+    } else if (isCalendar) {
         document.querySelectorAll('#actview-day, #actview-week, #actview-month').forEach(b => b.classList.remove('today'));
         document.getElementById('actview-' + actCalendarMode)?.classList.add('today');
         renderActivitiesCalendar();
@@ -7650,6 +7658,26 @@ function getActPeriodDates() {
     return { dates, label: `${fmt(dates[0])} — ${fmt(dates[6])}` };
 }
 
+// Computes max concurrent overlap across a set of [start,end) intervals
+// (classic sweep-line) — used to determine whether a resource type is
+// actually full at any point in the day, rather than just counting how many
+// bookings happen to touch that date regardless of whether their times
+// overlap at all.
+function maxConcurrentOverlap(intervals) {
+    const events = [];
+    intervals.forEach(iv => {
+        events.push([iv.start, 1]);
+        events.push([iv.end, -1]);
+    });
+    events.sort((a, b) => a[0] - b[0] || a[1] - b[1]); // ties: departures (-1) before arrivals (1)
+    let cur = 0, max = 0;
+    events.forEach(([, delta]) => {
+        cur += delta;
+        if (cur > max) max = cur;
+    });
+    return max;
+}
+
 async function computeCalendarDayStatuses(dates) {
     const client = getSupabase();
     if (!client || !dates || !dates.length) return {};
@@ -7658,18 +7686,19 @@ async function computeCalendarDayStatuses(dates) {
     const rangeStart = fmt(dates[0]);
     const rangeEnd = fmt(dates[dates.length - 1]);
 
-    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }, { data: resourceUsage }] = await Promise.all([
+    const [{ data: resources }, { data: staffList }, { data: closures }, { data: bookings }, { data: resourceUsage }, { data: templates }] = await Promise.all([
         client.from('resources').select('id, type, seats'),
         client.from('staff').select('id'),
         client.from('business_closures').select('start_date, end_date, label'),
-        client.from('bookings').select('id, check_in, check_out, assigned_staff_id, requires_staff_time, status')
+        client.from('bookings').select('id, service_name, check_in, check_out, assigned_staff_id, requires_staff_time, status')
             .neq('status', 'cancelled')
             .lte('check_in', rangeEnd + 'T23:59:59')
             .gte('check_out', rangeStart + 'T00:00:00'),
-        client.from('booking_resources').select('resource_id, bookings!inner(id, check_in, check_out, status)')
+        client.from('booking_resources').select('booking_id, resource_id, all_day, start_time, end_time, bookings!inner(id, check_in, check_out, status)')
             .neq('bookings.status', 'cancelled')
             .lte('bookings.check_in', rangeEnd + 'T23:59:59')
-            .gte('bookings.check_out', rangeStart + 'T00:00:00')
+            .gte('bookings.check_out', rangeStart + 'T00:00:00'),
+        client.from('appointment_type_templates').select('name, resource_type, default_duration_minutes')
     ]);
 
     const resourceTypeCapacity = {};
@@ -7680,42 +7709,83 @@ async function computeCalendarDayStatuses(dates) {
     });
     const totalStaff = (staffList || []).length;
 
+    const templateByName = {};
+    (templates || []).forEach(t => { templateByName[t.name] = t; });
+
+    // A booking with an explicit resource assignment shouldn't ALSO be
+    // counted via its template's resource_type — that would double-count
+    // the same booking against capacity.
+    const bookingIdsWithExplicitResource = new Set((resourceUsage || []).map(row => row.booking_id));
+
     const result = {};
     dates.forEach(d => {
         const key = fmt(d);
+        const dayStart = new Date(key + 'T00:00:00').getTime();
+        const dayEnd = new Date(key + 'T23:59:59').getTime();
 
         // 1. Business Closed check
         const matchedClosure = (closures || []).find(c => key >= c.start_date && key <= (c.end_date || c.start_date));
         const closed = !!matchedClosure;
 
-        // 2. Staff Fully Booked check
+        // 2. Staff Fully Booked check (still day-level for now — staff-time
+        // bookings are evaluated as occupying the whole day, same as before)
         const dayBookings = (bookings || []).filter(bk => {
             const start = (bk.check_in || '').slice(0, 10);
             const end = (bk.check_out || bk.check_in || '').slice(0, 10);
-            // Check-out date is freed up for same-day check-ins unless check_in === check_out
             return key >= start && (start === end ? key <= end : key < end);
         });
-
         const staffBusy = new Set(dayBookings.filter(bk => bk.requires_staff_time && bk.assigned_staff_id).map(bk => bk.assigned_staff_id));
         const staffFull = totalStaff > 0 && staffBusy.size >= totalStaff;
 
-        // 3. Resource Seat Full check (Check-out date frees up the seat)
-        const dayResourceUsage = (resourceUsage || []).filter(row => {
-            const bk = row.bookings;
-            if (!bk) return false;
-            const start = (bk.check_in || '').slice(0, 10);
-            const end = (bk.check_out || bk.check_in || '').slice(0, 10);
-            // Seat is occupied from check-in up until (but NOT including) check-out date
-            return key >= start && (start === end ? key <= end : key < end);
-        });
+        // 3. Resource capacity — real time-based overlap via max-concurrent
+        // usage, merging BOTH ways a booking can be tied to a resource type:
+        // an explicit booking_resources assignment, or the service template
+        // simply declaring a resource_type. A resource type only counts as
+        // "full" if usage actually peaks at or above capacity at some point
+        // in the day — two separate, non-overlapping 1-hour appointments no
+        // longer wrongly block the whole day just because both land on it.
+        const intervalsByType = {};
+        const addInterval = (type, start, end) => {
+            const overlapStart = Math.max(start, dayStart);
+            const overlapEnd = Math.min(end, dayEnd);
+            if (overlapStart >= overlapEnd) return;
+            (intervalsByType[type] = intervalsByType[type] || []).push({ start: overlapStart, end: overlapEnd });
+        };
 
-        const usedByType = {};
-        dayResourceUsage.forEach(row => {
+        (resourceUsage || []).forEach(row => {
+            const bk = row.bookings;
+            if (!bk) return;
             const type = resourceTypeById[row.resource_id];
             if (!type) return;
-            usedByType[type] = (usedByType[type] || 0) + 1;
+            const bkCheckInDate = (bk.check_in || '').slice(0, 10);
+            const bkCheckOutDate = (bk.check_out || bk.check_in || '').slice(0, 10);
+            let s, e;
+            if (row.all_day || !row.start_time || !row.end_time) {
+                s = new Date(bkCheckInDate + 'T00:00:00').getTime();
+                e = new Date(bkCheckOutDate + 'T23:59:59').getTime();
+            } else {
+                s = new Date(bkCheckInDate + 'T' + row.start_time).getTime();
+                e = new Date(bkCheckInDate + 'T' + row.end_time).getTime();
+            }
+            addInterval(type, s, e);
         });
-        const fullTypes = Object.keys(resourceTypeCapacity).filter(type => usedByType[type] >= resourceTypeCapacity[type]);
+
+        (bookings || []).forEach(bk => {
+            if (bookingIdsWithExplicitResource.has(bk.id)) return;
+            const t = templateByName[bk.service_name];
+            const type = t?.resource_type;
+            if (!type) return;
+            const checkInMs = new Date(bk.check_in).getTime();
+            const checkOutMs = bk.check_out ? new Date(bk.check_out).getTime() : checkInMs;
+            const durationMs = (t.default_duration_minutes || 60) * 60000;
+            const occupiedUntilMs = Math.max(checkOutMs, checkInMs + durationMs);
+            addInterval(type, checkInMs, occupiedUntilMs);
+        });
+
+        const fullTypes = Object.keys(resourceTypeCapacity).filter(type => {
+            const intervals = intervalsByType[type];
+            return intervals && intervals.length && maxConcurrentOverlap(intervals) >= resourceTypeCapacity[type];
+        });
 
         let level = null;
         if (closed) level = 'closed';
@@ -7726,6 +7796,118 @@ async function computeCalendarDayStatuses(dates) {
     });
 
     return result;
+}
+
+// Shows exactly what the availability system itself sees for a given date —
+// every resource type, its capacity, and each booking occupying it with real
+// times — merging both ways a booking can be tied to a resource (explicit
+// booking_resources assignment, or its service template's resource_type).
+async function renderAvailabilityAudit() {
+    const container = document.getElementById('audit-results');
+    if (!container) return;
+    const dateStr = document.getElementById('audit-date-input')?.value || new Date().toISOString().slice(0, 10);
+    container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Loading…</p>';
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const [{ data: resources }, { data: bookings }, { data: resourceUsage }, { data: templates }] = await Promise.all([
+        client.from('resources').select('id, name, type, seats').eq('business_id', currentBusinessId),
+        client.from('bookings').select('id, service_name, check_in, check_out, status, pets(name), households(name)')
+            .eq('business_id', currentBusinessId)
+            .neq('status', 'cancelled')
+            .lte('check_in', dateStr + 'T23:59:59')
+            .gte('check_out', dateStr + 'T00:00:00'),
+        client.from('booking_resources').select('booking_id, resource_id, all_day, start_time, end_time, bookings!inner(id, check_in, check_out, status, service_name, pets(name), households(name))')
+            .eq('business_id', currentBusinessId)
+            .neq('bookings.status', 'cancelled')
+            .lte('bookings.check_in', dateStr + 'T23:59:59')
+            .gte('bookings.check_out', dateStr + 'T00:00:00'),
+        client.from('appointment_type_templates').select('name, resource_type, default_duration_minutes').eq('business_id', currentBusinessId)
+    ]);
+
+    const resourceTypeCapacity = {};
+    const resourceTypeById = {};
+    (resources || []).forEach(r => {
+        resourceTypeById[r.id] = r.type;
+        resourceTypeCapacity[r.type] = (resourceTypeCapacity[r.type] || 0) + (r.seats || 1);
+    });
+    const templateByName = {};
+    (templates || []).forEach(t => { templateByName[t.name] = t; });
+    const bookingIdsWithExplicitResource = new Set((resourceUsage || []).map(row => row.booking_id));
+
+    const dayStart = new Date(dateStr + 'T00:00:00').getTime();
+    const dayEnd = new Date(dateStr + 'T23:59:59').getTime();
+
+    // entriesByType: { type: [{ start, end, label, source }] }
+    const entriesByType = {};
+    const addEntry = (type, start, end, label, source) => {
+        const overlapStart = Math.max(start, dayStart);
+        const overlapEnd = Math.min(end, dayEnd);
+        if (overlapStart >= overlapEnd) return;
+        (entriesByType[type] = entriesByType[type] || []).push({ start: overlapStart, end: overlapEnd, label, source });
+    };
+
+    (resourceUsage || []).forEach(row => {
+        const bk = row.bookings;
+        if (!bk) return;
+        const type = resourceTypeById[row.resource_id];
+        if (!type) return;
+        const bkCheckInDate = (bk.check_in || '').slice(0, 10);
+        const bkCheckOutDate = (bk.check_out || bk.check_in || '').slice(0, 10);
+        let s, e;
+        if (row.all_day || !row.start_time || !row.end_time) {
+            s = new Date(bkCheckInDate + 'T00:00:00').getTime();
+            e = new Date(bkCheckOutDate + 'T23:59:59').getTime();
+        } else {
+            s = new Date(bkCheckInDate + 'T' + row.start_time).getTime();
+            e = new Date(bkCheckInDate + 'T' + row.end_time).getTime();
+        }
+        const petName = bk.pets?.name || bk.households?.name || 'Unknown';
+        addEntry(type, s, e, `${bk.service_name || 'Booking'} — ${petName}`, 'explicit assignment');
+    });
+
+    (bookings || []).forEach(bk => {
+        if (bookingIdsWithExplicitResource.has(bk.id)) return;
+        const t = templateByName[bk.service_name];
+        const type = t?.resource_type;
+        if (!type) return;
+        const checkInMs = new Date(bk.check_in).getTime();
+        const checkOutMs = bk.check_out ? new Date(bk.check_out).getTime() : checkInMs;
+        const durationMs = (t.default_duration_minutes || 60) * 60000;
+        const occupiedUntilMs = Math.max(checkOutMs, checkInMs + durationMs);
+        const petName = bk.pets?.name || bk.households?.name || 'Unknown';
+        addEntry(type, checkInMs, occupiedUntilMs, `${bk.service_name || 'Booking'} — ${petName}`, 'service default');
+    });
+
+    const fmtTime = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+    const types = Object.keys(resourceTypeCapacity).sort();
+    if (!types.length) {
+        container.innerHTML = '<p class="biz-empty">No resource types configured yet — add resources under Templates → Resources.</p>';
+        return;
+    }
+
+    container.innerHTML = types.map(type => {
+        const entries = (entriesByType[type] || []).slice().sort((a, b) => a.start - b.start);
+        const peak = entries.length ? maxConcurrentOverlap(entries) : 0;
+        const capacity = resourceTypeCapacity[type];
+        const isFull = peak >= capacity;
+        return `
+            <div style="margin-bottom:1rem; padding:0.85rem 1rem; border:1px solid var(--border); border-radius:0.5rem; background:${isFull ? '#fef2f2' : 'var(--bg-card)'};">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <strong>${type}</strong>
+                    <span style="font-size:0.82rem; color:${isFull ? '#dc2626' : 'var(--text-muted)'}; font-weight:${isFull ? '600' : '400'};">Peak usage: ${peak} / ${capacity} ${isFull ? '— FULL at peak' : ''}</span>
+                </div>
+                ${entries.length ? entries.map(e => `
+                    <div style="display:flex; justify-content:space-between; font-size:0.85rem; padding:0.3rem 0; border-top:1px solid var(--border);">
+                        <span>${e.label}</span>
+                        <span style="color:var(--text-muted);">${fmtTime(e.start)} – ${fmtTime(e.end)} <span style="font-size:0.72rem;">(${e.source})</span></span>
+                    </div>
+                `).join('') : '<p style="font-size:0.82rem; color:var(--text-muted); margin:0;">Nothing scheduled this day.</p>'}
+            </div>
+        `;
+    }).join('');
 }
 
 function getServiceIcons(item) {
