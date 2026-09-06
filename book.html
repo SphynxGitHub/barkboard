@@ -287,6 +287,7 @@
         let currentBusiness = null;
         let allTemplates = [];
         let businessHours = [];
+        let businessClosures = [];
         let miniCalYear, miniCalMonth; // 0-indexed month
         let selectedServiceDate = null;
         let selectedServiceTime = null;
@@ -371,6 +372,12 @@
                 .eq('business_id', business.id);
             businessHours = hours || [];
             renderBusinessHours(businessHours);
+
+            const { data: closures } = await supabaseClient
+                .from('business_closures')
+                .select('start_date, end_date, label')
+                .eq('business_id', business.id);
+            businessClosures = closures || [];
 
             document.getElementById('main-content').classList.remove('hidden');
 
@@ -687,6 +694,12 @@
             if (!pets.length) return alert('Please select or add at least one pet.');
             if (pets.some(p => !p.serviceName)) return alert('Please select a service for every pet.');
             if (!startDate || !endDate) return alert('Please choose start and end dates.');
+            if (endDate < startDate) return alert('End date can\'t be before the start date.');
+
+            const dropoffClosure = closureLabelForDate(startDate);
+            const pickupClosure = closureLabelForDate(endDate);
+            if (dropoffClosure) return alert(`We're closed on your drop-off date (${startDate})${dropoffClosure ? ' — ' + dropoffClosure : ''}. Please choose a different date.`);
+            if (pickupClosure) return alert(`We're closed on your pickup date (${endDate})${pickupClosure ? ' — ' + pickupClosure : ''}. Please choose a different date.`);
 
             // Flatten each pet's chosen add-ons into the shape the Edge Function expects.
             const addOns = pets.flatMap(p => (p.addOns || []).map(serviceName => ({ serviceName, petName: p.name })));
@@ -739,6 +752,11 @@
             return !!h?.is_closed;
         }
 
+        function closureLabelForDate(dateStr) {
+            const hit = businessClosures.find(c => dateStr >= c.start_date && dateStr <= (c.end_date || c.start_date));
+            return hit?.label || null;
+        }
+
         function shiftMiniCalMonth(delta) {
             miniCalMonth += delta;
             if (miniCalMonth < 0) { miniCalMonth = 11; miniCalYear--; }
@@ -764,13 +782,15 @@
                 const dateObj = new Date(miniCalYear, miniCalMonth, d);
                 const dateStr = `${miniCalYear}-${String(miniCalMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const isPast = dateStr < todayStr;
-                const closed = isDayClosed(dateObj.getDay());
+                const closureLabel = closureLabelForDate(dateStr);
+                const closed = isDayClosed(dateObj.getDay()) || !!closureLabel;
                 const disabled = isPast || closed;
                 const classes = ['mini-cal-day'];
                 if (disabled) classes.push('mini-cal-disabled');
                 if (dateStr === todayStr) classes.push('mini-cal-today');
                 if (dateStr === selectedServiceDate) classes.push('mini-cal-selected');
-                html += `<div class="${classes.join(' ')}" ${disabled ? '' : `onclick="selectMiniCalDay('${dateStr}')"`} title="${closed ? 'Closed' : ''}">${d}</div>`;
+                const title = closureLabel ? closureLabel : (closed ? 'Closed' : '');
+                html += `<div class="${classes.join(' ')}" ${disabled ? '' : `onclick="selectMiniCalDay('${dateStr}')"`} title="${title}">${d}</div>`;
             }
             grid.innerHTML = html;
         }
