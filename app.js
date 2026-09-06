@@ -1670,10 +1670,12 @@ async function openQuickBookingModal() {
 
     renderQbCategoryPicker();
     document.getElementById('quick-booking-modal')?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // prevents the page behind the modal from also scrolling
 }
 
 function closeQuickBookingModal() {
     document.getElementById('quick-booking-modal')?.classList.add('hidden');
+    document.body.style.overflow = '';
 }
 
 // --- Household search -------------------------------------------------
@@ -2065,6 +2067,18 @@ function selectQbSlot(t) {
 }
 
 // --- Live review summary ---------------------------------------------------
+// Same pricing logic as the public booking page: per_day rates multiply by
+// night count for a boarding stay, everything else is a flat amount.
+function qbTemplatePrice(templateName, startDate, endDate) {
+    const t = (qbTemplatesCache || []).find(tpl => tpl.name === templateName);
+    if (!t || t.default_price == null) return 0;
+    if (t.pricing_unit === 'per_day' && startDate && endDate && endDate !== startDate) {
+        const days = Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)));
+        return Number(t.default_price) * days;
+    }
+    return Number(t.default_price);
+}
+
 function updateQbReview() {
     const section = document.getElementById('qb-review-section');
     const list = document.getElementById('qb-review-list');
@@ -2082,7 +2096,13 @@ function updateQbReview() {
     if (!dateLine) { section.classList.add('hidden'); return; }
 
     section.classList.remove('hidden');
-    list.innerHTML = pets.map(p => `<div>• ${p.name} (${p.species || 'pet'}) — ${p.serviceName} — ${dateLine}</div>`).join('');
+    let total = 0;
+    const lines = pets.map(p => {
+        const price = qbTemplatePrice(p.serviceName, qbSelectedStart, qbSelectedEnd);
+        total += price;
+        return `<div style="display:flex; justify-content:space-between;"><span>${p.name} (${p.species || 'pet'}) — ${p.serviceName} — ${dateLine}</span><span>$${price.toFixed(2)}</span></div>`;
+    });
+    list.innerHTML = lines.join('') + `<div style="display:flex; justify-content:space-between; font-weight:700; margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid var(--border); color:var(--text);"><span>Estimated Total</span><span>$${total.toFixed(2)}</span></div>`;
 }
 
 // --- Submit ------------------------------------------------------------
@@ -2128,7 +2148,7 @@ async function submitQuickBooking() {
             service_name: p.serviceName,
             check_in: checkIn,
             check_out: checkOut,
-            amount: template?.default_price || 0,
+            amount: qbTemplatePrice(p.serviceName, qbSelectedStart, qbSelectedEnd),
             status,
             assigned_staff_id: staffId,
             notes,
