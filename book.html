@@ -83,6 +83,25 @@
         .step-back { background: none; border: none; color: var(--text-muted); font-size: 0.82rem; cursor: pointer; padding: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.3rem; }
         .step-back:hover { color: var(--accent); }
 
+        .mini-cal { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; margin-bottom: 1rem; }
+        .mini-cal-header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; font-size: 0.88rem; margin-bottom: 0.5rem; }
+        .mini-cal-nav { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--text-muted); padding: 0.2rem 0.5rem; border-radius: 6px; }
+        .mini-cal-nav:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); }
+        .mini-cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 0.7rem; color: var(--text-muted); text-align: center; margin-bottom: 0.25rem; }
+        .mini-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+        .mini-cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; border-radius: 8px; cursor: pointer; border: 1.5px solid transparent; }
+        .mini-cal-day:hover:not(.mini-cal-disabled):not(.mini-cal-empty) { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+        .mini-cal-day.mini-cal-selected { background: var(--accent); color: #fff; font-weight: 700; }
+        .mini-cal-day.mini-cal-disabled { color: #d1d5db; cursor: not-allowed; text-decoration: line-through; }
+        .mini-cal-day.mini-cal-empty { visibility: hidden; cursor: default; }
+        .mini-cal-day.mini-cal-today:not(.mini-cal-selected) { border-color: var(--accent); }
+
+        .slot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+        .slot-btn { padding: 0.55rem 0.4rem; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 0.85rem; cursor: pointer; text-align: center; }
+        .slot-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .slot-btn.slot-selected { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+        .slot-loading { grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem 0; }
+
         .pet-select-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 0.75rem; margin-bottom: 0.7rem; background: var(--surface); position: relative; transition: border-color 0.15s ease, background 0.15s ease; }
         .pet-select-card:not(.manual-pet-card) .pet-card-header { display: flex; align-items: center; gap: 0.7rem; cursor: pointer; }
         .pet-select-card.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, transparent); }
@@ -198,16 +217,24 @@
                 <button type="button" class="add-pet-link-btn" onclick="addManualPetCard('service-pet-rows', currentServiceCategory)">+ Add a pet not listed above</button>
                 <p class="field-hint hidden" id="multi-pet-notice" style="margin-top:-0.6rem; margin-bottom:1.1rem;"></p>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Date *</label>
-                        <input type="date" id="service-date" required>
+                <label>Date *</label>
+                <div class="mini-cal">
+                    <div class="mini-cal-header">
+                        <button type="button" class="mini-cal-nav" onclick="shiftMiniCalMonth(-1)">‹</button>
+                        <span id="mini-cal-label"></span>
+                        <button type="button" class="mini-cal-nav" onclick="shiftMiniCalMonth(1)">›</button>
                     </div>
-                    <div class="form-group">
-                        <label>Time *</label>
-                        <input type="time" id="service-time" required>
-                    </div>
+                    <div class="mini-cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+                    <div class="mini-cal-grid" id="mini-cal-grid"></div>
                 </div>
+                <input type="hidden" id="service-date" required>
+
+                <div id="slot-picker-section" class="hidden">
+                    <label>Time *</label>
+                    <div id="slot-picker-grid" class="slot-grid"></div>
+                    <p class="field-hint hidden" id="slot-picker-empty">No available times on this date — please choose another day.</p>
+                </div>
+                <input type="hidden" id="service-time" required>
 
                 <button type="button" class="submit-btn" onclick="finishServiceGroup()">Add to My Requests</button>
             </div>
@@ -259,6 +286,10 @@
 
         let currentBusiness = null;
         let allTemplates = [];
+        let businessHours = [];
+        let miniCalYear, miniCalMonth; // 0-indexed month
+        let selectedServiceDate = null;
+        let selectedServiceTime = null;
         let contactInfo = { name: '', email: '', phone: '' };
         let bookingGroups = [];
         let petRowCounter = 0;
@@ -306,7 +337,7 @@
 
             const { data: business } = await supabaseClient
                 .from('businesses')
-                .select('id, name, slug, logo_url, accent_color, welcome_message, public_booking_enabled')
+                .select('id, name, slug, logo_url, accent_color, welcome_message, public_booking_enabled, slot_increment_minutes')
                 .eq('slug', slug)
                 .eq('public_booking_enabled', true)
                 .maybeSingle();
@@ -320,6 +351,12 @@
 
             currentBusiness = business;
             applyBranding(business);
+            // Snap native time pickers to the business's configured increment
+            // (15 or 30 min) instead of the browser default of 1 minute.
+            const stepSeconds = (business.slot_increment_minutes || 30) * 60;
+            ['board-dropoff-time', 'board-pickup-time'].forEach(id => {
+                document.getElementById(id)?.setAttribute('step', stepSeconds);
+            });
 
             const { data: templates } = await supabaseClient
                 .from('appointment_type_templates')
@@ -332,7 +369,8 @@
                 .from('business_hours')
                 .select('day_of_week, is_closed, open_time, close_time')
                 .eq('business_id', business.id);
-            renderBusinessHours(hours || []);
+            businessHours = hours || [];
+            renderBusinessHours(businessHours);
 
             document.getElementById('main-content').classList.remove('hidden');
 
@@ -675,10 +713,119 @@
             currentServiceCategory = category;
             document.getElementById('service-group-title').textContent = `${CATEGORY_META[category].icon} ${CATEGORY_META[category].label}`;
             renderPetCards('service-pet-rows', category);
+            selectedServiceDate = null;
+            selectedServiceTime = null;
             document.getElementById('service-date').value = '';
             document.getElementById('service-time').value = '';
+            document.getElementById('slot-picker-section').classList.add('hidden');
+            const today = new Date();
+            miniCalYear = today.getFullYear();
+            miniCalMonth = today.getMonth();
+            renderMiniCal();
             updateMultiPetNotice();
             goToStep('service-group');
+        }
+
+        // --- Mini calendar (date-first picker) ------------------------------------
+        function isDayClosed(dayOfWeek) {
+            const h = businessHours.find(bh => bh.day_of_week === dayOfWeek);
+            return !!h?.is_closed;
+        }
+
+        function shiftMiniCalMonth(delta) {
+            miniCalMonth += delta;
+            if (miniCalMonth < 0) { miniCalMonth = 11; miniCalYear--; }
+            if (miniCalMonth > 11) { miniCalMonth = 0; miniCalYear++; }
+            renderMiniCal();
+        }
+
+        function renderMiniCal() {
+            const label = document.getElementById('mini-cal-label');
+            const grid = document.getElementById('mini-cal-grid');
+            const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            label.textContent = `${monthNames[miniCalMonth]} ${miniCalYear}`;
+
+            const firstDay = new Date(miniCalYear, miniCalMonth, 1);
+            const daysInMonth = new Date(miniCalYear, miniCalMonth + 1, 0).getDate();
+            const startWeekday = firstDay.getDay();
+            const todayStr = new Date().toISOString().slice(0, 10);
+
+            let html = '';
+            for (let i = 0; i < startWeekday; i++) html += `<div class="mini-cal-day mini-cal-empty"></div>`;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(miniCalYear, miniCalMonth, d);
+                const dateStr = `${miniCalYear}-${String(miniCalMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const isPast = dateStr < todayStr;
+                const closed = isDayClosed(dateObj.getDay());
+                const disabled = isPast || closed;
+                const classes = ['mini-cal-day'];
+                if (disabled) classes.push('mini-cal-disabled');
+                if (dateStr === todayStr) classes.push('mini-cal-today');
+                if (dateStr === selectedServiceDate) classes.push('mini-cal-selected');
+                html += `<div class="${classes.join(' ')}" ${disabled ? '' : `onclick="selectMiniCalDay('${dateStr}')"`} title="${closed ? 'Closed' : ''}">${d}</div>`;
+            }
+            grid.innerHTML = html;
+        }
+
+        function selectMiniCalDay(dateStr) {
+            selectedServiceDate = dateStr;
+            selectedServiceTime = null;
+            document.getElementById('service-date').value = dateStr;
+            document.getElementById('service-time').value = '';
+            renderMiniCal();
+            renderSlotPicker(dateStr);
+        }
+
+        // Business-hours-bounded slot list at the configured increment. Doesn't
+        // yet account for existing bookings/resource capacity at a given slot —
+        // the public page has no way to check that anonymously today. Staff
+        // still confirm/decline each request manually, same as multi-pet
+        // "times may need to be staggered" already works elsewhere in this flow.
+        function renderSlotPicker(dateStr) {
+            const section = document.getElementById('slot-picker-section');
+            const grid = document.getElementById('slot-picker-grid');
+            const emptyMsg = document.getElementById('slot-picker-empty');
+            section.classList.remove('hidden');
+
+            const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
+            const hoursRow = businessHours.find(bh => bh.day_of_week === dayOfWeek);
+            const openTime = hoursRow?.open_time?.slice(0, 5) || '09:00';
+            const closeTime = hoursRow?.close_time?.slice(0, 5) || '17:00';
+            const increment = currentBusiness?.slot_increment_minutes || 30;
+
+            const [openH, openM] = openTime.split(':').map(Number);
+            const [closeH, closeM] = closeTime.split(':').map(Number);
+            let cursor = openH * 60 + openM;
+            const closeMinutes = closeH * 60 + closeM;
+
+            const slots = [];
+            while (cursor < closeMinutes) {
+                const h = Math.floor(cursor / 60), m = cursor % 60;
+                slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                cursor += increment;
+            }
+
+            if (!slots.length) {
+                grid.innerHTML = '';
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+            emptyMsg.classList.add('hidden');
+
+            grid.innerHTML = slots.map(t => {
+                const [h, m] = t.split(':').map(Number);
+                const period = h >= 12 ? 'PM' : 'AM';
+                const h12 = h % 12 === 0 ? 12 : h % 12;
+                const label = `${h12}:${String(m).padStart(2, '0')} ${period}`;
+                return `<button type="button" class="slot-btn ${t === selectedServiceTime ? 'slot-selected' : ''}" onclick="selectSlotTime('${t}')">${label}</button>`;
+            }).join('');
+        }
+
+        function selectSlotTime(t) {
+            selectedServiceTime = t;
+            document.getElementById('service-time').value = t;
+            renderSlotPicker(selectedServiceDate); // re-render to move the highlight
         }
 
         function finishServiceGroup() {
@@ -816,8 +963,17 @@
                 const sel = card.querySelector('.pet-service-select');
                 if (sel) sel.value = p.serviceName;
             });
-            document.getElementById('service-date').value = group.date || '';
-            document.getElementById('service-time').value = group.time || '';
+            if (group.date) {
+                const [y, m] = group.date.split('-').map(Number);
+                miniCalYear = y;
+                miniCalMonth = m - 1;
+                selectedServiceDate = group.date;
+                selectedServiceTime = group.time || null;
+                document.getElementById('service-date').value = group.date;
+                document.getElementById('service-time').value = group.time || '';
+                renderMiniCal();
+                renderSlotPicker(group.date);
+            }
             updateMultiPetNotice();
         }
 

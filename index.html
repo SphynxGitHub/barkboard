@@ -693,6 +693,14 @@
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Welcome Message</label>
                                 <textarea id="pb-welcome" rows="2" placeholder="e.g. Request an appointment below and we'll confirm within 24 hours." class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()"></textarea>
                             </div>
+                            <div>
+                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Appointment Time Slots</label>
+                                <select id="pb-slot-increment" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
+                                    <option value="15">Every 15 minutes</option>
+                                    <option value="30">Every 30 minutes</option>
+                                </select>
+                                <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Controls the time options customers can pick from for Grooming/Training/Daycare on your booking page.</p>
+                            </div>
                         </div>
                     </div>
 
