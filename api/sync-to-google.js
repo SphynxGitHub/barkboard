@@ -63,18 +63,24 @@ export default async function handler(req, res) {
 
     // 5. Handle POST request (Create/Update)
     // Pull the saved business timezone or fallback to America/New_York
+    // 1. Resolve business timezone (or default to Eastern)
     const timeZone = booking.businesses?.timezone || 'America/New_York';
     const petName = booking.pets?.name ? ` - ${booking.pets.name}` : '';
-
+    
+    // 2. Strip any trailing 'Z' or offset if present on check_in / check_out strings
+    // e.g., "2026-09-05T09:00:00"
+    const cleanCheckIn = booking.check_in ? booking.check_in.split('.')[0].replace('Z', '') : null;
+    const cleanCheckOut = booking.check_out ? booking.check_out.split('.')[0].replace('Z', '') : cleanCheckIn;
+    
     const eventPayload = {
       summary: `${booking.service_name || 'BarkBoard Booking'}${petName}`,
       description: `Household: ${booking.households?.name || 'N/A'}\nNotes: ${booking.notes || ''}`,
       start: {
-        dateTime: new Date(booking.check_in).toISOString(),
-        timeZone: timeZone
+        dateTime: cleanCheckIn, // Pure local time string (YYYY-MM-DDTHH:MM:SS)
+        timeZone: timeZone      // Explicit IANA timezone string
       },
       end: {
-        dateTime: new Date(booking.check_out || booking.check_in).toISOString(),
+        dateTime: cleanCheckOut,
         timeZone: timeZone
       }
     };
