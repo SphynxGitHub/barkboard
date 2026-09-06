@@ -7728,3 +7728,26 @@ async function exportFinancialSummaryCSV() {
     downloadCSV(`financial-summary-${from}-to-${to}.csv`,
         ['Type', 'Date', 'Household', 'Description', 'Amount', 'Status'], rows);
 }
+
+//=======================================
+// GOOGLE CALENDAR CONNECTION AUTH FLOW
+//=======================================
+function connectGoogleCalendar(staffId) {
+  if (!staffId) return alert('Select a staff member or business account first.');
+
+  const clientId = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+  const redirectUri = encodeURIComponent('https://your-vercel-domain.vercel.app/api/auth/google/callback');
+  const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
+  
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&access_type=offline&prompt=consent&state=${staffId}`;
+
+  window.open(authUrl, 'ConnectGoogleCalendar', 'width=600,height=700');
+}
+
+// Listen for completion postMessage from popup window
+window.addEventListener('message', (event) => {
+  if (event.data?.type === 'GOOGLE_OAUTH_SUCCESS') {
+    alert('Google Calendar synced successfully!');
+    if (typeof renderStaffRoster === 'function') renderStaffRoster();
+  }
+});
