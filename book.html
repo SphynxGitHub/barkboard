@@ -820,13 +820,17 @@
         // window (in minutes-since-midnight) on the given date. check_in/check_out
         // are floating local-time strings (no timezone) — parsed as local time here
         // too, matching how the rest of the app treats them.
+        // Uses occupied_until (real duration-based end, from the RPC) rather
+        // than check_out — check_out equals check_in exactly for point-in-time
+        // appointments, so a naive check_in/check_out overlap test never sees
+        // these bookings as occupying anything at all.
         function countOverlaps(bookingsForDay, slotStartMin, slotEndMin, dateStr) {
             let count = 0;
             const dayStart = new Date(dateStr + 'T00:00:00').getTime();
             const dayEnd = new Date(dateStr + 'T23:59:59').getTime();
             for (const b of bookingsForDay) {
                 const bStart = Math.max(new Date(b.check_in).getTime(), dayStart);
-                const bEnd = Math.min(new Date(b.check_out).getTime(), dayEnd);
+                const bEnd = Math.min(new Date(b.occupied_until || b.check_out).getTime(), dayEnd);
                 if (bStart >= bEnd) continue;
                 const bStartMin = (bStart - dayStart) / 60000;
                 const bEndMin = (bEnd - dayStart) / 60000;
