@@ -5141,12 +5141,18 @@ function renderDetailsStrip(type, id, data) {
             <div><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Contact</label><input type="text" value="${data.contact || ''}" class="biz-select" style="padding:0.4rem;" onchange="autoSaveField('staff', '${id}', 'contact', this.value)"></div>
             <div style="flex:1; min-width:200px;"><label style="display:block; font-size:0.75rem; font-weight:600; margin-bottom:0.2rem;">Notes</label><textarea class="biz-select" style="padding:0.4rem; width:100%;" rows="1" onchange="autoSaveField('staff', '${id}', 'notes', this.value)">${data.notes || ''}</textarea></div>
         `;
+        // Filled in asynchronously right after render (see call below) — connection
+        // status requires a DB read, and this function itself is synchronous.
+        setTimeout(() => updateStaffCalendarButton(id), 0);
     }
+
+    const calendarButtonSlot = type === 'staff' ? `<span id="staff-cal-btn-${id}"></span>` : '';
 
     return `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding-bottom:1.25rem; margin-bottom:1.5rem; border-bottom:1px solid var(--border);">
             <div id="details-view-${key}" style="display:flex; flex-wrap:wrap; gap:1.5rem; flex:1;">${viewFields}</div>
             <div id="details-edit-${key}" class="hidden" style="display:flex; flex-wrap:wrap; gap:1rem; flex:1;">${editFields}</div>
+            ${calendarButtonSlot}
             <button class="btn-icon" onclick="toggleDetailsEdit('${key}')" title="Edit" style="background:none; border:none; cursor:pointer; flex-shrink:0;"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>
         </div>
     `;
@@ -5795,7 +5801,7 @@ function renderEventsCard(bookings, householdId, opts) {
                             ${petName ? `<div style="font-size:0.82rem; color:var(--text-muted); margin-top:0.3rem;"><i data-lucide="dog" style="width:12px;height:12px;"></i> ${petName}</div>` : ''}
                             ${(bk.resourceAssignments || []).map(r => `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="bed-double" style="width:12px;height:12px;"></i> ${r.name}${r.allDay ? ' (all day)' : (r.startTime ? ' (' + r.startTime.slice(0,5) + (r.endTime ? '–' + r.endTime.slice(0,5) : '') + ')' : ' (time-based)')}</div>`).join('')}
                             ${bk.requires_staff_time ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.1rem;"><i data-lucide="clock" style="width:12px;height:12px;"></i> ${bk.staff_time_minutes || '?'} min/day staff time${bk.staff_time_resource?.name ? ' · ' + bk.staff_time_resource.name : ''}</div>` : ''}
-                            ${bk.notes ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
+                            ${bk.notes && !bk.google_event_id ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">${bk.notes}</div>` : ''}
                         </div>
                         <div style="display:flex; gap:0.35rem;">
                             <button class="btn-icon" onclick="openBookingModal('${householdId}', '${bk.id}')" title="Edit event" style="background:none; border:none; cursor:pointer;">
@@ -5806,6 +5812,7 @@ function renderEventsCard(bookings, householdId, opts) {
                             </button>
                         </div>
                     </div>
+                    ${bk.google_event_id ? `<div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.4rem; display:flex; align-items:center; gap:0.3rem;"><i data-lucide="calendar-sync" style="width:11px;height:11px;"></i> Synced from Google Calendar</div>` : ''}
                 </div>
             `;
         }).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.5rem;">No active bookings found.</p>';
@@ -7781,6 +7788,26 @@ async function exportFinancialSummaryCSV() {
 // GOOGLE CALENDAR CONNECTION AUTH FLOW
 //=======================================
 
+async function updateStaffCalendarButton(staffId) {
+    const slot = document.getElementById(`staff-cal-btn-${staffId}`);
+    if (!slot) return; // profile navigated away before this resolved
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: token } = await client
+        .from('staff_oauth_tokens')
+        .select('id')
+        .eq('staff_id', staffId)
+        .eq('provider', 'google')
+        .maybeSingle();
+
+    slot.innerHTML = token
+        ? `<span style="font-size:0.78rem; color:var(--success-text,#065f46); background:var(--success,#d1fae5); padding:0.3rem 0.7rem; border-radius:999px; font-weight:600; white-space:nowrap;">✓ Calendar Synced</span>`
+        : `<button class="btn" style="font-size:0.78rem; padding:0.4rem 0.75rem; white-space:nowrap;" onclick="connectGoogleCalendar('${staffId}')"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Connect Calendar</button>`;
+    refreshIcons();
+}
+
 function connectGoogleCalendar(staffId) {
   if (!staffId) return alert('Select a staff member or business account first.');
 
@@ -7791,13 +7818,17 @@ function connectGoogleCalendar(staffId) {
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&access_type=offline&prompt=consent&state=${staffId}`;
 
   window.open(authUrl, 'ConnectGoogleCalendar', 'width=600,height=700');
+  _connectingStaffId = staffId;
 }
+
+let _connectingStaffId = null;
 
 // Listen for completion postMessage from popup window
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'GOOGLE_OAUTH_SUCCESS') {
     alert('Google Calendar synced successfully!');
     if (typeof renderStaffRoster === 'function') renderStaffRoster();
+    if (_connectingStaffId) updateStaffCalendarButton(_connectingStaffId);
   }
 });
 
