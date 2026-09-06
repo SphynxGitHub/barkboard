@@ -2006,8 +2006,12 @@ async function saveBookingResources(client, bookingId, resourceList) {
 }
 
 async function saveBooking() {
+    console.log("1. saveBooking initiated");
     const client = getSupabase();
-    if (!client) return alert('Database connection unavailable.');
+    if (!client) {
+        console.error("Supabase client unavailable");
+        return alert('Database connection unavailable.');
+    }
 
     const type = document.getElementById('bk-type')?.value || 'appointment';
     const serviceName = document.getElementById('bk-service-type')?.value.trim() || '';
@@ -2035,6 +2039,8 @@ async function saveBooking() {
     const petIds = petCheckboxes.map(cb => cb.value);
     const petNames = petCheckboxes.map(cb => cb.parentElement?.textContent.trim() || '').filter(Boolean);
 
+    console.log("2. Form values:", { type, startDate, petIdsCount: petIds.length, bookingHouseholdId });
+
     if (!startDate) return alert('Please choose a date.');
     if (!startTimeRaw) return alert(type === 'stay' ? 'Please choose a drop-off time.' : 'Please choose a time.');
     if (type === 'stay' && !endDate) return alert('Please choose an end date for a multi-day stay.');
@@ -2047,10 +2053,13 @@ async function saveBooking() {
     // Fallback: If bookingHouseholdId is empty (global search), resolve from selected pet
     let targetHouseholdId = bookingHouseholdId;
     if (!targetHouseholdId && petIds.length) {
-        const { data: petData } = await client.from('pets').select('household_id').eq('id', petIds[0]).single();
+        console.log("3. Resolving household ID from selected pet...");
+        const { data: petData, error: petErr } = await client.from('pets').select('household_id').eq('id', petIds[0]).single();
+        if (petErr) console.error("Error resolving pet household:", petErr);
         if (petData?.household_id) targetHouseholdId = petData.household_id;
     }
 
+    console.log("4. Resolved targetHouseholdId:", targetHouseholdId);
     if (!targetHouseholdId) return alert('Could not resolve household for selected pet.');
 
     const subtotal = amountRaw ? parseFloat(amountRaw) : 0;
@@ -2061,6 +2070,8 @@ async function saveBooking() {
     const checkIn = `${startDate}T${startTime}:00`;
     const checkOut = type === 'stay' ? `${endDate}T${endTime}:00` : checkIn;
 
+    console.log("5. Submitting to Supabase...");
+    
     const basePayload = {
         household_id: targetHouseholdId,
         service_name: serviceName,
