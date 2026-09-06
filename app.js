@@ -7080,6 +7080,21 @@ async function openApptTypeModal(id) {
         };
         renderChecks('att-scheduling-notices', 'scheduling');
         renderChecks('att-invoice-notices', 'invoice');
+
+        // Staff qualification checkboxes — same pattern as the notice
+        // checkboxes above, just against the staff roster instead.
+        const { data: allStaff } = await client.from('staff').select('id, name, role').eq('business_id', currentBusinessId).order('name');
+        let appliedStaffIds = new Set();
+        if (id) {
+            const { data: appliedStaff } = await client.from('appointment_template_staff').select('staff_id').eq('appointment_type_template_id', id);
+            appliedStaffIds = new Set((appliedStaff || []).map(s => s.staff_id));
+        }
+        const staffListEl = document.getElementById('att-staff-list');
+        if (staffListEl) {
+            staffListEl.innerHTML = (allStaff || []).length
+                ? allStaff.map(s => `<label style="display:flex; align-items:center; gap:0.4rem; font-weight:400; font-size:0.85rem;"><input type="checkbox" class="att-staff-chk" data-staff-id="${s.id}" ${appliedStaffIds.has(s.id) ? 'checked' : ''}> ${s.name}${s.role ? ' — ' + s.role : ''}</label>`).join('')
+                : `<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">No staff added yet.</p>`;
+        }
     }
 
     document.getElementById('appt-type-modal')?.classList.remove('hidden');
@@ -7148,6 +7163,14 @@ async function saveApptType() {
         if (checkedTemplateIds.length) {
             await client.from('appointment_template_notices').insert(
                 checkedTemplateIds.map(templateId => ({ appointment_type_template_id: savedId, email_template_id: templateId, business_id: currentBusinessId }))
+            );
+        }
+
+        const checkedStaffIds = Array.from(document.querySelectorAll('.att-staff-chk:checked')).map(chk => chk.dataset.staffId);
+        await client.from('appointment_template_staff').delete().eq('appointment_type_template_id', savedId);
+        if (checkedStaffIds.length) {
+            await client.from('appointment_template_staff').insert(
+                checkedStaffIds.map(staffId => ({ appointment_type_template_id: savedId, staff_id: staffId, business_id: currentBusinessId }))
             );
         }
     }
