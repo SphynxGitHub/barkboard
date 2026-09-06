@@ -124,10 +124,28 @@
                 </div>
             </div>
 
-            <!-- Step 2: Hours of Operation -->
+            <!-- Step 2: Hours of Operation & Time Zone -->
             <div id="ob-step-2" class="ob-step hidden">
-                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">When are you open? Shown on your public booking page.</p>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Set your business time zone and operating hours for public bookings.</p>
+            
+                <!-- Business Time Zone Selection -->
+                <div style="margin-bottom:1.25rem;">
+                    <label for="ob-timezone" style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Primary Time Zone</label>
+                    <select id="ob-timezone" class="form-control" style="width:100%;">
+                        <option value="America/New_York">Eastern Time (ET)</option>
+                        <option value="America/Chicago">Central Time (CT)</option>
+                        <option value="America/Denver">Mountain Time (MT)</option>
+                        <option value="America/Phoenix">Mountain Time - AZ (No DST)</option>
+                        <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                        <option value="America/Anchorage">Alaska Time (AKT)</option>
+                        <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+                    </select>
+                </div>
+            
+                <!-- Hours Rows -->
+                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Hours of Operation</label>
                 <div id="ob-hours-rows" style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.25rem;"></div>
+            
                 <div style="display:flex; gap:0.6rem;">
                     <button type="button" class="btn" style="flex:1;" onclick="obPrevStep()">Back</button>
                     <button type="button" class="auth-submit-btn" style="flex:2;" onclick="obNextStep()">Next</button>
@@ -546,7 +564,20 @@
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Address</label>
                                 <input type="text" id="pb-address" placeholder="123 Main St, Anytown, ST 12345" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
-                                <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Shown on invoices/receipts and your booking page.</p>
+                                <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Shown on invoices, receipts, and public receipts.</p>
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Timezone</label>
+                                <select id="staff-timezone" class="biz-select" style="width:100%; padding:0.5rem;" onchange="savePublicBookingSettings()">
+                                    <option value="America/New_York">Eastern Time (ET)</option>
+                                    <option value="America/Chicago">Central Time (CT)</option>
+                                    <option value="America/Denver">Mountain Time (MT)</option>
+                                    <option value="America/Phoenix">Mountain Time - AZ (No DST)</option>
+                                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                                    <option value="America/Anchorage">Alaska Time (AKT)</option>
+                                    <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+                                </select>
+                                <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Used to keep public bookings and Google Calendar in sync.</p>
                             </div>
                             <div>
                                 <label style="display:block; font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Logo</label>
