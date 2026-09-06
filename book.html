@@ -360,7 +360,7 @@
 
             const { data: templates } = await supabaseClient
                 .from('appointment_type_templates')
-                .select('name, default_price, pricing_unit, default_duration_minutes, species, category, prompt_dropoff_pickup_time')
+                .select('name, default_price, pricing_unit, default_duration_minutes, species, category, prompt_dropoff_pickup_time, resource_type, requires_staff_time, staff_time_resource_type')
                 .eq('business_id', business.id)
                 .order('name');
             allTemplates = templates || [];
@@ -509,7 +509,7 @@
                     </div>
                     <div class="pet-card-service-row hidden">
                         <label>Service *</label>
-                        <select class="pet-service-select" onchange="${category === 'boarding' ? 'updateBoardingTotal()' : ''}"></select>
+                        <select class="pet-service-select" onchange="${category === 'boarding' ? 'updateBoardingTotal()' : 'refreshSlotsIfDateSelected()'}"></select>
                         ${category === 'boarding' ? '<div class="pet-addon-section"><label class="section-label">Add-ons (optional)</label><div class="pet-addon-list"></div></div>' : ''}
                     </div>
                 </div>
@@ -548,7 +548,7 @@
                 </div>
                 <div class="pet-card-service-row">
                     <label>Service *</label>
-                    <select class="pet-service-select" onchange="${category === 'boarding' ? 'updateBoardingTotal()' : ''}"></select>
+                    <select class="pet-service-select" onchange="${category === 'boarding' ? 'updateBoardingTotal()' : 'refreshSlotsIfDateSelected()'}"></select>
                     ${category === 'boarding' ? '<div class="pet-addon-section"><label class="section-label">Add-ons (optional)</label><div class="pet-addon-list"></div></div>' : ''}
                 </div>
             `;
@@ -609,7 +609,14 @@
         // "times may not match" notice on service groups).
         function onPetSelectionChanged(category) {
             if (category === 'boarding') updateBoardingTotal();
-            else updateMultiPetNotice();
+            else {
+                updateMultiPetNotice();
+                refreshSlotsIfDateSelected();
+            }
+        }
+
+        function refreshSlotsIfDateSelected() {
+            if (selectedServiceDate) renderSlotPicker(selectedServiceDate);
         }
 
         // --- Boarding group --------------------------------------------------
@@ -777,16 +784,48 @@
             renderSlotPicker(dateStr);
         }
 
-        // Business-hours-bounded slot list at the configured increment. Doesn't
-        // yet account for existing bookings/resource capacity at a given slot —
-        // the public page has no way to check that anonymously today. Staff
-        // still confirm/decline each request manually, same as multi-pet
-        // "times may need to be staggered" already works elsewhere in this flow.
-        function renderSlotPicker(dateStr) {
+        let slotDataCache = {}; // `${serviceName}|${dateStr}` -> RPC result, avoids re-fetching the same service/date repeatedly
+
+        async function fetchSlotDataForService(serviceName, dateStr) {
+            const key = `${serviceName}|${dateStr}`;
+            if (slotDataCache[key] !== undefined) return slotDataCache[key];
+            const { data, error } = await supabaseClient.rpc('get_service_slot_data', {
+                business_slug: currentBusiness.slug, p_service_name: serviceName, target_date: dateStr
+            });
+            slotDataCache[key] = error ? null : data;
+            return slotDataCache[key];
+        }
+
+        // Counts how many existing bookings overlap a candidate [slotStart, slotEnd)
+        // window (in minutes-since-midnight) on the given date. check_in/check_out
+        // are floating local-time strings (no timezone) — parsed as local time here
+        // too, matching how the rest of the app treats them.
+        function countOverlaps(bookingsForDay, slotStartMin, slotEndMin, dateStr) {
+            let count = 0;
+            const dayStart = new Date(dateStr + 'T00:00:00').getTime();
+            const dayEnd = new Date(dateStr + 'T23:59:59').getTime();
+            for (const b of bookingsForDay) {
+                const bStart = Math.max(new Date(b.check_in).getTime(), dayStart);
+                const bEnd = Math.min(new Date(b.check_out).getTime(), dayEnd);
+                if (bStart >= bEnd) continue;
+                const bStartMin = (bStart - dayStart) / 60000;
+                const bEndMin = (bEnd - dayStart) / 60000;
+                if (slotStartMin < bEndMin && slotEndMin > bStartMin) count++;
+            }
+            return count;
+        }
+
+        // Real capacity-aware slot list: business-hours bounds, existing
+        // bookings against the service's resource type(s), and the demand
+        // this specific request itself would add (so two pets both needing
+        // the last free spot at the same time can't both slip through).
+        async function renderSlotPicker(dateStr) {
             const section = document.getElementById('slot-picker-section');
             const grid = document.getElementById('slot-picker-grid');
             const emptyMsg = document.getElementById('slot-picker-empty');
             section.classList.remove('hidden');
+            grid.innerHTML = '<div class="slot-loading">Checking availability...</div>';
+            emptyMsg.classList.add('hidden');
 
             const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
             const hoursRow = businessHours.find(bh => bh.day_of_week === dayOfWeek);
@@ -794,27 +833,87 @@
             const closeTime = hoursRow?.close_time?.slice(0, 5) || '17:00';
             const increment = currentBusiness?.slot_increment_minutes || 30;
 
+            const pets = getSelectedPetsWithServices('service-pet-rows');
+            const petNeeds = pets.map(p => {
+                const t = allTemplates.find(tpl => tpl.name === p.serviceName);
+                return {
+                    duration: t?.default_duration_minutes || 60,
+                    resourceType: t?.resource_type || null,
+                    requiresStaffTime: !!t?.requires_staff_time,
+                    staffResourceType: t?.staff_time_resource_type || null,
+                    serviceName: p.serviceName
+                };
+            });
+
+            const uniqueServices = Array.from(new Set(petNeeds.map(n => n.serviceName).filter(Boolean)));
+            const slotDataByService = {};
+            for (const svc of uniqueServices) {
+                slotDataByService[svc] = await fetchSlotDataForService(svc, dateStr);
+            }
+
+            const maxDuration = petNeeds.length ? Math.max(...petNeeds.map(n => n.duration)) : 60;
+
             const [openH, openM] = openTime.split(':').map(Number);
             const [closeH, closeM] = closeTime.split(':').map(Number);
             let cursor = openH * 60 + openM;
             const closeMinutes = closeH * 60 + closeM;
 
-            const slots = [];
-            while (cursor < closeMinutes) {
-                const h = Math.floor(cursor / 60), m = cursor % 60;
-                slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+            const candidateSlots = [];
+            while (cursor + maxDuration <= closeMinutes) {
+                candidateSlots.push(cursor);
                 cursor += increment;
             }
 
-            if (!slots.length) {
+            const availableSlots = candidateSlots.filter(slotStart => {
+                // How much demand THIS request would add per resource type, if booked at this slot
+                const demandByResource = {};
+                petNeeds.forEach(n => {
+                    if (n.resourceType) demandByResource[n.resourceType] = (demandByResource[n.resourceType] || 0) + 1;
+                    if (n.requiresStaffTime && n.staffResourceType) demandByResource[n.staffResourceType] = (demandByResource[n.staffResourceType] || 0) + 1;
+                });
+
+                for (const [resType, neededCount] of Object.entries(demandByResource)) {
+                    let capacity = 0, existingBookings = [];
+                    for (const svc of uniqueServices) {
+                        const sd = slotDataByService[svc];
+                        if (!sd) continue;
+                        if (sd.resource_type === resType) { capacity = Math.max(capacity, sd.resource_capacity || 0); existingBookings = sd.resource_bookings || []; }
+                        if (sd.staff_resource_type === resType) { capacity = Math.max(capacity, sd.staff_capacity || 0); existingBookings = sd.staff_bookings || []; }
+                    }
+                    if (capacity === 0 && !existingBookings.length) continue; // no capacity data for this type — nothing to check against
+
+                    const relevantDurations = petNeeds.filter(n => n.resourceType === resType || n.staffResourceType === resType).map(n => n.duration);
+                    const windowDuration = relevantDurations.length ? Math.max(...relevantDurations) : 30;
+                    const slotEnd = slotStart + windowDuration;
+
+                    const existingUsage = countOverlaps(existingBookings, slotStart, slotEnd, dateStr);
+                    if (existingUsage + neededCount > capacity) return false;
+                }
+                return true;
+            });
+
+            // If the previously-picked time no longer has room (e.g. another
+            // pet/service was just added), don't leave a stale, now-invalid
+            // selection sitting in the form.
+            if (selectedServiceTime) {
+                const [selH, selM] = selectedServiceTime.split(':').map(Number);
+                if (!availableSlots.includes(selH * 60 + selM)) {
+                    selectedServiceTime = null;
+                    document.getElementById('service-time').value = '';
+                }
+            }
+
+            if (!availableSlots.length) {
                 grid.innerHTML = '';
+                emptyMsg.textContent = 'No available times on this date — please choose another day.';
                 emptyMsg.classList.remove('hidden');
                 return;
             }
             emptyMsg.classList.add('hidden');
 
-            grid.innerHTML = slots.map(t => {
-                const [h, m] = t.split(':').map(Number);
+            grid.innerHTML = availableSlots.map(mins => {
+                const h = Math.floor(mins / 60), m = mins % 60;
+                const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
                 const period = h >= 12 ? 'PM' : 'AM';
                 const h12 = h % 12 === 0 ? 12 : h % 12;
                 const label = `${h12}:${String(m).padStart(2, '0')} ${period}`;
