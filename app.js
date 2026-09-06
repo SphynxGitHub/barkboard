@@ -2028,12 +2028,10 @@ async function saveBooking() {
     const staffTimeMinutes = document.getElementById('bk-staff-time-minutes')?.value;
     const notes = document.getElementById('bk-notes')?.value.trim() || '';
     const notesVisibleToCustomer = document.getElementById('bk-notes-visible-customer')?.checked || false;
-    // Only actually present (and thus only meaningfully readable) when the row was
-    // shown at all, i.e. the booking was flexible_time to begin with — for a normal
-    // booking this stays false/absent, harmless either way.
+    
     const flexibleTime = document.getElementById('bk-flexible-time-row') && !document.getElementById('bk-flexible-time-row').classList.contains('hidden')
         ? (document.getElementById('bk-flexible-time')?.checked || false)
-        : undefined;
+        : false; // Safely defaults to false to avoid NOT NULL DB constraint errors
     
     const petCheckboxes = Array.from(document.querySelectorAll('.bk-pet-checkbox:checked'));
     const petIds = petCheckboxes.map(cb => cb.value);
@@ -2050,7 +2048,6 @@ async function saveBooking() {
     const startTime = startTimeRaw;
     const endTime = type === 'stay' ? endTimeRaw : startTimeRaw;
 
-    // Fallback: If bookingHouseholdId is empty (global search), resolve from selected pet
     let targetHouseholdId = bookingHouseholdId;
     if (!targetHouseholdId && petIds.length) {
         console.log("3. Resolving household ID from selected pet...");
@@ -2085,13 +2082,9 @@ async function saveBooking() {
         notes: notes,
         notes_visible_to_customer: notesVisibleToCustomer,
         flexible_time: flexibleTime,
-        // Persisted so that reopening this booking to edit it can recalculate the total as
-        // dates/type change, without needing to re-find or re-select the original template.
         rate_per_day: ratePerDay,
-        // Stored separately from the discounted `amount` so the Subtotal/Discount split can
-        // be reconstructed and shown correctly the next time this booking is opened for edit.
         discount_amount: discount,
-        business_id: currentBusinessId
+        business_id: typeof currentBusinessId !== 'undefined' ? currentBusinessId : null
     };
 
     let response;
@@ -2126,30 +2119,31 @@ async function saveBooking() {
         alert('Failed to save event: ' + response.error.message);
         console.error('Supabase booking error:', response.error);
     } else {
-        // Save resource assignments — same set applied to every booking row this event produced,
-        // since resources belong to the event/appointment as a whole, not to a specific pet.
+        // 1. Save resource assignments and trigger background push to Google Calendar
         for (const pid of Object.keys(petIdToBookingId)) {
-            await saveBookingResources(client, petIdToBookingId[pid], bkEventResources);
+            const bookingId = petIdToBookingId[pid];
+            if (typeof saveBookingResources === 'function' && typeof bkEventResources !== 'undefined') {
+                await saveBookingResources(client, bookingId, bkEventResources);
+            }
+            
+            // Push event directly to Google Calendar if assigned staff has synced Google
+            if (typeof pushBookingToGoogleCalendar === 'function') {
+                pushBookingToGoogleCalendar(bookingId);
+            }
         }
 
-        // If editing an existing booking that's already linked to an invoice, keep the
-        // invoice's total/description in sync with the (possibly changed) amount/service name
-        // instead of leaving it stale until someone happens to reopen the invoice modal.
-        if (editingBookingId && existingBookingInvoiceId) {
+        // 2. Invoice sync logic
+        if (editingBookingId && existingBookingInvoiceId && typeof syncInvoiceTotals === 'function') {
             await syncInvoiceTotals(client, existingBookingInvoiceId);
         }
-        // If editing an existing booking that DOESN'T have an invoice yet (e.g. one
-        // that came in through the public booking page, which never creates one) and
-        // it's being confirmed here, generate one now — same as new bookings already do.
-        if (editingBookingId && !existingBookingInvoiceId && status === 'confirmed' && amount > 0) {
+        if (editingBookingId && !existingBookingInvoiceId && status === 'confirmed' && amount > 0 && typeof ensureInvoiceForConfirmedBooking === 'function') {
             await ensureInvoiceForConfirmedBooking(client, editingBookingId);
         }
 
-        // AUTO-GENERATE & LINK INVOICE
+        // 3. Auto-generate & link invoice for new bookings
         if (firstNewBookingId && amount > 0) {
             const when = type === 'stay' ? `${startDate} → ${endDate}` : startDate;
             
-            // 1. Insert Invoice and get returned ID
             const { data: createdInvoices, error: invErr } = await client.from('invoices').insert([{
                 household_id: targetHouseholdId,
                 booking_id: firstNewBookingId,
@@ -2160,10 +2154,9 @@ async function saveBooking() {
                 service_start_date: startDate,
                 service_end_date: type === 'stay' ? endDate : startDate,
                 pet_names: petNames.join(', '),
-                business_id: currentBusinessId
+                business_id: typeof currentBusinessId !== 'undefined' ? currentBusinessId : null
             }]).select();
 
-            // 2. Link created Invoice back to all generated booking rows
             if (!invErr && createdInvoices && createdInvoices.length) {
                 const newInvoiceId = createdInvoices[0].id;
                 const allBookingIds = Object.values(petIdToBookingId);
@@ -2176,23 +2169,13 @@ async function saveBooking() {
 
         closeBookingModal();
 
-        // 1. Refresh profile view if open
+        // 4. Refresh active views
         if (targetHouseholdId && typeof openFullWidthProfile === 'function' && document.getElementById('crm-list-container')?.querySelector('.full-width-profile-view')) {
             openFullWidthProfile('household', targetHouseholdId);
         }
-
-        // 2. Refresh Activities Feed & Calendar
-        if (typeof renderActivities === 'function') {
-            await renderActivities();
-        }
-        if (typeof renderActivitiesCalendar === 'function') {
-            await renderActivitiesCalendar();
-        }
-
-        // 3. Refresh Resource Grid
-        if (typeof renderCalendar === 'function') {
-            await renderCalendar();
-        }
+        if (typeof renderActivities === 'function') await renderActivities();
+        if (typeof renderActivitiesCalendar === 'function') await renderActivitiesCalendar();
+        if (typeof renderCalendar === 'function') await renderCalendar();
     }
 }
 
@@ -7807,20 +7790,4 @@ async function pushBookingToGoogleCalendar(bookingId) {
   } catch (err) {
     console.warn('Google Calendar sync background trigger failed:', err);
   }
-}
-
-// Inside saveBooking() in app.js (after saveBookingResources completes):
-if (response.error) {
-    alert('Failed to save event: ' + response.error.message);
-} else {
-    // Save resource assignments
-    for (const pid of Object.keys(petIdToBookingId)) {
-        await saveBookingResources(client, petIdToBookingId[pid], bkResourcesByPet[pid] || []);
-        
-        // --- TRIGGER GOOGLE CALENDAR PUSH ---
-        pushBookingToGoogleCalendar(petIdToBookingId[pid]);
-    }
-
-    // Auto-generate invoice logic...
-    closeBookingModal();
 }
