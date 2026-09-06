@@ -1181,11 +1181,11 @@ async function renderTodoPanel() {
     if (progressBar) progressBar.style.width = list.length ? `${Math.round((done / list.length) * 100)}%` : '0%';
 
     body.innerHTML = list.length ? list.map(t => `
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border);">
-            <label style="display:flex; align-items:center; gap:0.5rem; ${t.is_done ? 'color:var(--text-muted); text-decoration:line-through;' : ''}">
-                <input type="checkbox" ${t.is_done ? 'checked' : ''} onchange="toggleTodoTask('${t.id}', this.checked)">
+        <div style="display:flex; align-items:flex-start; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid var(--border);">
+            <input type="checkbox" style="margin-top:0.2rem; flex-shrink:0;" ${t.is_done ? 'checked' : ''} onchange="toggleTodoTask('${t.id}', this.checked)">
+            <div style="min-width:0; flex:1; overflow-wrap:break-word; cursor:pointer; ${t.is_done ? 'color:var(--text-muted); text-decoration:line-through;' : ''}" onclick="openTaskView('${t.id}')">
                 ${t.task_text}${t.staff?.name ? ' <span style="font-size:0.78rem; color:var(--text-muted);">(' + t.staff.name + ')</span>' : ''}
-            </label>
+            </div>
         </div>
     `).join('') : '<div class="biz-empty">No tasks due today.</div>';
 }
@@ -1698,6 +1698,62 @@ function editFromAppointmentView() {
     const householdId = avCurrentHouseholdId;
     closeAppointmentViewModal();
     openBookingModal(householdId, bookingId);
+}
+
+/* ==========================================================================
+   VIEW-ONLY TASK CARD — same principle as the appointment view card: status
+   and notes are editable inline, everything else requires Edit.
+   ========================================================================== */
+let tvCurrentTaskId = null;
+
+async function openTaskView(taskId) {
+    const client = getSupabase();
+    if (!client) return;
+    const { data: t, error } = await client.from('staff_tasks').select('*, staff(name), pets(name)').eq('id', taskId).single();
+    if (error || !t) return alert('Could not load that task.');
+
+    tvCurrentTaskId = taskId;
+    document.getElementById('tv-title').textContent = t.task_text || 'Task';
+    document.getElementById('tv-body').innerHTML = `
+        <div><strong>Due:</strong> ${t.due_date || '—'}</div>
+        <div><strong>Assigned To:</strong> ${t.staff?.name || 'Unassigned'}</div>
+        ${t.pets?.name ? `<div><strong>Pet:</strong> ${t.pets.name}</div>` : ''}
+        <div><strong>Priority:</strong> ${t.priority || 'normal'}</div>
+    `;
+    document.getElementById('tv-status').value = t.is_done ? 'true' : 'false';
+    document.getElementById('tv-notes').value = t.notes || '';
+    document.getElementById('task-view-modal')?.classList.remove('hidden');
+}
+
+function closeTaskViewModal() {
+    document.getElementById('task-view-modal')?.classList.add('hidden');
+    tvCurrentTaskId = null;
+}
+
+async function saveTaskViewStatus() {
+    const client = getSupabase();
+    if (!client || !tvCurrentTaskId) return;
+    const isDone = document.getElementById('tv-status')?.value === 'true';
+    const { error } = await client.from('staff_tasks').update({ is_done: isDone }).eq('id', tvCurrentTaskId);
+    if (error) return alert('Failed to update status: ' + error.message);
+    if (typeof renderTodoPanel === 'function') renderTodoPanel();
+    if (typeof renderTodaysOverview === 'function') renderTodaysOverview();
+    if (typeof renderActivities === 'function') renderActivities();
+}
+
+async function saveTaskViewNotes() {
+    const client = getSupabase();
+    if (!client || !tvCurrentTaskId) return;
+    const notes = document.getElementById('tv-notes')?.value.trim() || null;
+    const { error } = await client.from('staff_tasks').update({ notes }).eq('id', tvCurrentTaskId);
+    if (error) return alert('Failed to save notes: ' + error.message);
+    closeTaskViewModal();
+}
+
+function editFromTaskView() {
+    const taskId = tvCurrentTaskId;
+    closeTaskViewModal();
+    if (typeof openStaffTaskModal === 'function') openStaffTaskModal(taskId);
 }
 
 async function openQuickBookingModal() {
@@ -7385,9 +7441,9 @@ function openActivityItem(kind, id, householdId) {
             openAppointmentView(id);
         }
     } else if (kind === 'task') {
-        // Open staff task modal
-        if (typeof openStaffTaskModal === 'function') {
-            openStaffTaskModal(id);
+        // View-only card by default now — Edit inside it opens the full modal
+        if (typeof openTaskView === 'function') {
+            openTaskView(id);
         }
     } else if (kind === 'invoice') {
         // Open invoice edit modal or jump to household invoices
