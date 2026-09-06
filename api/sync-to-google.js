@@ -66,11 +66,15 @@ export default async function handler(req, res) {
     // 1. Resolve business timezone (or default to Eastern)
     const timeZone = booking.businesses?.timezone || 'America/New_York';
     const petName = booking.pets?.name ? ` - ${booking.pets.name}` : '';
-    
-    // 2. Strip any trailing 'Z' or offset if present on check_in / check_out strings
+
+    // 2. Strip any trailing offset if present on check_in / check_out strings —
+    // now that these columns are plain `timestamp` (not timestamptz), Supabase
+    // shouldn't hand back an offset at all, but this stays as cheap insurance:
+    // matches 'Z' or any '+HH:MM'/'-HH:MM' suffix, not just a literal 'Z'.
     // e.g., "2026-09-05T09:00:00"
-    const cleanCheckIn = booking.check_in ? booking.check_in.split('.')[0].replace('Z', '') : null;
-    const cleanCheckOut = booking.check_out ? booking.check_out.split('.')[0].replace('Z', '') : cleanCheckIn;
+    const stripOffset = (s) => s ? s.split('.')[0].replace(/(Z|[+-]\d{2}:\d{2})$/, '') : null;
+    const cleanCheckIn = stripOffset(booking.check_in);
+    const cleanCheckOut = stripOffset(booking.check_out) || cleanCheckIn;
     
     const eventPayload = {
       summary: `${booking.service_name || 'BarkBoard Booking'}${petName}`,
