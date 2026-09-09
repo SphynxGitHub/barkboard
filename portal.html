@@ -61,6 +61,10 @@
         .book-service-btn:hover { transform: translateY(-1px); }
         .book-service-btn:active { transform: translateY(0); }
 
+        .main-tabs { display: flex; gap: 0.4rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); overflow-x: auto; }
+        .main-tab { background: none; border: none; padding: 0.6rem 0.9rem; font-size: 0.88rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+        .main-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
         .filter-row { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 1rem; }
         .pill-toggle { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.75rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; color: var(--text-muted); }
         .pill-toggle.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -137,21 +141,61 @@
 
             <div id="review-flag-notice" class="msg-box msg-success hidden">Thanks! We've created your account — a team member will review it shortly to make sure everything's linked up correctly.</div>
 
-            <div class="section-title">Your Appointments</div>
-            <div class="filter-row" id="group-by-row">
-                <button class="pill-toggle active" data-group="date" onclick="setGroupBy('date')">Date</button>
-                <button class="pill-toggle" data-group="pet" onclick="setGroupBy('pet')">Pet</button>
-                <button class="pill-toggle" data-group="type" onclick="setGroupBy('type')">Activity Type</button>
-                <button class="pill-toggle" data-group="service" onclick="setGroupBy('service')">Service</button>
-                <button class="pill-toggle" data-group="status" onclick="setGroupBy('status')">Status</button>
+            <div class="main-tabs">
+                <button class="main-tab active" id="ptab-appointments" onclick="switchPortalTab('appointments')">Appointments</button>
+                <button class="main-tab" id="ptab-notes" onclick="switchPortalTab('notes')">Notes</button>
+                <button class="main-tab" id="ptab-payments" onclick="switchPortalTab('payments')">Payments</button>
+                <button class="main-tab" id="ptab-profile" onclick="switchPortalTab('profile')">Profile</button>
             </div>
-            <div id="appointments-list"></div>
 
-            <div class="section-title">Notes For You</div>
-            <div id="notes-list"></div>
+            <!-- Appointments -->
+            <div id="psec-appointments">
+                <div class="filter-row" id="group-by-row">
+                    <button class="pill-toggle active" data-group="date" onclick="setGroupBy('appointments', 'date')">Date</button>
+                    <button class="pill-toggle" data-group="pet" onclick="setGroupBy('appointments', 'pet')">Pet</button>
+                    <button class="pill-toggle" data-group="type" onclick="setGroupBy('appointments', 'type')">Activity Type</button>
+                    <button class="pill-toggle" data-group="service" onclick="setGroupBy('appointments', 'service')">Service</button>
+                    <button class="pill-toggle" data-group="status" onclick="setGroupBy('appointments', 'status')">Status</button>
+                </div>
+                <div id="appointments-list"></div>
+            </div>
 
-            <div class="section-title">Your Pets</div>
-            <div id="pets-list"></div>
+            <!-- Notes -->
+            <div id="psec-notes" class="hidden">
+                <div class="filter-row" id="notes-group-by-row">
+                    <button class="pill-toggle active" data-group="date" onclick="setGroupBy('notes', 'date')">Date</button>
+                    <button class="pill-toggle" data-group="pet" onclick="setGroupBy('notes', 'pet')">Pet</button>
+                    <button class="pill-toggle" data-group="type" onclick="setGroupBy('notes', 'type')">Type</button>
+                </div>
+                <div id="notes-list"></div>
+            </div>
+
+            <!-- Payments -->
+            <div id="psec-payments" class="hidden">
+                <div class="filter-row" id="payments-group-by-row">
+                    <button class="pill-toggle active" data-group="date" onclick="setGroupBy('payments', 'date')">Date</button>
+                    <button class="pill-toggle" data-group="pet" onclick="setGroupBy('payments', 'pet')">Pet</button>
+                    <button class="pill-toggle" data-group="status" onclick="setGroupBy('payments', 'status')">Status</button>
+                </div>
+                <div id="payments-list"></div>
+            </div>
+
+            <!-- Profile -->
+            <div id="psec-profile" class="hidden">
+                <div class="section-title">Update Information</div>
+                <div class="card" style="margin-bottom:1.5rem;">
+                    <div id="profile-people-list"></div>
+                    <button type="button" class="pill-toggle" style="margin-top:0.75rem;" onclick="addProfilePersonRow()">+ Add Household Member</button>
+                    <button type="button" class="btn-primary" style="margin-top:1rem; width:100%;" onclick="saveProfileInfo()">Save Changes</button>
+                </div>
+
+                <div class="section-title">Manage Pets</div>
+                <div class="card">
+                    <div id="profile-pets-list"></div>
+                    <button type="button" class="pill-toggle" style="margin-top:0.75rem;" onclick="addProfilePetRow()">+ Add a Pet</button>
+                    <button type="button" class="btn-primary" style="margin-top:1rem; width:100%;" onclick="saveProfilePets()">Save Changes</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -366,17 +410,32 @@
         }
 
         // --- Grouping ------------------------------------------------------------
-        let groupBy = 'date';
+        let groupBy = { appointments: 'date', notes: 'date', payments: 'date' };
         let allBookingsData = [];
         let invoicesById = {};
         let serviceCategoryMap = {};
         let lastVisitedAt = null;
         let paymentSettings = null;
 
-        function setGroupBy(mode) {
-            groupBy = mode;
-            document.querySelectorAll('#group-by-row .pill-toggle').forEach(btn => btn.classList.toggle('active', btn.dataset.group === mode));
-            renderAppointments();
+        // --- Tab switching -----------------------------------------------------
+        function switchPortalTab(tab) {
+            ['appointments', 'notes', 'payments', 'profile'].forEach(t => {
+                document.getElementById(`ptab-${t}`)?.classList.toggle('active', t === tab);
+                document.getElementById(`psec-${t}`)?.classList.toggle('hidden', t !== tab);
+            });
+            if (tab === 'appointments') renderAppointments();
+            else if (tab === 'notes') renderNotesGrouped();
+            else if (tab === 'payments') renderPayments();
+            else if (tab === 'profile') { renderProfilePeople(); renderProfilePets(); }
+        }
+
+        function setGroupBy(section, mode) {
+            groupBy[section] = mode;
+            const rowId = section === 'appointments' ? 'group-by-row' : `${section}-group-by-row`;
+            document.querySelectorAll(`#${rowId} .pill-toggle`).forEach(btn => btn.classList.toggle('active', btn.dataset.group === mode));
+            if (section === 'appointments') renderAppointments();
+            else if (section === 'notes') renderNotesGrouped();
+            else if (section === 'payments') renderPayments();
         }
 
         function isNewSince(createdAt) {
@@ -384,8 +443,9 @@
             return new Date(createdAt) > new Date(lastVisitedAt);
         }
 
+        // Invoice/payment info moved to its own Payments tab — this card is
+        // appointment details only now.
         function appointmentCardHtml(b) {
-            const invoice = b.invoice_id ? invoicesById[b.invoice_id] : null;
             const petName = b.pets?.name || 'Pet';
             const isNew = isNewSince(b.created_at);
             const dateRange = b.check_out && b.check_out.slice(0, 10) !== (b.check_in || '').slice(0, 10)
@@ -397,18 +457,27 @@
                         <div>
                             <div class="item-title">${petName} — ${b.service_name}${statusPillHtml(b.status)}${b.flexible_time ? '<span class="status-pill" style="background:#fef3c7;color:#92400e;">Needs Scheduling</span>' : ''}${isNew ? '<span class="new-badge">New</span>' : ''}</div>
                             <div class="item-sub">${dateRange}${b.amount ? ' · $' + Number(b.amount).toFixed(2) : ''}</div>
-                            ${invoice ? `<div class="item-sub" style="margin-top:0.3rem;"><span class="status-pill ${invoice.status === 'paid' ? 'paid-pill' : 'unpaid-pill'}">${invoice.status}</span></div>` : ''}
                             ${b.notes ? `<div class="item-sub" style="margin-top:0.4rem;">📝 ${b.notes}</div>` : ''}
                             ${b.customer_change_request && !b.customer_change_request_resolved ? `<div class="change-note-box">Your request: "${b.customer_change_request}" — awaiting response</div>` : ''}
                         </div>
                         <div class="item-actions">
                             <button class="icon-btn" title="Add to calendar" onclick="addAppointmentToCalendar('${b.id}')">📅</button>
-                            ${invoice ? `<button class="icon-btn" title="${invoice.status === 'paid' ? 'Print receipt' : 'Print invoice'}" onclick="openPrintOverlay('${invoice.id}')">🖨️</button>` : ''}
                             <button class="icon-btn" title="Request a change" onclick="openRescheduleOverlay('${b.id}', '${petName.replace(/'/g, "\\'")} — ${(b.service_name || '').replace(/'/g, "\\'")}')">✏️</button>
                         </div>
                     </div>
                 </div>
             `;
+        }
+
+        function groupItems(items, mode, keyFn) {
+            const groups = {};
+            const groupOrder = [];
+            items.forEach(item => {
+                const key = keyFn(item, mode);
+                if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+                groups[key].push(item);
+            });
+            return { groups, groupOrder };
         }
 
         function renderAppointments() {
@@ -418,29 +487,84 @@
                 return;
             }
 
-            const groups = {};
-            const groupOrder = [];
-            const addToGroup = (key, b) => {
-                if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
-                groups[key].push(b);
-            };
-
-            allBookingsData.forEach(b => {
-                let key;
-                if (groupBy === 'date') key = (b.check_in || '').slice(0, 10) || 'No date';
-                else if (groupBy === 'pet') key = b.pets?.name || 'Unknown pet';
-                else if (groupBy === 'type') {
+            const { groups, groupOrder } = groupItems(allBookingsData, groupBy.appointments, (b, mode) => {
+                if (mode === 'date') return (b.check_in || '').slice(0, 10) || 'No date';
+                if (mode === 'pet') return b.pets?.name || 'Unknown pet';
+                if (mode === 'type') {
                     const cat = serviceCategoryMap[b.service_name];
-                    key = cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'Other';
+                    return cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'Other';
                 }
-                else if (groupBy === 'service') key = b.service_name || 'Service';
-                else if (groupBy === 'status') key = (b.status || 'pending').toUpperCase();
-                addToGroup(key, b);
+                if (mode === 'service') return b.service_name || 'Service';
+                if (mode === 'status') return (b.status || 'pending').toUpperCase();
             });
 
             el.innerHTML = groupOrder.map(key => `
                 <div class="group-heading">${key}</div>
                 ${groups[key].map(appointmentCardHtml).join('')}
+            `).join('');
+        }
+
+        // --- Notes ---------------------------------------------------------
+        let allNotesData = [];
+
+        function noteCardHtml(n) {
+            return `<div class="item-card"><div class="item-title">${n.title}${n.isNew ? '<span class="new-badge">New</span>' : ''}</div><div class="item-sub" style="margin-top:0.3rem;">${n.text}</div></div>`;
+        }
+
+        function renderNotesGrouped() {
+            const el = document.getElementById('notes-list');
+            if (!allNotesData.length) {
+                el.innerHTML = '<div class="empty-note">Nothing here yet.</div>';
+                return;
+            }
+
+            const { groups, groupOrder } = groupItems(allNotesData, groupBy.notes, (n, mode) => {
+                if (mode === 'date') return n.date || 'No date';
+                if (mode === 'pet') return n.petName || 'General';
+                if (mode === 'type') return n.type;
+            });
+
+            el.innerHTML = groupOrder.map(key => `
+                <div class="group-heading">${key}</div>
+                ${groups[key].map(noteCardHtml).join('')}
+            `).join('');
+        }
+
+        // --- Payments --------------------------------------------------------
+        let allInvoicesData = [];
+
+        function invoiceCardHtml(inv) {
+            return `
+                <div class="item-card">
+                    <div class="item-card-row">
+                        <div>
+                            <div class="item-title">${inv.description || 'Invoice'}<span class="status-pill ${inv.status === 'paid' ? 'paid-pill' : 'unpaid-pill'}">${inv.status}</span></div>
+                            <div class="item-sub">${inv.petNames || ''}${inv.petNames ? ' · ' : ''}$${Number(inv.amount || 0).toFixed(2)}${inv.due_date ? ' · Due ' + inv.due_date : ''}</div>
+                        </div>
+                        <div class="item-actions">
+                            <button class="icon-btn" title="${inv.status === 'paid' ? 'Print receipt' : 'Print invoice'}" onclick="openPrintOverlay('${inv.id}')">🖨️</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPayments() {
+            const el = document.getElementById('payments-list');
+            if (!allInvoicesData.length) {
+                el.innerHTML = '<div class="empty-note">No invoices yet.</div>';
+                return;
+            }
+
+            const { groups, groupOrder } = groupItems(allInvoicesData, groupBy.payments, (inv, mode) => {
+                if (mode === 'date') return inv.due_date || inv.paid_date || 'No date';
+                if (mode === 'pet') return inv.petNames || 'General';
+                if (mode === 'status') return (inv.status || 'unpaid').toUpperCase();
+            });
+
+            el.innerHTML = groupOrder.map(key => `
+                <div class="group-heading">${key}</div>
+                ${groups[key].map(invoiceCardHtml).join('')}
             `).join('');
         }
 
@@ -572,12 +696,22 @@
                 (invoices || []).forEach(inv => { invoicesById[inv.id] = inv; });
             }
 
-            renderAppointments();
+            // Payments tab — one card per invoice, with pet name(s) derived from
+            // whichever booking(s) reference it (an invoice can cover more than
+            // one booking, e.g. multiple pets billed together).
+            allInvoicesData = Object.values(invoicesById).map(inv => {
+                const linkedBookings = allBookingsData.filter(b => b.invoice_id === inv.id);
+                const petNames = Array.from(new Set(linkedBookings.map(b => b.pets?.name).filter(Boolean))).join(', ');
+                return { ...inv, petNames };
+            });
 
             const bookingNotes = allBookingsData.filter(b => b.notes).map(b => ({
                 title: `${b.pets?.name || 'Pet'} — ${b.service_name}`,
                 text: b.notes,
-                isNew: isNewSince(b.created_at)
+                isNew: isNewSince(b.created_at),
+                date: (b.check_in || '').slice(0, 10) || 'No date',
+                petName: b.pets?.name || 'General',
+                type: 'Appointment Note'
             }));
 
             const { data: tasks } = await supabaseClient
@@ -587,25 +721,108 @@
             const taskNotes = (tasks || []).map(t => ({
                 title: t.pets?.name ? `For ${t.pets.name}` : 'Note',
                 text: t.task_text,
-                isNew: isNewSince(t.created_at)
+                isNew: isNewSince(t.created_at),
+                date: t.due_date || 'No date',
+                petName: t.pets?.name || 'General',
+                type: 'Task'
             }));
 
-            const allNotes = [...bookingNotes, ...taskNotes];
-            document.getElementById('notes-list').innerHTML = allNotes.length
-                ? allNotes.map(n => `<div class="item-card"><div class="item-title">${n.title}${n.isNew ? '<span class="new-badge">New</span>' : ''}</div><div class="item-sub" style="margin-top:0.3rem;">${n.text}</div></div>`).join('')
-                : '<div class="empty-note">Nothing here yet.</div>';
+            allNotesData = [...bookingNotes, ...taskNotes];
 
-            const { data: pets } = await supabaseClient
-                .from('pets')
-                .select('*')
-                .eq('household_id', currentHouseholdId)
-                .order('name');
-            document.getElementById('pets-list').innerHTML = (pets || []).length
-                ? pets.map(p => `<div class="item-card"><div class="item-title">${p.name}</div><div class="item-sub">${p.species || ''}</div></div>`).join('')
-                : '<div class="empty-note">No pets on file yet.</div>';
+            // Render whichever tab is currently showing
+            const activeTab = document.querySelector('.main-tab.active')?.id?.replace('ptab-', '') || 'appointments';
+            switchPortalTab(activeTab);
 
             // Now that "new" flags for this load are computed, mark the visit.
             await supabaseClient.rpc('mark_portal_visited');
+        }
+
+        // --- Profile: household members ---------------------------------------
+        async function renderProfilePeople() {
+            const el = document.getElementById('profile-people-list');
+            const { data: people } = await supabaseClient.from('people').select('id, name, email, phone, role').eq('household_id', currentHouseholdId).order('created_at');
+            el.innerHTML = (people || []).map(p => profilePersonRowHtml(p)).join('');
+        }
+
+        function profilePersonRowHtml(p) {
+            const id = p?.id || '';
+            return `
+                <div class="profile-row" data-person-id="${id}" style="display:flex; flex-direction:column; gap:0.5rem; padding:0.75rem 0; border-bottom:1px solid var(--border);">
+                    <input type="text" class="pp-name" placeholder="Name" value="${p?.name || ''}" style="padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;">
+                    <div style="display:flex; gap:0.5rem;">
+                        <input type="email" class="pp-email" placeholder="Email" value="${p?.email || ''}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;">
+                        <input type="tel" class="pp-phone" placeholder="Phone" value="${p?.phone || ''}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;">
+                    </div>
+                </div>
+            `;
+        }
+
+        function addProfilePersonRow() {
+            document.getElementById('profile-people-list').insertAdjacentHTML('beforeend', profilePersonRowHtml(null));
+        }
+
+        async function saveProfileInfo() {
+            const rows = Array.from(document.querySelectorAll('#profile-people-list .profile-row'));
+            for (const row of rows) {
+                const name = row.querySelector('.pp-name')?.value.trim();
+                const email = row.querySelector('.pp-email')?.value.trim();
+                const phone = row.querySelector('.pp-phone')?.value.trim();
+                if (!name) continue; // skip empty rows rather than saving a blank person
+                const personId = row.dataset.personId;
+                if (personId) {
+                    const { error } = await supabaseClient.rpc('customer_update_person', { p_person_id: personId, p_name: name, p_email: email || null, p_phone: phone || null });
+                    if (error) { alert('Failed to save: ' + error.message); return; }
+                } else {
+                    const { data: newId, error } = await supabaseClient.rpc('customer_add_person', { p_name: name, p_email: email || null, p_phone: phone || null });
+                    if (error) { alert('Failed to save: ' + error.message); return; }
+                    row.dataset.personId = newId;
+                }
+            }
+            alert('Saved!');
+        }
+
+        // --- Profile: pets -----------------------------------------------------
+        async function renderProfilePets() {
+            const el = document.getElementById('profile-pets-list');
+            const { data: pets } = await supabaseClient.from('pets').select('id, name, species').eq('household_id', currentHouseholdId).order('name');
+            el.innerHTML = (pets || []).map(p => profilePetRowHtml(p)).join('');
+        }
+
+        function profilePetRowHtml(p) {
+            const id = p?.id || '';
+            return `
+                <div class="profile-row" data-pet-id="${id}" style="display:flex; gap:0.5rem; padding:0.75rem 0; border-bottom:1px solid var(--border);">
+                    <input type="text" class="pp-pet-name" placeholder="Pet name" value="${p?.name || ''}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;">
+                    <select class="pp-pet-species" style="padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;">
+                        <option value="Dog" ${p?.species === 'Dog' ? 'selected' : ''}>Dog</option>
+                        <option value="Cat" ${p?.species === 'Cat' ? 'selected' : ''}>Cat</option>
+                        <option value="Other" ${p?.species === 'Other' ? 'selected' : ''}>Other</option>
+                    </select>
+                </div>
+            `;
+        }
+
+        function addProfilePetRow() {
+            document.getElementById('profile-pets-list').insertAdjacentHTML('beforeend', profilePetRowHtml(null));
+        }
+
+        async function saveProfilePets() {
+            const rows = Array.from(document.querySelectorAll('#profile-pets-list .profile-row'));
+            for (const row of rows) {
+                const name = row.querySelector('.pp-pet-name')?.value.trim();
+                const species = row.querySelector('.pp-pet-species')?.value;
+                if (!name) continue;
+                const petId = row.dataset.petId;
+                if (petId) {
+                    const { error } = await supabaseClient.rpc('customer_update_pet', { p_pet_id: petId, p_name: name, p_species: species });
+                    if (error) { alert('Failed to save: ' + error.message); return; }
+                } else {
+                    const { data: newId, error } = await supabaseClient.rpc('customer_add_pet', { p_name: name, p_species: species });
+                    if (error) { alert('Failed to save: ' + error.message); return; }
+                    row.dataset.petId = newId;
+                }
+            }
+            alert('Saved!');
         }
 
         init();
