@@ -298,7 +298,6 @@
         let businessClosures = [];
         let miniCalYear, miniCalMonth; // 0-indexed month
         let selectedServiceDate = null;
-        let selectedServiceTime = null;
         let contactInfo = { name: '', email: '', phone: '' };
         let bookingGroups = [];
         let petRowCounter = 0;
@@ -1146,7 +1145,8 @@
         // --- Review & submit -------------------------------------------------------
         function groupSummaryHtml(group, index) {
             const meta = CATEGORY_META[group.category];
-            const petLine = group.pets.map(p => `${p.name} (${p.serviceName})`).join(', ');
+            const isBoarding = group.category === 'boarding';
+            const petLine = group.pets.map(p => `${p.name} (${p.serviceName}${!isBoarding && p.time ? ' at ' + p.time : ''})`).join(', ');
             const editBtn = `<button type="button" class="group-edit" onclick="editGroup(${index})" title="Edit">✏️</button>`;
             const priceLine = `<div class="group-price">$${computeGroupTotal(group).toFixed(2)}</div>`;
             if (group.category === 'boarding') {
@@ -1167,7 +1167,7 @@
                     <div class="group-actions">${editBtn}<button type="button" class="group-remove" onclick="removeGroup(${index})">×</button></div>
                     <span class="cat-tag">${meta.icon} ${meta.label}</span>
                     <div style="font-weight:600; font-size:0.9rem;">${petLine}</div>
-                    <div class="field-hint" style="margin-top:0.2rem;">${group.date} at ${group.time}</div>
+                    <div class="field-hint" style="margin-top:0.2rem;">${group.date}</div>
                     ${priceLine}
                 </div>
             `;
@@ -1248,17 +1248,16 @@
                 const card = findOrCreatePetCard('service-pet-rows', group.category, p.name, p.species);
                 const sel = card.querySelector('.pet-service-select');
                 if (sel) sel.value = p.serviceName;
+                if (p.time) card.dataset.selectedTime = p.time;
             });
             if (group.date) {
                 const [y, m] = group.date.split('-').map(Number);
                 miniCalYear = y;
                 miniCalMonth = m - 1;
                 selectedServiceDate = group.date;
-                selectedServiceTime = group.time || null;
                 document.getElementById('service-date').value = group.date;
-                document.getElementById('service-time').value = group.time || '';
                 renderMiniCal();
-                renderSlotPicker(group.date);
+                renderPerPetSlotPickers(group.date);
             }
             updateMultiPetNotice();
         }
