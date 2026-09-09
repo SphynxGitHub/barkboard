@@ -794,9 +794,9 @@
                 <div class="profile-row" data-pet-id="${id}" style="display:flex; gap:0.5rem; padding:0.75rem 0; border-bottom:1px solid var(--border);">
                     <input type="text" class="pp-pet-name" placeholder="Pet name" value="${p?.name || ''}" style="flex:1; padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;">
                     <select class="pp-pet-species" style="padding:0.5rem; border:1px solid var(--border); border-radius:0.375rem;">
-                        <option value="Dog" ${p?.species === 'Dog' ? 'selected' : ''}>Dog</option>
-                        <option value="Cat" ${p?.species === 'Cat' ? 'selected' : ''}>Cat</option>
-                        <option value="Other" ${p?.species === 'Other' ? 'selected' : ''}>Other</option>
+                        <option value="dog" ${p?.species === 'dog' ? 'selected' : ''}>Dog</option>
+                        <option value="cat" ${p?.species === 'cat' ? 'selected' : ''}>Cat</option>
+                        <option value="other" ${p?.species === 'other' ? 'selected' : ''}>Other</option>
                     </select>
                 </div>
             `;

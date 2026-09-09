@@ -1929,7 +1929,7 @@ function qbPetRowHtml(id, name, species, manual) {
             <label style="display:flex; align-items:center; gap:0.5rem; flex:1; font-weight:400;">
                 <input type="checkbox" class="qb-pet-chk" onchange="onQbPetToggled()" checked>
                 ${manual ? `<input type="text" class="qb-manual-name biz-select" style="padding:0.3rem; width:120px;" placeholder="Pet name" value="${name || ''}">` : `<span>${name}</span>`}
-                ${manual ? `<select class="qb-manual-species biz-select" style="padding:0.3rem;"><option value="Dog" ${species==='Dog'?'selected':''}>Dog</option><option value="Cat" ${species==='Cat'?'selected':''}>Cat</option><option value="Other" ${species==='Other'?'selected':''}>Other</option></select>` : `<span style="font-size:0.78rem; color:var(--text-muted);">${species || ''}</span>`}
+                ${manual ? `<select class="qb-manual-species biz-select" style="padding:0.3rem;"><option value="dog" ${species==='dog'?'selected':''}>Dog</option><option value="cat" ${species==='cat'?'selected':''}>Cat</option><option value="other" ${species==='other'?'selected':''}>Other</option></select>` : `<span style="font-size:0.78rem; color:var(--text-muted);">${species || ''}</span>`}
             </label>
             <select class="qb-pet-service-select biz-select" style="padding:0.35rem; min-width:160px;" onchange="onQbServiceChanged()">
                 <option value="">Choose service...</option>
@@ -1942,7 +1942,7 @@ function qbPetRowHtml(id, name, species, manual) {
 function addQbManualPet() {
     const el = document.getElementById('qb-pet-rows');
     const wrapper = document.createElement('div');
-    wrapper.innerHTML = qbPetRowHtml(null, '', 'Dog', true);
+    wrapper.innerHTML = qbPetRowHtml(null, '', 'dog', true);
     el.appendChild(wrapper.firstElementChild);
     refreshIcons();
 }
@@ -2339,7 +2339,7 @@ async function submitQuickBooking() {
         let petId = p.petId;
         if (!petId) {
             // Manually-entered pet not on file yet — create it under this household first
-            const { data: newPet, error: petErr } = await client.from('pets').insert([{ household_id: qbSelectedHouseholdId, name: p.name, species: p.species || 'Dog' }]).select().single();
+            const { data: newPet, error: petErr } = await client.from('pets').insert([{ household_id: qbSelectedHouseholdId, name: p.name, species: p.species || 'dog' }]).select().single();
             if (petErr) { alert(`Failed to create pet "${p.name}": ` + petErr.message); return; }
             petId = newPet.id;
         }
