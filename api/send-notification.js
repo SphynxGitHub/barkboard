@@ -21,6 +21,37 @@ function headerHtml(business, settings) {
   `;
 }
 
+// Lightweight markdown-style formatting, matching the toolbar in the Notice
+// Template editor (**bold**, *italic*, "- " bullet lists, [text](url) links).
+// HTML-escapes the raw text first so any literal <, >, & (whether typed by
+// staff or substituted in from a merge field) can't break the email markup.
+function renderNoticeBodyToHtml(text) {
+  let html = String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" style="color:#2563eb;">$1</a>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  const lines = html.split('\n');
+  const out = [];
+  let inList = false;
+  for (const line of lines) {
+    if (line.startsWith('- ')) {
+      if (!inList) { out.push('<ul style="margin:0.5em 0; padding-left:1.2em;">'); inList = true; }
+      out.push(`<li>${line.slice(2)}</li>`);
+    } else {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(line);
+    }
+  }
+  if (inList) out.push('</ul>');
+
+  return out.join('\n').replace(/\n(?!<\/?(ul|li))/g, '<br>').replace(/\n/g, '');
+}
+
 function wrapEmail(bodyHtml) {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif; max-width:480px; margin:0 auto; padding:24px; color:#111827;">${bodyHtml}</div>`;
 }
@@ -252,7 +283,7 @@ export default async function handler(req, res) {
           : `${booking.check_in.slice(0, 10)} at ${booking.check_in.slice(11, 16)}`;
         const ownerName = await getOwnerName(booking.household_id);
         const vars = { business_name: business.name, owner_name: ownerName, pet_name: petName || 'your pet', service_name: booking.service_name, date: when, amount: booking.amount ? `$${Number(booking.amount).toFixed(2)}` : '' };
-        emailsToSend = custom.map(t => ({ subject: renderMergeFields(t.subject, vars), html: wrapEmail(headerHtml(business, settings) + `<div>${renderMergeFields(t.body, vars).replace(/\n/g, '<br>')}</div>`), emailTemplateId: t.id }));
+        emailsToSend = custom.map(t => ({ subject: renderMergeFields(t.subject, vars), html: wrapEmail(headerHtml(business, settings) + `<div>${renderNoticeBodyToHtml(renderMergeFields(t.body, vars))}</div>`), emailTemplateId: t.id }));
       } else {
         emailsToSend = [{ ...(type === 'booking-confirmed' ? templateBookingConfirmed({ business, settings, booking, petName }) : templateBookingDeclined({ business, settings, booking, petName })), emailTemplateId: null }];
       }
@@ -284,7 +315,7 @@ export default async function handler(req, res) {
           subject: renderMergeFields(t.subject, vars),
           html: wrapEmail(
             headerHtml(business, settings) +
-            `<div>${renderMergeFields(t.body, vars).replace(/\n/g, '<br>')}</div>` +
+            `<div>${renderNoticeBodyToHtml(renderMergeFields(t.body, vars))}</div>` +
             (t.attach_invoice ? invoiceDetailsHtml(invoice, paymentOptions, type === 'payment-received') : '')
           ),
           emailTemplateId: t.id

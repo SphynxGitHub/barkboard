@@ -298,8 +298,14 @@
                             <button type="button" class="btn" style="font-size:0.78rem; padding:0.3rem 0.6rem;" onclick="insertMergeTag()">Insert</button>
                         </div>
                     </div>
+                    <div style="display:flex; gap:0.35rem; margin-bottom:0.4rem;">
+                        <button type="button" class="btn" style="font-size:0.8rem; padding:0.3rem 0.55rem; font-weight:700;" onclick="wrapEtBodySelection('**', '**')" title="Bold">B</button>
+                        <button type="button" class="btn" style="font-size:0.8rem; padding:0.3rem 0.6rem; font-style:italic;" onclick="wrapEtBodySelection('*', '*')" title="Italic">i</button>
+                        <button type="button" class="btn" style="font-size:0.8rem; padding:0.3rem 0.55rem;" onclick="insertEtBodyLinePrefix('- ')" title="Bullet list">☰</button>
+                        <button type="button" class="btn" style="font-size:0.8rem; padding:0.3rem 0.55rem;" onclick="insertEtBodyLink()" title="Link">🔗</button>
+                    </div>
                     <textarea id="et-body" rows="12" placeholder="Hi {{owner_name}}, this confirms {{pet_name}}'s {{service_name}} on {{date}}..."></textarea>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Pick a field above and click Insert to drop it in at your cursor, or type it directly: {{business_name}}, {{owner_name}}, {{pet_name}}, {{service_name}}, {{date}}, {{amount}}, {{due_date}}, {{payment_options}}</p>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin:0.35rem 0 0;">Pick a field above and click Insert to drop it in at your cursor, or type it directly: {{business_name}}, {{owner_name}}, {{pet_name}}, {{service_name}}, {{date}}, {{amount}}, {{due_date}}, {{payment_options}}. **bold**, *italic*, "- " for a bullet list, and the link button all render properly in the actual email.</p>
                 </div>
                 <div class="form-group" id="et-attach-group">
                     <label style="display:flex; align-items:center; gap:0.5rem; font-weight:400;">

@@ -3810,7 +3810,7 @@ async function renderStaffRoster() {
             </div>
             <div class="staff-actions">
                 ${connectedStaffIds.has(s.id)
-                    ? `<span style="font-size:0.75rem; color:var(--success-text,#065f46); background:var(--success,#d1fae5); padding:0.25rem 0.6rem; border-radius:999px; font-weight:600; white-space:nowrap;">✓ Calendar Synced</span>`
+                    ? `<span style="font-size:0.75rem; color:var(--success-text,#065f46); background:var(--success,#d1fae5); padding:0.25rem 0.6rem; border-radius:999px; font-weight:600; white-space:nowrap; display:inline-flex; align-items:center; gap:0.4rem;">✓ Calendar Synced <button onclick="event.stopPropagation(); disconnectStaffCalendar('${s.id}')" title="Disconnect" style="background:none; border:none; cursor:pointer; color:inherit; padding:0; line-height:1; font-weight:700;">×</button></span>`
                     : `<button class="btn" style="font-size:0.78rem; padding:0.35rem 0.7rem; white-space:nowrap;" onclick="event.stopPropagation(); connectGoogleCalendar('${s.id}')"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Connect Calendar</button>`
                 }
                 <button class="btn-icon" style="background:none; border:none; cursor:pointer; color:var(--danger-text);" onclick="event.stopPropagation(); deleteStaff('${s.id}')" title="Remove"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
@@ -8835,6 +8835,51 @@ function insertMergeTag() {
     textarea.setSelectionRange(newPos, newPos);
 }
 
+// Lightweight markdown-style formatting for the notice body — wraps the
+// current selection (or inserts placeholder text if nothing's selected) in
+// the given markers. Converted to real HTML at send time (see
+// renderNoticeBodyToHtml, shared with the send/cron functions).
+function wrapEtBodySelection(prefix, suffix) {
+    const textarea = document.getElementById('et-body');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const selected = textarea.value.slice(start, end) || 'text';
+    const before = textarea.value.slice(0, start);
+    const after = textarea.value.slice(end);
+    textarea.value = before + prefix + selected + suffix + after;
+    textarea.focus();
+    textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+}
+
+function insertEtBodyLinePrefix(prefix) {
+    const textarea = document.getElementById('et-body');
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    // Find the start of the current line so the prefix lands at the
+    // beginning of it, not wherever the cursor happens to be mid-line.
+    const lineStart = textarea.value.lastIndexOf('\n', start - 1) + 1;
+    textarea.value = textarea.value.slice(0, lineStart) + prefix + textarea.value.slice(lineStart);
+    const newPos = start + prefix.length;
+    textarea.focus();
+    textarea.setSelectionRange(newPos, newPos);
+}
+
+function insertEtBodyLink() {
+    const textarea = document.getElementById('et-body');
+    if (!textarea) return;
+    const url = prompt('Link URL:');
+    if (!url) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const selected = textarea.value.slice(start, end) || 'link text';
+    const markdown = `[${selected}](${url})`;
+    textarea.value = textarea.value.slice(0, start) + markdown + textarea.value.slice(end);
+    const newPos = start + markdown.length;
+    textarea.focus();
+    textarea.setSelectionRange(newPos, newPos);
+}
+
 function updateTemplateTriggerOptions() {
     const category = document.getElementById('et-category')?.value;
     const trigger = document.getElementById('et-trigger')?.value;
@@ -9474,9 +9519,27 @@ async function updateStaffCalendarButton(staffId) {
         .maybeSingle();
 
     slot.innerHTML = token
-        ? `<span style="font-size:0.78rem; color:var(--success-text,#065f46); background:var(--success,#d1fae5); padding:0.3rem 0.7rem; border-radius:999px; font-weight:600; white-space:nowrap;">✓ Calendar Synced</span>`
+        ? `<span style="font-size:0.78rem; color:var(--success-text,#065f46); background:var(--success,#d1fae5); padding:0.3rem 0.7rem; border-radius:999px; font-weight:600; white-space:nowrap; display:inline-flex; align-items:center; gap:0.4rem;">✓ Calendar Synced <button onclick="disconnectStaffCalendar('${staffId}')" title="Disconnect" style="background:none; border:none; cursor:pointer; color:inherit; padding:0; line-height:1; font-weight:700;">×</button></span>`
         : `<button class="btn" style="font-size:0.78rem; padding:0.4rem 0.75rem; white-space:nowrap;" onclick="connectGoogleCalendar('${staffId}')"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Connect Calendar</button>`;
     refreshIcons();
+}
+
+async function disconnectStaffCalendar(staffId) {
+    if (!confirm('Disconnect this staff member\'s Google Calendar? Bookings already synced will stay, but nothing will sync in either direction going forward until reconnected.')) return;
+    try {
+        const res = await fetch('/api/auth/google/disconnect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ staffId })
+        });
+        if (!res.ok) throw new Error('Request failed');
+    } catch (err) {
+        console.error('Failed to disconnect calendar:', err);
+        alert('Failed to disconnect — please try again.');
+        return;
+    }
+    if (typeof renderStaffRoster === 'function') renderStaffRoster();
+    if (typeof updateStaffCalendarButton === 'function') updateStaffCalendarButton(staffId);
 }
 
 function connectGoogleCalendar(staffId) {

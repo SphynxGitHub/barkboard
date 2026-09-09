@@ -19,6 +19,37 @@ function headerHtml(business, settings) {
   `;
 }
 
+// Lightweight markdown-style formatting, matching the toolbar in the Notice
+// Template editor (**bold**, *italic*, "- " bullet lists, [text](url) links).
+// HTML-escapes the raw text first so any literal <, >, & (whether typed by
+// staff or substituted in from a merge field) can't break the email markup.
+function renderNoticeBodyToHtml(text) {
+  let html = String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" style="color:#2563eb;">$1</a>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  const lines = html.split('\n');
+  const out = [];
+  let inList = false;
+  for (const line of lines) {
+    if (line.startsWith('- ')) {
+      if (!inList) { out.push('<ul style="margin:0.5em 0; padding-left:1.2em;">'); inList = true; }
+      out.push(`<li>${line.slice(2)}</li>`);
+    } else {
+      if (inList) { out.push('</ul>'); inList = false; }
+      out.push(line);
+    }
+  }
+  if (inList) out.push('</ul>');
+
+  return out.join('\n').replace(/\n(?!<\/?(ul|li))/g, '<br>').replace(/\n/g, '');
+}
+
 function wrapEmail(bodyHtml) {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif; max-width:480px; margin:0 auto; padding:24px; color:#111827;">${bodyHtml}</div>`;
 }
@@ -159,7 +190,7 @@ export default async function handler(req, res) {
             from: `"${mail.fromName || business.name}" <${mail.fromEmail}>`,
             to: person.email,
             subject: renderMergeFields(template.subject, vars),
-            html: wrapEmail(headerHtml(business, settings) + `<div>${renderMergeFields(template.body, vars).replace(/\n/g, '<br>')}</div>`)
+            html: wrapEmail(headerHtml(business, settings) + `<div>${renderNoticeBodyToHtml(renderMergeFields(template.body, vars))}</div>`)
           });
           await logSend(template.business_id, { emailTemplateId: template.id, bookingId: booking.id, recipientEmail: person.email, status: 'sent' });
           results.push({ template: template.name, bookingId: booking.id, status: 'sent' });
@@ -202,7 +233,7 @@ export default async function handler(req, res) {
             subject: renderMergeFields(template.subject, vars),
             html: wrapEmail(
               headerHtml(business, settings) +
-              `<div>${renderMergeFields(template.body, vars).replace(/\n/g, '<br>')}</div>` +
+              `<div>${renderNoticeBodyToHtml(renderMergeFields(template.body, vars))}</div>` +
               (template.attach_invoice ? invoiceDetailsHtml(invoice, paymentOptions) : '')
             )
           });
